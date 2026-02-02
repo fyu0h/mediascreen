@@ -1,0 +1,506 @@
+[
+  {
+    "name": "香港大公报",
+    "url": "http://www.takungpao.com.hk/",
+    "country_code": "HK",
+    "coords": [
+      114.17,
+      22.32
+    ],
+    "id": "26bac7db",
+    "domain": "takungpao.com.hk",
+    "fetch_method": "crawler",
+    "sitemap_supported": false,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:23:41",
+    "sitemap_url": null
+  },
+  {
+    "name": "大公报",
+    "url": "https://www.takungpao.com/",
+    "country_code": "HK",
+    "coords": [
+      114.17,
+      22.32
+    ],
+    "id": "9a2095ef",
+    "domain": "takungpao.com",
+    "fetch_method": "crawler",
+    "sitemap_supported": false,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:23:44",
+    "sitemap_url": null
+  },
+  {
+    "name": "纽约时报",
+    "url": "https://cn.nytimes.com/",
+    "country_code": "US",
+    "coords": [
+      -73.97,
+      40.77
+    ],
+    "id": "932e1638",
+    "domain": "cn.nytimes.com",
+    "fetch_method": "crawler",
+    "sitemap_supported": false,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:24:35",
+    "sitemap_url": null
+  },
+  {
+    "name": "马来西亚星洲日报",
+    "url": "https://www.sinchew.com.my/",
+    "country_code": "MY",
+    "coords": [
+      101.69,
+      3.14
+    ],
+    "id": "5b9d008a",
+    "domain": "sinchew.com.my",
+    "fetch_method": "crawler",
+    "sitemap_supported": false,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 02:18:35",
+    "sitemap_url": null
+  },
+  {
+    "name": "财联社",
+    "url": "https://www.cls.cn/",
+    "country_code": "CN",
+    "coords": [
+      121.47,
+      31.23
+    ],
+    "id": "0ec6b1d4",
+    "domain": "cls.cn",
+    "fetch_method": "sitemap",
+    "sitemap_supported": true,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 02:15:50",
+    "sitemap_url": "https://cls.cn/map.xml"
+  },
+  {
+    "name": "美国政府官网",
+    "url": "https://www.usa.gov/",
+    "country_code": "US",
+    "coords": [
+      -77.04,
+      38.91
+    ],
+    "id": "8e2d6c94",
+    "domain": "usa.gov",
+    "fetch_method": "sitemap",
+    "sitemap_supported": true,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 02:15:39",
+    "sitemap_url": "https://www.usa.gov/sitemap.xml"
+  },
+  {
+    "name": "美国国务院新闻",
+    "url": "https://www.state.gov/press-releases/",
+    "country_code": "US",
+    "coords": [
+      -77.04,
+      38.91
+    ],
+    "id": "a9c2bbd9",
+    "domain": "state.gov",
+    "fetch_method": "sitemap",
+    "sitemap_supported": true,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 02:15:33",
+    "sitemap_url": "https://www.state.gov/sitemap_index.xml"
+  },
+  {
+    "name": "联合早报",
+    "url": "https://www.zaobao.com.sg/",
+    "country_code": "SG",
+    "coords": [
+      103.85,
+      1.35
+    ],
+    "id": "45cd277e",
+    "domain": "zaobao.com.sg",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "香港中通社",
+    "url": "https://www.hkcna.hk/",
+    "country_code": "HK",
+    "coords": [
+      114.17,
+      22.32
+    ],
+    "id": "c4d6e5a4",
+    "domain": "hkcna.hk",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "法新社",
+    "url": "https://www.rfi.fr/cn/",
+    "country_code": "FR",
+    "coords": [
+      2.35,
+      48.86
+    ],
+    "id": "585b6e2a",
+    "domain": "rfi.fr",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "BBC",
+    "url": "https://www.bbc.com/news",
+    "country_code": "GB",
+    "coords": [
+      -0.12,
+      51.51
+    ],
+    "id": "25a5cde5",
+    "domain": "bbc.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "泰晤士报",
+    "url": "https://www.thetimes.com/",
+    "country_code": "GB",
+    "coords": [
+      -0.12,
+      51.51
+    ],
+    "id": "7c9dec9c",
+    "domain": "thetimes.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "路透社",
+    "url": "https://www.reuters.com/",
+    "country_code": "GB",
+    "coords": [
+      -0.12,
+      51.51
+    ],
+    "id": "9085445b",
+    "domain": "reuters.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "乌克兰情报官网",
+    "url": "https://lb.ua/",
+    "country_code": "UA",
+    "coords": [
+      30.52,
+      50.45
+    ],
+    "id": "2685f63a",
+    "domain": "lb.ua",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "美国移民局新闻",
+    "url": "https://www.uscis.gov/newsroom/all-news",
+    "country_code": "US",
+    "coords": [
+      -77.04,
+      38.91
+    ],
+    "id": "fee02546",
+    "domain": "uscis.gov",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "澳大利亚移民局新闻",
+    "url": "https://www.homeaffairs.gov.au/news-media/archive",
+    "country_code": "AU",
+    "coords": [
+      149.13,
+      -35.28
+    ],
+    "id": "f1a2b97b",
+    "domain": "homeaffairs.gov.au",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "韩国移民局移民新闻",
+    "url": "http://www.immigration.go.kr/immigration/3341/subview.do",
+    "country_code": "KR",
+    "coords": [
+      126.98,
+      37.57
+    ],
+    "id": "ae84f03b",
+    "domain": "immigration.go.kr",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "荷兰移民局新闻",
+    "url": "https://ind.nl/nl/nieuws",
+    "country_code": "NL",
+    "coords": [
+      4.9,
+      52.37
+    ],
+    "id": "71649ca9",
+    "domain": "ind.nl",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "日本共同社",
+    "url": "https://tchina.kyodonews.net/",
+    "country_code": "JP",
+    "coords": [
+      139.69,
+      35.69
+    ],
+    "id": "238c3936",
+    "domain": "tchina.kyodonews.net",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "首尔经济日报",
+    "url": "https://money.udn.com/search/tagging/1001/%E9%A6%96%E7%88%BE",
+    "country_code": "KR",
+    "coords": [
+      126.98,
+      37.57
+    ],
+    "id": "caf7b554",
+    "domain": "money.udn.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "美国福克斯新闻",
+    "url": "https://www.foxnews.com/",
+    "country_code": "US",
+    "coords": [
+      -73.97,
+      40.77
+    ],
+    "id": "5f751e5f",
+    "domain": "foxnews.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "美国中文网",
+    "url": "https://www.sinovision.net/home/",
+    "country_code": "US",
+    "coords": [
+      -73.97,
+      40.77
+    ],
+    "id": "cb44c5a8",
+    "domain": "sinovision.net",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "哈萨克斯坦国际通讯社",
+    "url": "https://cn.inform.kz/",
+    "country_code": "KZ",
+    "coords": [
+      71.43,
+      51.13
+    ],
+    "id": "3b46c3b7",
+    "domain": "cn.inform.kz",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "美联社",
+    "url": "https://apnews.com/",
+    "country_code": "US",
+    "coords": [
+      -73.97,
+      40.77
+    ],
+    "id": "6278d944",
+    "domain": "apnews.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "海外家园网",
+    "url": "https://haiwaiwang.org/",
+    "country_code": "CN",
+    "coords": [
+      116.4,
+      39.9
+    ],
+    "id": "a3229f93",
+    "domain": "haiwaiwang.org",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "南华早报",
+    "url": "https://www.scmp.com/",
+    "country_code": "HK",
+    "coords": [
+      114.17,
+      22.32
+    ],
+    "id": "42f76197",
+    "domain": "scmp.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "明报",
+    "url": "https://news.mingpao.com/%E6%98%8E%E5%A0%B1%E6%96%B0%E8%81%9E%E7%B6%B2/main",
+    "country_code": "HK",
+    "coords": [
+      114.17,
+      22.32
+    ],
+    "id": "7d5c3cc9",
+    "domain": "news.mingpao.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "infobae",
+    "url": "https://www.infobae.com/america/",
+    "country_code": "AR",
+    "coords": [
+      -58.38,
+      -34.6
+    ],
+    "id": "ad7f0384",
+    "domain": "infobae.com",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "日本放送协会",
+    "url": "https://news.web.nhk/",
+    "country_code": "JP",
+    "coords": [
+      139.69,
+      35.69
+    ],
+    "id": "d1e4ea8b",
+    "domain": "news.web.nhk",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "name": "NHK World",
+    "url": "https://www3.nhk.or.jp/nhkworld/zh/news/",
+    "country_code": "JP",
+    "coords": [
+      139.69,
+      35.69
+    ],
+    "id": "d9874a72",
+    "domain": "www3.nhk.or.jp",
+    "fetch_method": "unknown",
+    "sitemap_supported": null,
+    "status": "active",
+    "created_at": "2026-02-02 01:08:37",
+    "updated_at": "2026-02-02 01:08:37"
+  },
+  {
+    "id": "569e70d8",
+    "name": "百度新闻",
+    "url": "https://news.baidu.com/",
+    "domain": "news.baidu.com",
+    "country_code": "US",
+    "coords": [
+      -77.0369,
+      38.9072
+    ],
+    "sitemap_supported": false,
+    "sitemap_url": null,
+    "fetch_method": "crawler",
+    "created_at": "2026-02-02 01:14:05",
+    "updated_at": "2026-02-02 01:14:05",
+    "status": "active"
+  }
+]

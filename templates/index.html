@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全球新闻态势感知平台</title>
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Leaflet CSS & JS -->
+    <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- 自定义样式 -->
+    <link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- 顶部标题栏 -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <span class="logo-icon"></span>
+                <span class="logo-text">全球新闻态势感知平台</span>
+            </div>
+        </div>
+        <div class="header-center">
+            <div class="status-indicator online"></div>
+            <span class="status-text">系统运行中</span>
+        </div>
+        <div class="header-right">
+            <button class="header-btn" onclick="openLogsModal()" title="后台日志">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+            </button>
+            <button class="header-btn" onclick="openSettingsModal()" title="系统设置">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+            <div class="datetime" id="datetime"></div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+        <!-- 左侧面板 -->
+        <aside class="panel panel-left">
+            <!-- 实时统计 -->
+            <section class="card">
+                <div class="card-header">
+                    <span class="card-title">实时数据概览</span>
+                    <span class="refresh-indicator" id="refreshIndicator"></span>
+                </div>
+                <div class="card-body">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value" id="totalArticles">--</div>
+                            <div class="stat-label">文章总数</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="todayCount">--</div>
+                            <div class="stat-label">今日新增</div>
+                            <div class="stat-change" id="changeRate"></div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="weekCount">--</div>
+                            <div class="stat-label">本周新增</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="activeSources">--</div>
+                            <div class="stat-label">活跃源</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 新闻源分布 -->
+            <section class="card flex-1">
+                <div class="card-header">
+                    <span class="card-title">新闻源文章分布</span>
+                </div>
+                <div class="card-body">
+                    <div id="sourceChart" class="chart-container"></div>
+                </div>
+            </section>
+
+            <!-- 时间趋势 -->
+            <section class="card flex-1">
+                <div class="card-header">
+                    <span class="card-title">发布趋势 (近7天)</span>
+                </div>
+                <div class="card-body">
+                    <div id="trendChart" class="chart-container"></div>
+                </div>
+            </section>
+        </aside>
+
+        <!-- 中央地图区 -->
+        <section class="panel panel-center">
+            <div class="card map-card">
+                <div class="card-header">
+                    <span class="card-title">全球新闻源分布</span>
+                    <div class="map-legend">
+                        <span class="legend-item"><i class="dot dot-lg"></i>高活跃</span>
+                        <span class="legend-item"><i class="dot dot-md"></i>中活跃</span>
+                        <span class="legend-item"><i class="dot dot-sm"></i>低活跃</span>
+                    </div>
+                </div>
+                <div class="card-body map-body">
+                    <div id="worldMap"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 右侧面板 -->
+        <aside class="panel panel-right">
+            <!-- 风控告警统计 -->
+            <section class="card">
+                <div class="card-header">
+                    <span class="card-title">风控监控中心</span>
+                    <button class="btn-manage" onclick="openKeywordModal()" title="管理关键词">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="risk-summary">
+                        <div class="risk-item risk-high">
+                            <div class="risk-icon">!</div>
+                            <div class="risk-info">
+                                <div class="risk-value" id="riskHigh">0</div>
+                                <div class="risk-label">高风险</div>
+                            </div>
+                        </div>
+                        <div class="risk-item risk-medium">
+                            <div class="risk-icon">!</div>
+                            <div class="risk-info">
+                                <div class="risk-value" id="riskMedium">0</div>
+                                <div class="risk-label">中风险</div>
+                            </div>
+                        </div>
+                        <div class="risk-item risk-low">
+                            <div class="risk-icon">i</div>
+                            <div class="risk-info">
+                                <div class="risk-value" id="riskLow">0</div>
+                                <div class="risk-label">关注</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 关键词热度 -->
+            <section class="card">
+                <div class="card-header">
+                    <span class="card-title">风控关键词热度</span>
+                    <span class="chart-hint">点击筛选</span>
+                </div>
+                <div class="card-body">
+                    <div id="keywordChart" class="chart-container-sm"></div>
+                </div>
+            </section>
+
+            <!-- 风控告警列表 -->
+            <section class="card flex-2">
+                <div class="card-header">
+                    <span class="card-title">最新风控告警</span>
+                    <div class="alert-header-right">
+                        <div class="filter-info" id="alertFilterInfo" style="display: none;">
+                            <span class="filter-label">筛选:</span>
+                            <span class="filter-keyword"></span>
+                            <button class="filter-clear" onclick="clearAlertFilter()" title="清除筛选">&times;</button>
+                        </div>
+                        <span class="alert-count" id="alertCount">0</span>
+                        <button class="btn-view-all" onclick="openAllAlertsModal()" title="查看全部">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
+                            全部
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body alert-body">
+                    <div class="alert-list" id="alertList">
+                        <div class="loading-text">加载中...</div>
+                    </div>
+                </div>
+            </section>
+        </aside>
+    </main>
+
+    <!-- 底部信息栏 -->
+    <footer class="footer">
+        <div class="footer-left">
+            <span>数据更新时间: <span id="updateTime">--</span></span>
+        </div>
+        <div class="footer-center">
+            <span>覆盖 <span id="totalCountries">--</span> 个国家/地区</span>
+            <span class="divider">|</span>
+            <span>监控 <span id="totalSources">--</span> 个新闻源</span>
+            <span class="divider">|</span>
+            <button class="footer-btn" onclick="openSitesModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="16"></line>
+                    <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+                订阅管理
+            </button>
+        </div>
+        <div class="footer-right">
+            <span>自动刷新: 60秒</span>
+        </div>
+    </footer>
+
+    <!-- 关键词管理弹窗 -->
+    <div class="modal-overlay" id="keywordModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">风控关键词管理</h3>
+                <button class="modal-close" onclick="closeKeywordModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 添加关键词表单 -->
+                <div class="keyword-form">
+                    <input type="text" id="newKeyword" class="form-input" placeholder="输入新关键词...">
+                    <select id="newKeywordLevel" class="form-select">
+                        <option value="high">高风险</option>
+                        <option value="medium">中风险</option>
+                        <option value="low">关注</option>
+                    </select>
+                    <button class="btn btn-add" onclick="addKeyword()">添加</button>
+                </div>
+
+                <!-- 关键词标签页 -->
+                <div class="keyword-tabs">
+                    <button class="tab-btn active" data-level="high" onclick="switchTab('high')">
+                        高风险 <span class="tab-count" id="tabCountHigh">0</span>
+                    </button>
+                    <button class="tab-btn" data-level="medium" onclick="switchTab('medium')">
+                        中风险 <span class="tab-count" id="tabCountMedium">0</span>
+                    </button>
+                    <button class="tab-btn" data-level="low" onclick="switchTab('low')">
+                        关注 <span class="tab-count" id="tabCountLow">0</span>
+                    </button>
+                </div>
+
+                <!-- 关键词列表 -->
+                <div class="keyword-list" id="keywordList">
+                    <div class="loading-text">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑关键词弹窗 -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title">编辑关键词</h3>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editKeywordId">
+                <div class="form-group">
+                    <label class="form-label">关键词</label>
+                    <input type="text" id="editKeywordText" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">风险等级</label>
+                    <select id="editKeywordLevel" class="form-select">
+                        <option value="high">高风险</option>
+                        <option value="medium">中风险</option>
+                        <option value="low">关注</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-cancel" onclick="closeEditModal()">取消</button>
+                    <button class="btn btn-save" onclick="saveKeyword()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 订阅管理弹窗 -->
+    <div class="modal-overlay" id="sitesModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">订阅管理</h3>
+                <button class="modal-close" onclick="closeSitesModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 添加站点表单 -->
+                <div class="site-form">
+                    <input type="text" id="newSiteName" class="form-input" placeholder="站点名称（如：纽约时报）">
+                    <input type="text" id="newSiteUrl" class="form-input flex-2" placeholder="站点 URL（如：https://www.nytimes.com）">
+                    <button class="btn btn-add" onclick="addSite()" id="btnAddSite">
+                        <span class="btn-text">添加并检测</span>
+                        <span class="btn-loading" style="display:none;">检测中...</span>
+                    </button>
+                </div>
+
+                <!-- 操作按钮栏 -->
+                <div class="site-toolbar">
+                    <button class="btn btn-outline" onclick="openBatchImportModal()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        批量导入
+                    </button>
+                    <button class="btn btn-outline" onclick="batchCheckAll()" id="btnBatchCheck">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                        <span class="btn-text">一键检测</span>
+                        <span class="btn-loading" style="display:none;">检测中...</span>
+                    </button>
+                    <div class="toolbar-divider"></div>
+                    <button class="btn btn-primary" onclick="openCrawlModal()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9"></path>
+                        </svg>
+                        更新文章
+                    </button>
+                </div>
+
+                <!-- 站点统计 -->
+                <div class="site-stats">
+                    <span class="stat-badge sitemap">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Sitemap: <span id="sitemapCount">0</span>
+                    </span>
+                    <span class="stat-badge crawler">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 6v6l4 2"></path>
+                        </svg>
+                        爬虫: <span id="crawlerCount">0</span>
+                    </span>
+                    <span class="stat-badge unknown">
+                        未知: <span id="unknownCount">0</span>
+                    </span>
+                    <span class="stat-badge total">
+                        共 <span id="siteTotalCount">0</span> 个站点
+                    </span>
+                </div>
+
+                <!-- 站点列表 -->
+                <div class="site-list" id="siteList">
+                    <div class="loading-text">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量导入弹窗 -->
+    <div class="modal-overlay" id="batchImportModal">
+        <div class="modal modal-md">
+            <div class="modal-header">
+                <h3 class="modal-title">批量导入站点</h3>
+                <button class="modal-close" onclick="closeBatchImportModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">
+                        站点列表
+                        <span class="form-hint">（每行一个，格式：名称,URL 或 名称 URL）</span>
+                    </label>
+                    <textarea id="batchImportText" class="form-textarea" rows="10" placeholder="纽约时报,https://www.nytimes.com
+BBC,https://www.bbc.com
+路透社 https://www.reuters.com"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="batchAutoDetect">
+                        <span>自动检测 Sitemap（较慢）</span>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-cancel" onclick="closeBatchImportModal()">取消</button>
+                    <button class="btn btn-add" onclick="doBatchImport()" id="btnDoBatchImport">
+                        <span class="btn-text">开始导入</span>
+                        <span class="btn-loading" style="display:none;">导入中...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑站点弹窗 -->
+    <div class="modal-overlay" id="editSiteModal">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title">编辑站点</h3>
+                <button class="modal-close" onclick="closeEditSiteModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editSiteId">
+                <div class="form-group">
+                    <label class="form-label">站点名称</label>
+                    <input type="text" id="editSiteName" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">站点 URL</label>
+                    <input type="text" id="editSiteUrl" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">国家/地区</label>
+                    <select id="editSiteCountry" class="form-select">
+                        <option value="">自动检测</option>
+                        <option value="CN">中国</option>
+                        <option value="US">美国</option>
+                        <option value="GB">英国</option>
+                        <option value="JP">日本</option>
+                        <option value="KR">韩国</option>
+                        <option value="HK">香港</option>
+                        <option value="TW">台湾</option>
+                        <option value="RU">俄罗斯</option>
+                        <option value="DE">德国</option>
+                        <option value="FR">法国</option>
+                        <option value="AU">澳大利亚</option>
+                        <option value="IN">印度</option>
+                        <option value="BR">巴西</option>
+                        <option value="IL">以色列</option>
+                        <option value="PK">巴基斯坦</option>
+                        <option value="KZ">哈萨克斯坦</option>
+                        <option value="AR">阿根廷</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">获取方式</label>
+                    <select id="editSiteMethod" class="form-select">
+                        <option value="sitemap">Sitemap</option>
+                        <option value="crawler">爬虫</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-cancel" onclick="closeEditSiteModal()">取消</button>
+                    <button class="btn btn-save" onclick="saveSite()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal modal-md">
+            <div class="modal-header">
+                <h3 class="modal-title">系统设置</h3>
+                <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- LLM API 设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <span class="section-title">LLM API 配置</span>
+                        <span class="section-status" id="llmStatus"></span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API 提供商</label>
+                        <select id="llmProvider" class="form-select" onchange="onProviderChange()">
+                            <option value="siliconflow">SiliconFlow</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API URL</label>
+                        <input type="text" id="llmApiUrl" class="form-input" placeholder="https://api.siliconflow.cn/v1/chat/completions">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <div class="input-with-btn">
+                            <input type="password" id="llmApiKey" class="form-input" placeholder="sk-...">
+                            <button class="btn-icon" onclick="togglePasswordVisibility('llmApiKey')" title="显示/隐藏">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="form-hint" id="llmKeyHint"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">模型</label>
+                        <select id="llmModel" class="form-select">
+                            <option value="deepseek-ai/DeepSeek-V3">DeepSeek V3</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button class="btn btn-outline btn-sm" onclick="testLLMConnection()" id="btnTestLLM">
+                            <span class="btn-text">测试连接</span>
+                            <span class="btn-loading" style="display:none;">测试中...</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 保存按钮 -->
+                <div class="form-actions">
+                    <button class="btn btn-cancel" onclick="closeSettingsModal()">取消</button>
+                    <button class="btn btn-save" onclick="saveSettings()">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 更新文章弹窗 -->
+    <div class="modal-overlay" id="crawlModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">更新文章</h3>
+                <button class="modal-close" onclick="closeCrawlModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 爬取方式选择 -->
+                <div class="crawl-options">
+                    <div class="option-group">
+                        <label class="option-label">爬取方式:</label>
+                        <div class="option-buttons">
+                            <button class="option-btn active" data-method="auto" onclick="selectCrawlMethod('auto')">
+                                自动选择
+                            </button>
+                            <button class="option-btn" data-method="sitemap" onclick="selectCrawlMethod('sitemap')">
+                                Sitemap
+                            </button>
+                            <button class="option-btn" data-method="ai" onclick="selectCrawlMethod('ai')">
+                                AI 分析
+                            </button>
+                        </div>
+                    </div>
+                    <div class="option-desc" id="crawlMethodDesc">
+                        根据站点配置自动选择：支持 Sitemap 的使用 Sitemap，否则使用 AI 分析
+                    </div>
+                </div>
+
+                <!-- 批量操作 -->
+                <div class="crawl-actions">
+                    <button class="btn btn-primary" onclick="crawlAllSitesWithProgress()" id="btnCrawlAll">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        <span class="btn-text">开始更新全部站点</span>
+                        <span class="btn-loading" style="display:none;">更新中...</span>
+                    </button>
+                    <button class="btn btn-cancel" onclick="stopCrawlProgress()" id="btnCrawlStop" style="display:none;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="6" y="6" width="12" height="12"></rect>
+                        </svg>
+                        停止
+                    </button>
+                    <span class="crawl-hint" id="crawlHint">或选择下方站点单独更新</span>
+                </div>
+
+                <!-- 进度显示区域 -->
+                <div class="crawl-progress-panel" id="crawlProgressPanel" style="display:none;">
+                    <!-- 进度条 -->
+                    <div class="progress-bar-container">
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" id="crawlProgressBarFill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text">
+                            <span id="crawlProgressText">准备中...</span>
+                            <span id="crawlProgressPercent">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- 当前站点 -->
+                    <div class="current-site-info" id="currentSiteInfo">
+                        <div class="current-site-label">正在处理:</div>
+                        <div class="current-site-name" id="currentSiteName">-</div>
+                        <div class="current-site-status" id="currentSiteStatus">
+                            <span class="status-spinner"></span>
+                            <span class="status-text">获取中...</span>
+                        </div>
+                    </div>
+
+                    <!-- 实时统计 -->
+                    <div class="crawl-live-stats">
+                        <div class="live-stat">
+                            <span class="live-stat-value" id="liveTotal">0</span>
+                            <span class="live-stat-label">总站点</span>
+                        </div>
+                        <div class="live-stat">
+                            <span class="live-stat-value" id="liveProcessed">0</span>
+                            <span class="live-stat-label">已处理</span>
+                        </div>
+                        <div class="live-stat success">
+                            <span class="live-stat-value" id="liveSuccess">0</span>
+                            <span class="live-stat-label">成功</span>
+                        </div>
+                        <div class="live-stat error">
+                            <span class="live-stat-value" id="liveFailed">0</span>
+                            <span class="live-stat-label">失败</span>
+                        </div>
+                        <div class="live-stat primary">
+                            <span class="live-stat-value" id="liveArticles">0</span>
+                            <span class="live-stat-label">新增文章</span>
+                        </div>
+                    </div>
+
+                    <!-- 实时日志 -->
+                    <div class="crawl-live-log" id="crawlLiveLog">
+                        <div class="log-placeholder">等待开始...</div>
+                    </div>
+                </div>
+
+                <!-- 站点列表 -->
+                <div class="crawl-site-list" id="crawlSiteList">
+                    <div class="loading-text">加载中...</div>
+                </div>
+
+                <!-- 爬取结果 -->
+                <div class="crawl-result" id="crawlResult" style="display:none;">
+                    <div class="result-header">
+                        <span class="result-title">更新结果</span>
+                        <button class="btn-icon-sm" onclick="closeCrawlResult()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="result-body" id="crawlResultBody"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全部告警弹窗 -->
+    <div class="modal-overlay" id="allAlertsModal">
+        <div class="modal modal-xl">
+            <div class="modal-header">
+                <h3 class="modal-title">风控告警列表</h3>
+                <button class="modal-close" onclick="closeAllAlertsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 筛选工具栏 -->
+                <div class="alerts-toolbar">
+                    <div class="toolbar-left">
+                        <div class="date-picker-group">
+                            <label class="toolbar-label">日期:</label>
+                            <div class="custom-date-picker">
+                                <button class="date-picker-btn" id="datePickerBtn" onclick="toggleCalendar()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    <span id="datePickerText">选择日期</span>
+                                </button>
+                                <div class="calendar-dropdown" id="calendarDropdown">
+                                    <div class="calendar-header">
+                                        <button class="calendar-nav" onclick="changeMonth(-1)">&lt;</button>
+                                        <span class="calendar-title" id="calendarTitle">2024年1月</span>
+                                        <button class="calendar-nav" onclick="changeMonth(1)">&gt;</button>
+                                    </div>
+                                    <div class="calendar-weekdays">
+                                        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                                    </div>
+                                    <div class="calendar-days" id="calendarDays">
+                                        <!-- 日期格子由 JS 生成 -->
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn-icon-sm" onclick="clearDateFilter()" title="清除日期">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="keyword-filter-group">
+                            <label class="toolbar-label">关键词:</label>
+                            <select id="alertKeywordFilter" class="form-select-sm" onchange="onKeywordFilterChange()">
+                                <option value="">全部</option>
+                            </select>
+                        </div>
+                        <div class="quick-dates">
+                            <button class="btn-quick-date" onclick="setQuickDate('today')">今天</button>
+                            <button class="btn-quick-date" onclick="setQuickDate('yesterday')">昨天</button>
+                            <button class="btn-quick-date" onclick="setQuickDate('week')">近7天</button>
+                        </div>
+                    </div>
+                    <div class="toolbar-right">
+                        <span class="alerts-total">共 <span id="fullAlertCount">0</span> 条</span>
+                        <button class="btn btn-outline btn-sm" onclick="refreshFullAlerts()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                            刷新
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 告警列表 -->
+                <div class="full-alert-list" id="fullAlertList">
+                    <div class="loading-text">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 后台日志弹窗 -->
+    <div class="modal-overlay" id="logsModal">
+        <div class="modal modal-xl">
+            <div class="modal-header">
+                <h3 class="modal-title">后台日志</h3>
+                <button class="modal-close" onclick="closeLogsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 日志统计 -->
+                <div class="logs-stats" id="logsStats">
+                    <div class="log-stat-item">
+                        <span class="stat-label">总计</span>
+                        <span class="stat-value" id="logsTotalCount">0</span>
+                    </div>
+                    <div class="log-stat-item">
+                        <span class="stat-label">操作</span>
+                        <span class="stat-value" id="logsOperationCount">0</span>
+                    </div>
+                    <div class="log-stat-item">
+                        <span class="stat-label">请求</span>
+                        <span class="stat-value" id="logsRequestCount">0</span>
+                    </div>
+                    <div class="log-stat-item stat-error">
+                        <span class="stat-label">错误</span>
+                        <span class="stat-value" id="logsErrorCount">0</span>
+                    </div>
+                </div>
+
+                <!-- 日志工具栏 -->
+                <div class="logs-toolbar">
+                    <div class="toolbar-left">
+                        <select id="logTypeFilter" class="form-select-sm" onchange="filterLogs()">
+                            <option value="">全部类型</option>
+                            <option value="operation">操作日志</option>
+                            <option value="request">网络请求</option>
+                            <option value="system">系统日志</option>
+                        </select>
+                        <select id="logStatusFilter" class="form-select-sm" onchange="filterLogs()">
+                            <option value="">全部状态</option>
+                            <option value="info">信息</option>
+                            <option value="success">成功</option>
+                            <option value="warning">警告</option>
+                            <option value="error">错误</option>
+                        </select>
+                        <input type="text" id="logSearchInput" class="form-input-sm" placeholder="搜索日志..." onkeyup="debounceFilterLogs()">
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="btn btn-outline btn-sm" onclick="refreshLogs()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                            刷新
+                        </button>
+                        <button class="btn btn-outline btn-sm btn-danger" onclick="clearAllLogs()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            清空
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 日志列表 -->
+                <div class="logs-list" id="logsList">
+                    <div class="loading-text">加载中...</div>
+                </div>
+
+                <!-- 分页 -->
+                <div class="logs-pagination" id="logsPagination">
+                    <button class="btn btn-sm" onclick="loadLogsPage(logsCurrentPage - 1)" id="logsPrevBtn" disabled>上一页</button>
+                    <span class="page-info">第 <span id="logsCurrentPageNum">1</span> 页</span>
+                    <button class="btn btn-sm" onclick="loadLogsPage(logsCurrentPage + 1)" id="logsNextBtn">下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志详情弹窗 -->
+    <div class="modal-overlay" id="logDetailModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">日志详情</h3>
+                <button class="modal-close" onclick="closeLogDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="log-detail-content" id="logDetailContent">
+                    <!-- 详情内容由 JS 填充 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示消息 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 自定义脚本 -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

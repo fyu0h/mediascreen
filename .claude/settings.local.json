@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.takungpao.com.hk)",
+      "WebFetch(domain:www.takungpao.com)",
+      "WebFetch(domain:cn.nytimes.com)",
+      "WebFetch(domain:www.sinchew.com.my)",
+      "WebFetch(domain:www.cls.cn)",
+      "WebFetch(domain:www.usa.gov)",
+      "WebFetch(domain:www.state.gov)",
+      "WebFetch(domain:www.zaobao.com.sg)",
+      "WebFetch(domain:www.hkcna.hk)",
+      "WebFetch(domain:www.rfi.fr)",
+      "Bash(curl:*)",
+      "Bash(python fetch_sitemaps.py:*)",
+      "Bash(python analyze_sitemaps.py:*)",
+      "Bash(python crawl_news.py:*)",
+      "Bash(powershell -Command \"\\(Get-Item ''news_urls.json''\\).Length\")",
+      "Bash(python:*)",
+      "Bash(sc query:*)",
+      "Bash(findstr:*)",
+      "Bash(where:*)",
+      "Bash(dir \"C:\\\\Program Files\\\\MongoDB\" /s /b)",
+      "Bash(docker:*)"
+    ]
+  }
+}

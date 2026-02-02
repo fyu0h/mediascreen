@@ -1,0 +1,16 @@
+{
+  "llm": {
+    "provider": "siliconflow",
+    "api_url": "https://api.siliconflow.cn/v1/chat/completions",
+    "model": "deepseek-ai/DeepSeek-V3",
+    "api_key_masked": "",
+    "api_key_set": false,
+    "api_key": "sk-bgyzpzozdwghavpnsnglmbnmwakalhspstohaoasancrtokl"
+  },
+  "crawler": {
+    "timeout": 30,
+    "max_articles": 500,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  },
+  "updated_at": "2026-02-02 01:59:59"
+}

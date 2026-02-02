@@ -1,0 +1,797 @@
+# -*- coding: utf-8 -*-
+"""
+MongoDB 连接与查询封装
+"""
+
+from typing import Optional, Dict, List, Any, Iterator
+from datetime import datetime, timedelta
+import re
+
+from pymongo import MongoClient as PyMongoClient
+from pymongo.database import Database
+from pymongo.collection import Collection
+
+from config import Config
+
+# 全局数据库连接
+_client: Optional[PyMongoClient] = None
+_db: Optional[Database] = None
+
+
+def get_db() -> Database:
+    """获取数据库连接（单例模式）"""
+    global _client, _db
+    if _db is None:
+        _client = PyMongoClient(Config.get_mongo_uri())
+        _db = _client[Config.MONGO_DB]
+    return _db
+
+
+def close_db() -> None:
+    """关闭数据库连接"""
+    global _client, _db
+    if _client:
+        _client.close()
+        _client = None
+        _db = None
+
+
+def get_articles_collection() -> Collection:
+    """获取文章集合"""
+    return get_db()[Config.COLLECTION_ARTICLES]
+
+
+def get_sources_collection() -> Collection:
+    """获取新闻源集合"""
+    return get_db()[Config.COLLECTION_SOURCES]
+
+
+def get_keywords_collection() -> Collection:
+    """获取关键词集合"""
+    return get_db()['risk_keywords']
+
+
+# ==================== 文章保存 ====================
+
+def save_articles(articles: List[Dict[str, Any]]) -> int:
+    """
+    保存文章到数据库（去重）
+    参数：
+        articles: 文章列表
+    返回：新增的文章数量
+    """
+    if not articles:
+        return 0
+
+    collection = get_articles_collection()
+    saved_count = 0
+
+    for article in articles:
+        loc = article.get('loc')
+        if not loc:
+            continue
+
+        # 使用 upsert 避免重复
+        try:
+            result = collection.update_one(
+                {'loc': loc},
+                {
+                    '$set': {
+                        'title': article.get('title', ''),
+                        'source_name': article.get('source_name', ''),
+                        'country_code': article.get('country_code', ''),
+                        'coords': article.get('coords', []),
+                        'summary': article.get('summary', ''),
+                        'lastmod': article.get('lastmod'),
+                        'updated_at': datetime.now()
+                    },
+                    '$setOnInsert': {
+                        'loc': loc,
+                        'pub_date': article.get('pub_date'),
+                        'imported_at': datetime.now()
+                    }
+                },
+                upsert=True
+            )
+            if result.upserted_id:
+                saved_count += 1
+        except Exception as e:
+            print(f"保存文章失败: {loc}, 错误: {e}")
+
+    return saved_count
+
+
+# ==================== 统计查询 ====================
+
+def get_overview_stats() -> Dict[str, Any]:
+    """
+    获取概览统计数据
+    返回：总文章数、源数、国家数、日期范围
+    """
+    articles = get_articles_collection()
+    sources = get_sources_collection()
+
+    total_articles = articles.count_documents({})
+    total_sources = sources.count_documents({})
+
+    # 统计不同国家数量
+    country_codes = articles.distinct('country_code')
+    total_countries = len([c for c in country_codes if c])
+
+    # 获取日期范围（只统计有 pub_date 的记录）
+    date_pipeline = [
+        {'$match': {'pub_date': {'$ne': None}}},
+        {'$group': {
+            '_id': None,
+            'min_date': {'$min': '$pub_date'},
+            'max_date': {'$max': '$pub_date'}
+        }}
+    ]
+    date_result = list(articles.aggregate(date_pipeline))
+
+    date_range = None
+    if date_result:
+        min_date = date_result[0].get('min_date')
+        max_date = date_result[0].get('max_date')
+        if min_date and max_date:
+            date_range = {
+                'start': min_date.strftime('%Y-%m-%d') if isinstance(min_date, datetime) else str(min_date)[:10],
+                'end': max_date.strftime('%Y-%m-%d') if isinstance(max_date, datetime) else str(max_date)[:10]
+            }
+
+    return {
+        'total_articles': total_articles,
+        'total_sources': total_sources,
+        'total_countries': total_countries,
+        'date_range': date_range
+    }
+
+
+def get_source_stats() -> List[Dict[str, Any]]:
+    """
+    获取各源文章数量统计
+    返回：按文章数量降序排列的列表
+    """
+    articles = get_articles_collection()
+
+    pipeline = [
+        {'$group': {
+            '_id': '$source_name',
+            'count': {'$sum': 1}
+        }},
+        {'$sort': {'count': -1}},
+        {'$project': {
+            '_id': 0,
+            'source': '$_id',
+            'count': 1
+        }}
+    ]
+
+    return list(articles.aggregate(pipeline))
+
+
+def get_trend_stats(days: int = 30) -> List[Dict[str, Any]]:
+    """
+    获取时间趋势统计
+    参数：days - 统计天数
+    返回：按日期排序的每日文章数量
+    """
+    articles = get_articles_collection()
+
+    # 计算起始日期
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+
+    pipeline = [
+        {'$match': {
+            'pub_date': {
+                '$gte': start_date,
+                '$lte': end_date
+            }
+        }},
+        {'$group': {
+            '_id': {
+                '$dateToString': {
+                    'format': '%Y-%m-%d',
+                    'date': '$pub_date'
+                }
+            },
+            'count': {'$sum': 1}
+        }},
+        {'$sort': {'_id': 1}},
+        {'$project': {
+            '_id': 0,
+            'date': '$_id',
+            'count': 1
+        }}
+    ]
+
+    return list(articles.aggregate(pipeline))
+
+
+def get_country_stats() -> List[Dict[str, Any]]:
+    """
+    获取按国家统计的文章数量
+    返回：按文章数量降序排列的列表
+    """
+    articles = get_articles_collection()
+
+    pipeline = [
+        {'$match': {'country_code': {'$ne': None}}},
+        {'$group': {
+            '_id': '$country_code',
+            'count': {'$sum': 1}
+        }},
+        {'$sort': {'count': -1}},
+        {'$project': {
+            '_id': 0,
+            'country': '$_id',
+            'count': 1
+        }}
+    ]
+
+    return list(articles.aggregate(pipeline))
+
+
+# ==================== 文章查询 ====================
+
+def search_articles(
+    source: Optional[str] = None,
+    keyword: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20
+) -> Dict[str, Any]:
+    """
+    搜索文章
+    参数：
+        source: 新闻源名称
+        keyword: 关键词（标题模糊搜索）
+        start_date: 开始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+        page: 页码
+        page_size: 每页数量
+    返回：包含文章列表和分页信息的字典
+    """
+    articles = get_articles_collection()
+
+    # 构建查询条件
+    query: Dict[str, Any] = {}
+
+    if source:
+        query['source_name'] = source
+
+    if keyword:
+        # 使用正则表达式进行模糊搜索（中文兼容性好）
+        query['title'] = {'$regex': re.escape(keyword), '$options': 'i'}
+
+    if start_date or end_date:
+        date_query: Dict[str, Any] = {}
+        if start_date:
+            try:
+                date_query['$gte'] = datetime.strptime(start_date, '%Y-%m-%d')
+            except ValueError:
+                pass
+        if end_date:
+            try:
+                # 结束日期包含当天，所以加一天
+                date_query['$lte'] = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+            except ValueError:
+                pass
+        if date_query:
+            query['pub_date'] = date_query
+
+    # 计算总数
+    total = articles.count_documents(query)
+
+    # 分页查询
+    skip = (page - 1) * page_size
+    cursor = articles.find(query).sort('pub_date', -1).skip(skip).limit(page_size)
+
+    # 格式化结果
+    items = []
+    for doc in cursor:
+        item = {
+            'title': doc.get('title', ''),
+            'url': doc.get('loc', ''),
+            'source': doc.get('source_name', ''),
+            'pub_date': None,
+            'country': doc.get('country_code', '')
+        }
+        pub_date = doc.get('pub_date')
+        if pub_date:
+            if isinstance(pub_date, datetime):
+                item['pub_date'] = pub_date.strftime('%Y-%m-%d %H:%M')
+            else:
+                item['pub_date'] = str(pub_date)[:16]
+        items.append(item)
+
+    return {
+        'items': items,
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': (total + page_size - 1) // page_size
+    }
+
+
+# ==================== 地图数据 ====================
+
+def get_map_markers() -> List[Dict[str, Any]]:
+    """
+    获取地图标记数据
+    返回：包含坐标和文章数量的标记列表
+    """
+    articles = get_articles_collection()
+
+    pipeline = [
+        {'$match': {'coords': {'$ne': None}}},
+        {'$group': {
+            '_id': {
+                'source': '$source_name',
+                'coords': '$coords',
+                'country': '$country_code'
+            },
+            'count': {'$sum': 1}
+        }},
+        {'$project': {
+            '_id': 0,
+            'source': '$_id.source',
+            'coords': '$_id.coords',
+            'country': '$_id.country',
+            'count': 1
+        }}
+    ]
+
+    return list(articles.aggregate(pipeline))
+
+
+# ==================== 新闻源查询 ====================
+
+def get_source_list() -> List[str]:
+    """
+    获取所有新闻源名称列表
+    返回：新闻源名称列表
+    """
+    sources = get_sources_collection()
+    return sources.distinct('name')
+
+
+def get_all_sources() -> List[Dict[str, Any]]:
+    """
+    获取所有新闻源详细信息
+    返回：新闻源列表
+    """
+    sources = get_sources_collection()
+    result = []
+    for doc in sources.find():
+        result.append({
+            'name': doc.get('name', ''),
+            'url': doc.get('url', ''),
+            'country_code': doc.get('country_code', ''),
+            'coords': doc.get('coords')
+        })
+    return result
+
+
+# ==================== 风控关键词监控 ====================
+
+def get_keyword_stats(keywords: List[str], days: int = 7) -> Dict[str, Any]:
+    """
+    统计关键词匹配的文章数量
+    参数：
+        keywords: 关键词列表
+        days: 统计天数
+    返回：各关键词匹配数量
+    """
+    articles = get_articles_collection()
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+
+    results = []
+    for keyword in keywords:
+        # 使用正则表达式匹配（不区分大小写）
+        query = {
+            'title': {'$regex': re.escape(keyword), '$options': 'i'},
+            'pub_date': {'$gte': start_date, '$lte': end_date}
+        }
+        count = articles.count_documents(query)
+        if count > 0:
+            results.append({'keyword': keyword, 'count': count})
+
+    # 按数量降序排序
+    results.sort(key=lambda x: x['count'], reverse=True)
+    return results
+
+
+def get_risk_alerts(keywords_by_level: Dict[str, List[str]], limit: int = 50,
+                    date_str: str = None, filter_keyword: str = None) -> List[Dict[str, Any]]:
+    """
+    获取风控告警文章列表
+    参数：
+        keywords_by_level: 按风险等级分类的关键词 {"high": [...], "medium": [...], "low": [...]}
+        limit: 返回数量限制
+        date_str: 指定日期 (YYYY-MM-DD)，可选
+        filter_keyword: 筛选关键词，可选
+    返回：匹配风控关键词的文章列表（按时间降序）
+    """
+    articles = get_articles_collection()
+
+    # 构建所有关键词的正则表达式
+    all_keywords = []
+    keyword_levels = {}  # 关键词 -> 风险等级映射
+
+    for level, keywords in keywords_by_level.items():
+        for kw in keywords:
+            all_keywords.append(kw)
+            keyword_levels[kw.lower()] = level
+
+    if not all_keywords:
+        return []
+
+    # 如果指定了筛选关键词，只用该关键词查询
+    if filter_keyword:
+        regex_pattern = re.escape(filter_keyword)
+    else:
+        regex_pattern = '|'.join(re.escape(kw) for kw in all_keywords)
+
+    query = {
+        'title': {'$regex': regex_pattern, '$options': 'i'}
+    }
+
+    # 添加日期筛选
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d')
+            next_date = target_date + timedelta(days=1)
+            query['pub_date'] = {
+                '$gte': target_date,
+                '$lt': next_date
+            }
+        except ValueError:
+            pass  # 日期格式错误，忽略日期筛选
+
+    cursor = articles.find(query).sort('pub_date', -1).limit(limit)
+
+    results = []
+    for doc in cursor:
+        title = doc.get('title', '')
+        # 确定匹配的关键词和风险等级
+        matched_level = 'low'
+        matched_keywords = []
+
+        for kw in all_keywords:
+            if re.search(re.escape(kw), title, re.IGNORECASE):
+                matched_keywords.append(kw)
+                kw_level = keyword_levels.get(kw.lower(), 'low')
+                # 取最高风险等级
+                if kw_level == 'high':
+                    matched_level = 'high'
+                elif kw_level == 'medium' and matched_level != 'high':
+                    matched_level = 'medium'
+
+        pub_date = doc.get('pub_date')
+        pub_date_str = None
+        if pub_date:
+            if isinstance(pub_date, datetime):
+                pub_date_str = pub_date.strftime('%Y-%m-%d %H:%M')
+            else:
+                pub_date_str = str(pub_date)[:16]
+
+        results.append({
+            'title': title,
+            'url': doc.get('loc', ''),
+            'source': doc.get('source_name', ''),
+            'country': doc.get('country_code', ''),
+            'pub_date': pub_date_str,
+            'risk_level': matched_level,
+            'matched_keywords': matched_keywords[:3]  # 最多显示3个匹配关键词
+        })
+
+    return results
+
+
+def get_alerts_count_by_day(keywords_by_level: Dict[str, List[str]], year: int, month: int) -> Dict[str, int]:
+    """
+    获取指定月份每天的告警数量
+    参数：
+        keywords_by_level: 按风险等级分类的关键词
+        year: 年份
+        month: 月份
+    返回：{日期字符串: 数量, ...}
+    """
+    articles = get_articles_collection()
+
+    # 构建所有关键词
+    all_keywords = []
+    for level, keywords in keywords_by_level.items():
+        all_keywords.extend(keywords)
+
+    if not all_keywords:
+        return {}
+
+    # 计算月份的起止日期
+    first_day = datetime(year, month, 1)
+    if month == 12:
+        last_day = datetime(year + 1, 1, 1)
+    else:
+        last_day = datetime(year, month + 1, 1)
+
+    # 构建查询
+    regex_pattern = '|'.join(re.escape(kw) for kw in all_keywords)
+    query = {
+        'title': {'$regex': regex_pattern, '$options': 'i'},
+        'pub_date': {'$gte': first_day, '$lt': last_day}
+    }
+
+    # 聚合按天统计
+    pipeline = [
+        {'$match': query},
+        {'$group': {
+            '_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$pub_date'}},
+            'count': {'$sum': 1}
+        }},
+        {'$sort': {'_id': 1}}
+    ]
+
+    results = {}
+    for doc in articles.aggregate(pipeline):
+        if doc['_id']:
+            results[doc['_id']] = doc['count']
+
+    return results
+
+
+def get_keyword_trend(keyword: str, days: int = 7) -> List[Dict[str, Any]]:
+    """
+    获取单个关键词的时间趋势
+    参数：
+        keyword: 关键词
+        days: 统计天数
+    返回：按日期的匹配数量
+    """
+    articles = get_articles_collection()
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+
+    pipeline = [
+        {
+            '$match': {
+                'title': {'$regex': re.escape(keyword), '$options': 'i'},
+                'pub_date': {'$gte': start_date, '$lte': end_date}
+            }
+        },
+        {
+            '$group': {
+                '_id': {
+                    '$dateToString': {
+                        'format': '%Y-%m-%d',
+                        'date': '$pub_date'
+                    }
+                },
+                'count': {'$sum': 1}
+            }
+        },
+        {'$sort': {'_id': 1}},
+        {
+            '$project': {
+                '_id': 0,
+                'date': '$_id',
+                'count': 1
+            }
+        }
+    ]
+
+    return list(articles.aggregate(pipeline))
+
+
+def get_realtime_stats() -> Dict[str, Any]:
+    """
+    获取实时统计数据（用于大屏展示）
+    返回：今日新增、本周新增、活跃源数等
+    """
+    articles = get_articles_collection()
+    now = datetime.now()
+
+    # 今日开始时间
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # 本周开始时间（周一）
+    week_start = today_start - timedelta(days=now.weekday())
+    # 昨日
+    yesterday_start = today_start - timedelta(days=1)
+
+    # 今日新增
+    today_count = articles.count_documents({'pub_date': {'$gte': today_start}})
+
+    # 昨日新增（用于计算环比）
+    yesterday_count = articles.count_documents({
+        'pub_date': {'$gte': yesterday_start, '$lt': today_start}
+    })
+
+    # 本周新增
+    week_count = articles.count_documents({'pub_date': {'$gte': week_start}})
+
+    # 计算环比变化
+    if yesterday_count > 0:
+        change_rate = round((today_count - yesterday_count) / yesterday_count * 100, 1)
+    else:
+        change_rate = 0 if today_count == 0 else 100
+
+    # 今日活跃源（今日有新文章的源数量）
+    active_sources = len(articles.distinct('source_name', {'pub_date': {'$gte': today_start}}))
+
+    return {
+        'today_count': today_count,
+        'yesterday_count': yesterday_count,
+        'week_count': week_count,
+        'change_rate': change_rate,
+        'active_sources': active_sources,
+        'update_time': now.strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+
+# ==================== 风控关键词管理 ====================
+
+COLLECTION_RISK_KEYWORDS = 'risk_keywords'
+
+
+def get_risk_keywords_collection() -> Collection:
+    """获取风控关键词集合"""
+    return get_db()[COLLECTION_RISK_KEYWORDS]
+
+
+def get_all_risk_keywords() -> Dict[str, List[Dict[str, Any]]]:
+    """
+    获取所有风控关键词（按等级分组）
+    返回：{high: [{id, keyword}, ...], medium: [...], low: [...]}
+    """
+    collection = get_risk_keywords_collection()
+    result = {'high': [], 'medium': [], 'low': []}
+
+    for doc in collection.find().sort('created_at', -1):
+        level = doc.get('level', 'low')
+        if level in result:
+            result[level].append({
+                'id': str(doc['_id']),
+                'keyword': doc.get('keyword', ''),
+                'created_at': doc.get('created_at', '').strftime('%Y-%m-%d %H:%M') if doc.get('created_at') else ''
+            })
+
+    return result
+
+
+def get_risk_keywords_flat() -> Dict[str, List[str]]:
+    """
+    获取所有风控关键词（扁平格式，用于匹配）
+    返回：{high: [keyword1, ...], medium: [...], low: [...]}
+    """
+    collection = get_risk_keywords_collection()
+    result = {'high': [], 'medium': [], 'low': []}
+
+    for doc in collection.find():
+        level = doc.get('level', 'low')
+        keyword = doc.get('keyword', '')
+        if level in result and keyword:
+            result[level].append(keyword)
+
+    return result
+
+
+def add_risk_keyword(keyword: str, level: str) -> Dict[str, Any]:
+    """
+    添加风控关键词
+    参数：
+        keyword: 关键词
+        level: 风险等级 (high/medium/low)
+    返回：新建的关键词文档
+    """
+    collection = get_risk_keywords_collection()
+
+    # 检查是否已存在
+    existing = collection.find_one({'keyword': keyword})
+    if existing:
+        raise ValueError(f'关键词 "{keyword}" 已存在')
+
+    # 验证等级
+    if level not in ['high', 'medium', 'low']:
+        raise ValueError('风险等级必须是 high、medium 或 low')
+
+    doc = {
+        'keyword': keyword.strip(),
+        'level': level,
+        'created_at': datetime.now()
+    }
+
+    result = collection.insert_one(doc)
+    doc['id'] = str(result.inserted_id)
+    return doc
+
+
+def update_risk_keyword(keyword_id: str, keyword: Optional[str] = None, level: Optional[str] = None) -> bool:
+    """
+    更新风控关键词
+    参数：
+        keyword_id: 关键词ID
+        keyword: 新关键词（可选）
+        level: 新风险等级（可选）
+    返回：是否更新成功
+    """
+    from bson import ObjectId
+
+    collection = get_risk_keywords_collection()
+
+    update_fields = {}
+    if keyword is not None:
+        # 检查新关键词是否与其他记录重复
+        existing = collection.find_one({
+            'keyword': keyword,
+            '_id': {'$ne': ObjectId(keyword_id)}
+        })
+        if existing:
+            raise ValueError(f'关键词 "{keyword}" 已存在')
+        update_fields['keyword'] = keyword.strip()
+
+    if level is not None:
+        if level not in ['high', 'medium', 'low']:
+            raise ValueError('风险等级必须是 high、medium 或 low')
+        update_fields['level'] = level
+
+    if not update_fields:
+        return False
+
+    update_fields['updated_at'] = datetime.now()
+
+    result = collection.update_one(
+        {'_id': ObjectId(keyword_id)},
+        {'$set': update_fields}
+    )
+
+    return result.modified_count > 0
+
+
+def delete_risk_keyword(keyword_id: str) -> bool:
+    """
+    删除风控关键词
+    参数：
+        keyword_id: 关键词ID
+    返回：是否删除成功
+    """
+    from bson import ObjectId
+
+    collection = get_risk_keywords_collection()
+    result = collection.delete_one({'_id': ObjectId(keyword_id)})
+    return result.deleted_count > 0
+
+
+def init_default_risk_keywords() -> int:
+    """
+    初始化默认风控关键词（如果集合为空）
+    返回：插入的关键词数量
+    """
+    from config import RISK_KEYWORDS
+
+    collection = get_risk_keywords_collection()
+
+    # 如果已有数据则跳过
+    if collection.count_documents({}) > 0:
+        return 0
+
+    # 创建唯一索引
+    collection.create_index('keyword', unique=True)
+
+    # 插入默认关键词
+    docs = []
+    now = datetime.now()
+    for level, keywords in RISK_KEYWORDS.items():
+        for kw in keywords:
+            docs.append({
+                'keyword': kw,
+                'level': level,
+                'created_at': now
+            })
+
+    if docs:
+        collection.insert_many(docs)
+
+    return len(docs)
