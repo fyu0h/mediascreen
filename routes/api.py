@@ -32,7 +32,9 @@ from models.mongo import (
     update_risk_keyword,
     delete_risk_keyword,
     init_default_risk_keywords,
-    get_alerts_count_by_day
+    get_alerts_count_by_day,
+    mark_alert_read,
+    get_read_alerts
 )
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -347,6 +349,38 @@ def risk_alerts_calendar():
         return error_response(f'获取日历数据失败: {str(e)}', 500)
 
 
+@api_bp.route('/risk/alerts/read', methods=['POST'])
+def risk_alerts_mark_read():
+    """
+    标记告警为已读
+    请求体：{url: "文章URL", reader_name: "阅读者姓名（可选）"}
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('请求体不能为空', 400)
+
+        url = data.get('url', '').strip()
+        reader_name = data.get('reader_name', '').strip()
+
+        if not url:
+            return error_response('文章URL不能为空', 400)
+
+        success = mark_alert_read(url, reader_name if reader_name else None)
+
+        if success:
+            return success_response({
+                'message': '已标记为已读',
+                'url': url,
+                'reader_name': reader_name
+            })
+        else:
+            return error_response('标记已读失败', 500)
+
+    except Exception as e:
+        return error_response(f'标记已读失败: {str(e)}', 500)
+
+
 @api_bp.route('/risk/stats', methods=['GET'])
 def risk_stats():
     """
@@ -405,7 +439,7 @@ def risk_trend():
         return error_response(f'获取关键词趋势失败: {str(e)}', 500)
 
 
-# ==================== 订阅管理接口 ====================
+# ==================== 订阅管理接口（已废弃，使用插件管理替代） ====================
 
 from models.sites import (
     get_all_sites,
@@ -422,11 +456,13 @@ from models.sites import (
 @api_bp.route('/sites', methods=['GET'])
 def sites_list():
     """
-    获取所有订阅站点
-    返回：站点列表
+    获取所有订阅站点（兼容旧接口）
+    注：推荐使用 /api/plugins 和 /api/subscriptions 接口
     """
     try:
-        data = get_all_sites()
+        # 优先从插件系统获取已启用的站点
+        from models.plugins import get_enabled_sites
+        data = get_enabled_sites()
         return success_response(data)
     except Exception as e:
         return error_response(f'获取站点列表失败: {str(e)}', 500)
@@ -435,45 +471,21 @@ def sites_list():
 @api_bp.route('/sites', methods=['POST'])
 def sites_add():
     """
-    添加新站点
-    请求体：{name: "站点名称", url: "站点URL", auto_detect: true/false}
+    添加新站点（已禁用）
+    请使用插件管理功能
     """
-    try:
-        data = request.get_json()
-        if not data:
-            return error_response('请求体不能为空', 400)
-
-        name = data.get('name', '').strip()
-        url = data.get('url', '').strip()
-        auto_detect = data.get('auto_detect', True)
-
-        if not name:
-            return error_response('站点名称不能为空', 400)
-        if not url:
-            return error_response('站点 URL 不能为空', 400)
-
-        site = add_site(name, url, auto_detect)
-
-        log_operation(
-            action=f'添加站点: {name}',
-            details={'url': url, 'auto_detect': auto_detect, 'site_id': site.get('id')},
-            status='success'
-        )
-
-        return success_response(site)
-    except ValueError as e:
-        return error_response(str(e), 400)
-    except Exception as e:
-        return error_response(f'添加站点失败: {str(e)}', 500)
+    return error_response('手动添加站点功能已禁用，请使用插件管理功能', 400)
 
 
 @api_bp.route('/sites/<site_id>', methods=['GET'])
 def sites_get(site_id: str):
     """获取单个站点信息"""
     try:
-        site = get_site(site_id)
-        if site:
-            return success_response(site)
+        # 先从插件系统查找
+        from models.plugins import get_enabled_sites
+        for site in get_enabled_sites():
+            if site.get('id') == site_id:
+                return success_response(site)
         return error_response('站点不存在', 404)
     except Exception as e:
         return error_response(f'获取站点失败: {str(e)}', 500)
@@ -482,83 +494,33 @@ def sites_get(site_id: str):
 @api_bp.route('/sites/<site_id>', methods=['PUT'])
 def sites_update(site_id: str):
     """
-    更新站点信息
-    请求体：{name, url, country_code, status, fetch_method}（均可选）
+    更新站点信息（已禁用）
+    请使用插件管理功能
     """
-    try:
-        data = request.get_json()
-        if not data:
-            return error_response('请求体不能为空', 400)
-
-        site = update_site(
-            site_id,
-            name=data.get('name'),
-            url=data.get('url'),
-            country_code=data.get('country_code'),
-            status=data.get('status'),
-            fetch_method=data.get('fetch_method')
-        )
-
-        if site:
-            return success_response(site)
-        return error_response('站点不存在', 404)
-    except ValueError as e:
-        return error_response(str(e), 400)
-    except Exception as e:
-        return error_response(f'更新站点失败: {str(e)}', 500)
+    return error_response('请使用插件管理功能修改站点配置', 400)
 
 
 @api_bp.route('/sites/<site_id>', methods=['DELETE'])
 def sites_delete(site_id: str):
-    """删除站点"""
-    try:
-        site = get_site(site_id)
-        if delete_site(site_id):
-            log_operation(
-                action=f'删除站点: {site.get("name") if site else site_id}',
-                details={'site_id': site_id},
-                status='success'
-            )
-            return success_response({'message': '删除成功'})
-        return error_response('站点不存在', 404)
-    except Exception as e:
-        return error_response(f'删除站点失败: {str(e)}', 500)
+    """
+    删除站点（已禁用）
+    请使用插件管理功能
+    """
+    return error_response('请使用插件管理功能禁用站点', 400)
 
 
 @api_bp.route('/sites/<site_id>/recheck', methods=['POST'])
 def sites_recheck(site_id: str):
-    """重新检测站点的 sitemap 支持"""
-    try:
-        result = recheck_sitemap(site_id)
-        return success_response(result)
-    except ValueError as e:
-        return error_response(str(e), 400)
-    except Exception as e:
-        return error_response(f'检测失败: {str(e)}', 500)
+    """重新检测站点的 sitemap 支持（已禁用）"""
+    return error_response('此功能已禁用，站点配置由插件预设', 400)
 
 
 @api_bp.route('/sites/check-url', methods=['POST'])
 def sites_check_url():
     """
-    检测 URL 的 sitemap 支持（不保存）
-    请求体：{url: "站点URL"}
+    检测 URL 的 sitemap 支持（已禁用）
     """
-    try:
-        data = request.get_json()
-        if not data:
-            return error_response('请求体不能为空', 400)
-
-        url = data.get('url', '').strip()
-        if not url:
-            return error_response('URL 不能为空', 400)
-
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
-
-        result = check_sitemap(url)
-        return success_response(result)
-    except Exception as e:
-        return error_response(f'检测失败: {str(e)}', 500)
+    return error_response('此功能已禁用，站点配置由插件预设', 400)
 
 
 @api_bp.route('/sites/countries', methods=['GET'])
@@ -577,114 +539,218 @@ def sites_countries():
 @api_bp.route('/sites/batch-import', methods=['POST'])
 def sites_batch_import():
     """
-    批量导入站点
-    请求体：{sites: [{name: "名称", url: "URL"}, ...], auto_detect: true/false}
+    批量导入站点（已禁用）
     """
-    try:
-        data = request.get_json()
-        if not data:
-            return error_response('请求体不能为空', 400)
-
-        sites_data = data.get('sites', [])
-        auto_detect = data.get('auto_detect', False)  # 批量导入默认不检测
-
-        if not sites_data:
-            return error_response('站点列表不能为空', 400)
-
-        results = {
-            'success': [],
-            'failed': []
-        }
-
-        for item in sites_data:
-            name = item.get('name', '').strip()
-            url = item.get('url', '').strip()
-
-            if not name or not url:
-                results['failed'].append({
-                    'name': name or '(空)',
-                    'url': url or '(空)',
-                    'error': '名称或URL为空'
-                })
-                continue
-
-            try:
-                site = add_site(name, url, auto_detect=auto_detect)
-                results['success'].append({
-                    'id': site['id'],
-                    'name': site['name'],
-                    'url': site['url'],
-                    'country_code': site.get('country_code'),
-                    'fetch_method': site.get('fetch_method')
-                })
-            except ValueError as e:
-                results['failed'].append({
-                    'name': name,
-                    'url': url,
-                    'error': str(e)
-                })
-            except Exception as e:
-                results['failed'].append({
-                    'name': name,
-                    'url': url,
-                    'error': f'导入失败: {str(e)}'
-                })
-
-        return success_response(results)
-    except Exception as e:
-        return error_response(f'批量导入失败: {str(e)}', 500)
+    return error_response('批量导入功能已禁用，请使用插件管理功能', 400)
 
 
 @api_bp.route('/sites/batch-check', methods=['POST'])
 def sites_batch_check():
     """
-    一键检测所有站点的 sitemap 支持
-    返回：检测结果列表
+    一键检测所有站点的 sitemap 支持（已禁用）
+    """
+    return error_response('此功能已禁用，站点配置由插件预设', 400)
+
+
+# ==================== 插件管理接口 ====================
+
+from models.plugins import (
+    get_plugins_with_status,
+    get_enabled_sites,
+    toggle_site,
+    set_fetch_method,
+    set_auto_update,
+    get_auto_update_sites,
+    is_site_enabled,
+    get_site_fetch_method
+)
+from plugins.registry import plugin_registry
+
+
+@api_bp.route('/plugins', methods=['GET'])
+def plugins_list():
+    """
+    获取所有插件及其站点状态
+    返回：插件列表，每个插件包含站点列表和启用状态
     """
     try:
-        sites = get_all_sites()
-        results = {
-            'total': len(sites),
-            'checked': 0,
-            'sitemap': 0,
-            'crawler': 0,
-            'details': []
-        }
-
-        for site in sites:
-            site_id = site.get('id')
-            if not site_id:
-                continue
-
-            try:
-                check_result = recheck_sitemap(site_id)
-                updated_site = check_result['site']
-                is_sitemap = updated_site.get('fetch_method') == 'sitemap'
-
-                results['checked'] += 1
-                if is_sitemap:
-                    results['sitemap'] += 1
-                else:
-                    results['crawler'] += 1
-
-                results['details'].append({
-                    'id': site_id,
-                    'name': updated_site.get('name'),
-                    'fetch_method': updated_site.get('fetch_method'),
-                    'sitemap_url': updated_site.get('sitemap_url'),
-                    'success': True
-                })
-            except Exception as e:
-                results['details'].append({
-                    'id': site_id,
-                    'name': site.get('name'),
-                    'error': str(e),
-                    'success': False
-                })
-
-        return success_response(results)
+        data = get_plugins_with_status()
+        return success_response(data)
     except Exception as e:
-        return error_response(f'批量检测失败: {str(e)}', 500)
+        return error_response(f'获取插件列表失败: {str(e)}', 500)
+
+
+@api_bp.route('/plugins/<plugin_id>', methods=['GET'])
+def plugins_get(plugin_id: str):
+    """获取单个插件详情"""
+    try:
+        plugin = plugin_registry.get_plugin(plugin_id)
+        if not plugin:
+            return error_response('插件不存在', 404)
+
+        # 获取完整状态
+        plugins_data = get_plugins_with_status()
+        for p in plugins_data:
+            if p['id'] == plugin_id:
+                return success_response(p)
+
+        return error_response('插件不存在', 404)
+    except Exception as e:
+        return error_response(f'获取插件详情失败: {str(e)}', 500)
+
+
+@api_bp.route('/plugins/<plugin_id>/sites/<site_id>/toggle', methods=['POST'])
+def plugins_toggle_site(plugin_id: str, site_id: str):
+    """
+    切换站点启用状态
+    请求体：{enabled: true/false}
+    """
+    try:
+        data = request.get_json()
+        if data is None:
+            return error_response('请求体不能为空', 400)
+
+        enabled = data.get('enabled')
+        if enabled is None:
+            return error_response('缺少 enabled 参数', 400)
+
+        # 验证插件和站点存在
+        site = plugin_registry.get_site(plugin_id, site_id)
+        if not site:
+            return error_response('站点不存在', 404)
+
+        result = toggle_site(plugin_id, site_id, enabled)
+
+        log_operation(
+            action=f'{"启用" if enabled else "禁用"}站点: {site.get("name")}',
+            details={'plugin_id': plugin_id, 'site_id': site_id, 'enabled': enabled},
+            status='success'
+        )
+
+        return success_response({
+            'plugin_id': plugin_id,
+            'site_id': site_id,
+            'enabled': enabled,
+            'message': f'站点已{"启用" if enabled else "禁用"}'
+        })
+    except Exception as e:
+        return error_response(f'切换站点状态失败: {str(e)}', 500)
+
+
+@api_bp.route('/plugins/<plugin_id>/sites/<site_id>/method', methods=['PUT'])
+def plugins_set_method(plugin_id: str, site_id: str):
+    """
+    修改站点的抓取方式
+    请求体：{method: "sitemap"|"crawler"|"special"|null}
+    null 表示恢复默认
+    """
+    try:
+        data = request.get_json()
+        if data is None:
+            return error_response('请求体不能为空', 400)
+
+        method = data.get('method')
+        if method is not None and method not in ['sitemap', 'crawler', 'special']:
+            return error_response('无效的抓取方式，只支持 sitemap、crawler 或 special', 400)
+
+        # 验证插件和站点存在
+        site = plugin_registry.get_site(plugin_id, site_id)
+        if not site:
+            return error_response('站点不存在', 404)
+
+        result = set_fetch_method(plugin_id, site_id, method)
+
+        log_operation(
+            action=f'修改站点抓取方式: {site.get("name")}',
+            details={'plugin_id': plugin_id, 'site_id': site_id, 'method': method or '默认'},
+            status='success'
+        )
+
+        return success_response({
+            'plugin_id': plugin_id,
+            'site_id': site_id,
+            'method': method or site.get('fetch_method', 'crawler'),
+            'message': '抓取方式已更新'
+        })
+    except Exception as e:
+        return error_response(f'修改抓取方式失败: {str(e)}', 500)
+
+
+@api_bp.route('/plugins/<plugin_id>/sites/<site_id>/auto-update', methods=['PUT'])
+def plugins_set_auto_update(plugin_id: str, site_id: str):
+    """
+    设置站点的定时更新配置
+    请求体：{auto_update: true/false, update_interval: 秒数（可选）}
+    """
+    try:
+        data = request.get_json()
+        if data is None:
+            return error_response('请求体不能为空', 400)
+
+        auto_update = data.get('auto_update')
+        if auto_update is None:
+            return error_response('缺少 auto_update 参数', 400)
+
+        update_interval = data.get('update_interval')
+        if update_interval is not None:
+            update_interval = int(update_interval)
+            # 最小间隔60秒，最大间隔24小时
+            if update_interval < 60:
+                update_interval = 60
+            elif update_interval > 86400:
+                update_interval = 86400
+
+        # 验证插件和站点存在
+        site = plugin_registry.get_site(plugin_id, site_id)
+        if not site:
+            return error_response('站点不存在', 404)
+
+        result = set_auto_update(plugin_id, site_id, auto_update, update_interval)
+
+        log_operation(
+            action=f'设置站点定时更新: {site.get("name")}',
+            details={
+                'plugin_id': plugin_id,
+                'site_id': site_id,
+                'auto_update': auto_update,
+                'update_interval': update_interval or result.get('update_interval')
+            },
+            status='success'
+        )
+
+        return success_response({
+            'plugin_id': plugin_id,
+            'site_id': site_id,
+            'auto_update': auto_update,
+            'update_interval': result.get('update_interval', 300),
+            'message': f'定时更新已{"启用" if auto_update else "禁用"}'
+        })
+    except Exception as e:
+        return error_response(f'设置定时更新失败: {str(e)}', 500)
+
+
+@api_bp.route('/plugins/auto-update-sites', methods=['GET'])
+def plugins_auto_update_sites():
+    """
+    获取所有启用定时更新的站点
+    """
+    try:
+        data = get_auto_update_sites()
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取定时更新站点失败: {str(e)}', 500)
+
+
+@api_bp.route('/subscriptions', methods=['GET'])
+def subscriptions_list():
+    """
+    获取所有已启用的站点（用于爬虫和前端展示）
+    """
+    try:
+        data = get_enabled_sites()
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取订阅列表失败: {str(e)}', 500)
 
 
 # ==================== 设置接口 ====================
@@ -709,18 +775,38 @@ def get_settings():
     try:
         settings = load_settings()
 
-        # 遮蔽 LLM API Key
-        if 'llm' in settings and settings['llm'].get('api_key'):
-            settings['llm']['api_key_masked'] = mask_api_key(settings['llm']['api_key'])
-            settings['llm']['api_key_set'] = True
-        else:
-            settings['llm'] = settings.get('llm', {})
-            settings['llm']['api_key_masked'] = ''
-            settings['llm']['api_key_set'] = False
+        # 处理 LLM 设置
+        llm_config = settings.get('llm', {})
+        current_provider = llm_config.get('provider', 'siliconflow')
+        providers_config = llm_config.get('providers', {})
 
-        # 不返回原始 API Key
-        if 'llm' in settings:
-            settings['llm'].pop('api_key', None)
+        # 获取当前提供商的配置
+        current_provider_config = providers_config.get(current_provider, {})
+        current_api_key = current_provider_config.get('api_key', '')
+        current_api_url = current_provider_config.get('api_url', '')
+
+        # 构建返回的 LLM 配置
+        llm_response = {
+            'provider': current_provider,
+            'model': llm_config.get('model', 'deepseek-ai/DeepSeek-V3'),
+            'api_url': current_api_url,
+            'api_key_set': bool(current_api_key),
+            'api_key_masked': mask_api_key(current_api_key) if current_api_key else '',
+            # 各提供商的 Key 配置状态
+            'providers_status': {}
+        }
+
+        # 检查每个提供商的 API Key 配置状态
+        for provider_id in API_PROVIDERS.keys():
+            provider_cfg = providers_config.get(provider_id, {})
+            provider_key = provider_cfg.get('api_key', '')
+            llm_response['providers_status'][provider_id] = {
+                'api_key_set': bool(provider_key),
+                'api_key_masked': mask_api_key(provider_key) if provider_key else '',
+                'api_url': provider_cfg.get('api_url', API_PROVIDERS.get(provider_id, {}).get('api_url', ''))
+            }
+
+        settings['llm'] = llm_response
 
         # 添加 API 提供商列表
         settings['providers'] = API_PROVIDERS
@@ -742,17 +828,38 @@ def update_settings():
 
         current_settings = load_settings()
 
+        # 确保 llm.providers 存在
+        if 'llm' not in current_settings:
+            current_settings['llm'] = {}
+        if 'providers' not in current_settings['llm']:
+            current_settings['llm']['providers'] = {}
+
         # 更新 LLM 设置
         if 'llm' in data:
             llm = data['llm']
-            if 'provider' in llm:
-                current_settings['llm']['provider'] = llm['provider'].strip()
-            if 'api_url' in llm:
-                current_settings['llm']['api_url'] = llm['api_url'].strip()
-            if 'api_key' in llm and llm['api_key']:  # 只有提供了新的 key 才更新
-                current_settings['llm']['api_key'] = llm['api_key'].strip()
+            provider = llm.get('provider', current_settings['llm'].get('provider', 'siliconflow')).strip()
+
+            # 更新当前提供商
+            current_settings['llm']['provider'] = provider
+
+            # 更新模型
             if 'model' in llm:
                 current_settings['llm']['model'] = llm['model'].strip()
+
+            # 确保该提供商的配置存在
+            if provider not in current_settings['llm']['providers']:
+                current_settings['llm']['providers'][provider] = {
+                    'api_key': '',
+                    'api_url': API_PROVIDERS.get(provider, {}).get('api_url', '')
+                }
+
+            # 更新该提供商的 API URL
+            if 'api_url' in llm:
+                current_settings['llm']['providers'][provider]['api_url'] = llm['api_url'].strip()
+
+            # 更新该提供商的 API Key（只有提供了新的 key 才更新）
+            if 'api_key' in llm and llm['api_key']:
+                current_settings['llm']['providers'][provider]['api_key'] = llm['api_key'].strip()
 
         # 更新爬虫设置
         if 'crawler' in data:
@@ -793,6 +900,7 @@ def test_api_connection():
         if not data:
             return error_response('请求体不能为空', 400)
 
+        provider = data.get('provider', 'siliconflow').strip()
         api_url = data.get('api_url', '').strip()
         api_key = data.get('api_key', '').strip()
         model = data.get('model', '').strip()
@@ -800,18 +908,18 @@ def test_api_connection():
 
         # 如果使用已保存的配置
         if use_saved or not api_key:
-            config = get_llm_config()
-            api_key = config.get('api_key', '')
-            if not api_url:
-                api_url = config.get('api_url', '')
-            if not model:
-                model = config.get('model', '')
+            from models.settings import get_provider_api_key
+            api_key = get_provider_api_key(provider)
+
+        if not api_url:
+            api_url = API_PROVIDERS.get(provider, {}).get('api_url', '')
+
+        if not model:
+            models = API_PROVIDERS.get(provider, {}).get('models', [])
+            model = models[0]['id'] if models else 'deepseek-ai/DeepSeek-V3'
 
         if not api_url or not api_key:
             return error_response('API URL 和 API Key 不能为空', 400)
-
-        if not model:
-            model = 'deepseek-ai/DeepSeek-V3'
 
         # 确保 URL 格式正确
         if not api_url.endswith('/chat/completions'):
@@ -900,253 +1008,225 @@ def update_duty():
 
 # ==================== 文章爬取接口 ====================
 
-from crawlers import SitemapCrawler, AICrawler
-from models.mongo import save_articles, get_articles_collection
+from models.mongo import save_articles
 
+@api_bp.route('/crawl/update', methods=['POST'])
+def crawl_update():
+    """
+    更新文章 - 多线程并发爬取所有已启用站点的新闻
+    返回：爬取结果报表
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-@api_bp.route('/crawl/sitemap/<site_id>', methods=['POST'])
-def crawl_sitemap(site_id: str):
-    """
-    使用 Sitemap 方式爬取站点文章
-    """
     try:
-        site = get_site(site_id)
-        if not site:
-            return error_response('站点不存在', 404)
+        from models.plugins import get_enabled_sites
+        from plugins.crawler import get_crawler
 
-        if not site.get('sitemap_url'):
-            return error_response('该站点未配置 Sitemap URL', 400)
+        sites = get_enabled_sites()
 
-        crawler = SitemapCrawler()
-        result = crawler.crawl(site, max_articles=500)
-
-        if not result['success']:
-            return error_response(result.get('error', '爬取失败'), 500)
-
-        # 保存文章到数据库
-        articles = result.get('articles', [])
-        saved_count = 0
-        if articles:
-            saved_count = save_articles(articles)
-
-        return success_response({
-            'site_id': site_id,
-            'site_name': site.get('name'),
-            'method': 'sitemap',
-            'fetched': len(articles),
-            'saved': saved_count
-        })
-    except Exception as e:
-        return error_response(f'爬取失败: {str(e)}', 500)
-
-
-@api_bp.route('/crawl/ai/<site_id>', methods=['POST'])
-def crawl_ai(site_id: str):
-    """
-    使用 AI 方式爬取站点文章
-    """
-    try:
-        site = get_site(site_id)
-        if not site:
-            return error_response('站点不存在', 404)
-
-        # 从设置获取 API 配置
-        llm_config = get_llm_config()
-        if not llm_config.get('api_key'):
-            return error_response('未配置 API Key，请在设置中配置', 400)
-
-        crawler = AICrawler(
-            api_key=llm_config['api_key'],
-            api_url=llm_config['api_url'],
-            model=llm_config.get('model', 'deepseek-ai/DeepSeek-V3')
-        )
-        result = crawler.crawl(site, max_articles=100)
-
-        if not result['success']:
-            return error_response(result.get('error', '爬取失败'), 500)
-
-        # 保存文章到数据库
-        articles = result.get('articles', [])
-        saved_count = 0
-        if articles:
-            saved_count = save_articles(articles)
-
-        return success_response({
-            'site_id': site_id,
-            'site_name': site.get('name'),
-            'method': 'ai',
-            'fetched': len(articles),
-            'saved': saved_count
-        })
-    except Exception as e:
-        return error_response(f'爬取失败: {str(e)}', 500)
-
-
-@api_bp.route('/crawl/batch', methods=['POST'])
-def crawl_batch():
-    """
-    批量爬取所有站点
-    请求体：{method: "auto"|"sitemap"|"ai"} - auto 根据站点配置自动选择
-    """
-    try:
-        data = request.get_json() or {}
-        method = data.get('method', 'auto')
-
-        sites = get_all_sites()
         results = {
             'total': len(sites),
             'success': 0,
             'failed': 0,
             'total_articles': 0,
+            'total_saved': 0,
             'details': []
         }
 
-        sitemap_crawler = SitemapCrawler()
-        ai_crawler = None
-        llm_config = get_llm_config()
-        if llm_config.get('api_key'):
-            ai_crawler = AICrawler(
-                api_key=llm_config['api_key'],
-                api_url=llm_config['api_url'],
-                model=llm_config.get('model', 'deepseek-ai/DeepSeek-V3')
-            )
+        if not sites:
+            return success_response(results)
 
-        for site in sites:
+        def crawl_single_site(site):
+            """爬取单个站点"""
             site_id = site.get('id')
             site_name = site.get('name', '')
-            fetch_method = site.get('fetch_method', 'unknown')
+            crawler = get_crawler()
 
             try:
-                # 选择爬取方式
-                use_sitemap = False
-                if method == 'sitemap':
-                    use_sitemap = True
-                elif method == 'ai':
-                    use_sitemap = False
-                else:  # auto
-                    use_sitemap = fetch_method == 'sitemap' and site.get('sitemap_url')
-
-                if use_sitemap:
-                    if not site.get('sitemap_url'):
-                        raise ValueError('未配置 Sitemap URL')
-                    result = sitemap_crawler.crawl(site)
-                else:
-                    if not ai_crawler:
-                        raise ValueError('未配置 DeepSeek API Key')
-                    result = ai_crawler.crawl(site)
+                result = crawler.crawl_site(site, max_articles=100)
 
                 if result['success']:
                     articles = result.get('articles', [])
                     saved_count = save_articles(articles) if articles else 0
-                    results['success'] += 1
-                    results['total_articles'] += saved_count
-                    results['details'].append({
+                    return {
                         'id': site_id,
                         'name': site_name,
-                        'method': 'sitemap' if use_sitemap else 'ai',
                         'fetched': len(articles),
                         'saved': saved_count,
                         'success': True
-                    })
+                    }
                 else:
                     raise ValueError(result.get('error', '爬取失败'))
 
             except Exception as e:
-                results['failed'] += 1
-                results['details'].append({
+                return {
                     'id': site_id,
                     'name': site_name,
                     'error': str(e),
                     'success': False
-                })
+                }
+
+        # 使用线程池并发爬取
+        max_workers = min(10, len(sites))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(crawl_single_site, site) for site in sites]
+
+            for future in as_completed(futures):
+                detail = future.result()
+                results['details'].append(detail)
+
+                if detail['success']:
+                    results['success'] += 1
+                    results['total_articles'] += detail.get('fetched', 0)
+                    results['total_saved'] += detail.get('saved', 0)
+                else:
+                    results['failed'] += 1
 
         return success_response(results)
     except Exception as e:
-        return error_response(f'批量爬取失败: {str(e)}', 500)
+        return error_response(f'更新文章失败: {str(e)}', 500)
 
 
-@api_bp.route('/crawl/batch/stream', methods=['GET'])
-def crawl_batch_stream():
+@api_bp.route('/crawl/update/stream', methods=['GET'])
+def crawl_update_stream():
     """
-    批量爬取所有站点（SSE 流式返回进度）
-    参数：method - auto|sitemap|ai
+    更新文章（SSE 流式返回进度）- 多线程并发版本
     返回：Server-Sent Events 流
     """
     from flask import Response
     import json
-
-    method = request.args.get('method', 'auto')
+    import queue
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     def generate():
-        sites = get_all_sites()
-        total = len(sites)
+        from models.plugins import get_enabled_sites
+        from plugins.crawler import get_crawler
 
-        # 发送初始化事件
-        yield f"data: {json.dumps({'type': 'init', 'total': total})}\n\n"
+        try:
+            sites = get_enabled_sites()
+            total = len(sites)
 
-        if total == 0:
-            yield f"data: {json.dumps({'type': 'complete', 'success': 0, 'failed': 0, 'total_articles': 0})}\n\n"
-            return
+            # 发送初始化事件（包含站点列表）
+            sites_info = [{'id': s.get('id'), 'name': s.get('name', '')} for s in sites]
+            yield f"data: {json.dumps({'type': 'init', 'total': total, 'sites': sites_info, 'scheduler_sites': []})}\n\n"
 
-        sitemap_crawler = SitemapCrawler()
-        ai_crawler = None
-        llm_config = get_llm_config()
-        if llm_config.get('api_key'):
-            ai_crawler = AICrawler(
-                api_key=llm_config['api_key'],
-                api_url=llm_config['api_url'],
-                model=llm_config.get('model', 'deepseek-ai/DeepSeek-V3')
+            if total == 0:
+                yield f"data: {json.dumps({'type': 'complete', 'success_count': 0, 'failed_count': 0, 'total_articles': 0, 'total_saved': 0, 'details': [], 'scheduler_count': 0})}\n\n"
+                return
+
+            # 结果队列
+            result_queue = queue.Queue()
+            completed_count = 0
+
+            def crawl_single_site(site, index):
+                """爬取单个站点的工作函数"""
+                site_id = site.get('id')
+                site_name = site.get('name', '')
+                crawler = get_crawler()
+
+                try:
+                    result = crawler.crawl_site(site, max_articles=100)
+
+                    if result['success']:
+                        articles = result.get('articles', [])
+                        article_count = len(articles)
+                        saved_count = save_articles(articles) if articles else 0
+
+                        return {
+                            'index': index,
+                            'site_id': site_id,
+                            'site_name': site_name,
+                            'success': True,
+                            'article_count': article_count,
+                            'saved_count': saved_count,
+                            'error': None
+                        }
+                    else:
+                        raise ValueError(result.get('error', '爬取失败'))
+
+                except Exception as e:
+                    return {
+                        'index': index,
+                        'site_id': site_id,
+                        'site_name': site_name,
+                        'success': False,
+                        'article_count': 0,
+                        'saved_count': 0,
+                        'error': str(e)[:100]
+                    }
+
+            # 发送开始并发爬取的消息
+            yield f"data: {json.dumps({'type': 'progress', 'message': '开始并发爬取...', 'total': total})}\n\n"
+
+            # 使用线程池并发爬取
+            max_workers = min(10, total)  # 最多10个并发线程
+            success_count = 0
+            failed_count = 0
+            total_articles = 0
+            total_saved = 0
+            details = []
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 提交所有任务
+                future_to_site = {
+                    executor.submit(crawl_single_site, site, i): site
+                    for i, site in enumerate(sites)
+                }
+
+                # 收集结果
+                for future in as_completed(future_to_site):
+                    completed_count += 1
+                    result = future.result()
+
+                    if result['success']:
+                        success_count += 1
+                        total_articles += result['article_count']
+                        total_saved += result['saved_count']
+                        details.append({
+                            'id': result['site_id'],
+                            'name': result['site_name'],
+                            'fetched': result['article_count'],
+                            'saved': result['saved_count'],
+                            'success': True
+                        })
+                        # 发送站点完成事件
+                        yield f"data: {json.dumps({'type': 'site_done', 'completed': completed_count, 'total': total, 'site_id': result['site_id'], 'site_name': result['site_name'], 'success': True, 'article_count': result['article_count'], 'saved_count': result['saved_count']})}\n\n"
+                    else:
+                        failed_count += 1
+                        details.append({
+                            'id': result['site_id'],
+                            'name': result['site_name'],
+                            'error': result['error'],
+                            'success': False
+                        })
+                        # 发送站点失败事件
+                        yield f"data: {json.dumps({'type': 'site_done', 'completed': completed_count, 'total': total, 'site_id': result['site_id'], 'site_name': result['site_name'], 'success': False, 'error': result['error']})}\n\n"
+
+            # 发送完成事件（包含完整报表）
+            yield f"data: {json.dumps({'type': 'complete', 'success_count': success_count, 'failed_count': failed_count, 'total_articles': total_articles, 'total_saved': total_saved, 'details': details, 'scheduler_count': 0})}\n\n"
+
+            # 记录日志
+            log_operation(
+                action='文章更新完成',
+                details={
+                    'success_count': success_count,
+                    'failed_count': failed_count,
+                    'total_articles': total_articles,
+                    'total_saved': total_saved,
+                    'sites': [d['name'] for d in details if d['success']]
+                },
+                status='success' if failed_count == 0 else 'warning'
             )
 
-        success_count = 0
-        failed_count = 0
-        total_articles = 0
-
-        for index, site in enumerate(sites):
-            site_id = site.get('id')
-            site_name = site.get('name', '')
-            fetch_method = site.get('fetch_method', 'unknown')
-
-            # 发送进度事件 - 开始处理该站点
-            yield f"data: {json.dumps({'type': 'progress', 'current': index + 1, 'total': total, 'site_id': site_id, 'site_name': site_name, 'status': 'processing'})}\n\n"
-
-            try:
-                # 选择爬取方式
-                use_sitemap = False
-                if method == 'sitemap':
-                    use_sitemap = True
-                elif method == 'ai':
-                    use_sitemap = False
-                else:  # auto
-                    use_sitemap = fetch_method == 'sitemap' and site.get('sitemap_url')
-
-                if use_sitemap:
-                    if not site.get('sitemap_url'):
-                        raise ValueError('未配置 Sitemap URL')
-                    result = sitemap_crawler.crawl(site)
-                else:
-                    if not ai_crawler:
-                        raise ValueError('未配置 API Key')
-                    result = ai_crawler.crawl(site)
-
-                if result['success']:
-                    articles = result.get('articles', [])
-                    saved_count = save_articles(articles) if articles else 0
-                    success_count += 1
-                    total_articles += saved_count
-
-                    # 发送该站点成功事件
-                    yield f"data: {json.dumps({'type': 'site_done', 'current': index + 1, 'total': total, 'site_id': site_id, 'site_name': site_name, 'success': True, 'method': 'sitemap' if use_sitemap else 'ai', 'fetched': len(articles), 'saved': saved_count, 'success_count': success_count, 'failed_count': failed_count, 'total_articles': total_articles})}\n\n"
-                else:
-                    raise ValueError(result.get('error', '爬取失败'))
-
-            except Exception as e:
-                failed_count += 1
-                # 发送该站点失败事件
-                yield f"data: {json.dumps({'type': 'site_done', 'current': index + 1, 'total': total, 'site_id': site_id, 'site_name': site_name, 'success': False, 'error': str(e), 'success_count': success_count, 'failed_count': failed_count, 'total_articles': total_articles})}\n\n"
-
-        # 发送完成事件
-        yield f"data: {json.dumps({'type': 'complete', 'success': success_count, 'failed': failed_count, 'total_articles': total_articles})}\n\n"
+        except Exception as e:
+            log_operation(
+                action='文章更新失败',
+                details={'error': str(e)},
+                status='error',
+                error=str(e)
+            )
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return Response(
         generate(),
@@ -1157,6 +1237,31 @@ def crawl_batch_stream():
             'X-Accel-Buffering': 'no'
         }
     )
+
+
+# ==================== 调度器接口 ====================
+
+@api_bp.route('/scheduler/status', methods=['GET'])
+def scheduler_status():
+    """获取调度器状态"""
+    try:
+        from plugins.scheduler import get_rss_scheduler
+        scheduler = get_rss_scheduler()
+        return success_response(scheduler.get_status())
+    except Exception as e:
+        return error_response(f'获取调度器状态失败: {str(e)}', 500)
+
+
+@api_bp.route('/scheduler/trigger', methods=['POST'])
+def scheduler_trigger():
+    """手动触发一次更新"""
+    try:
+        from plugins.scheduler import get_rss_scheduler
+        scheduler = get_rss_scheduler()
+        scheduler.trigger_update()
+        return success_response({'message': '已触发更新'})
+    except Exception as e:
+        return error_response(f'触发更新失败: {str(e)}', 500)
 
 
 # ==================== 日志接口 ====================
@@ -1397,3 +1502,387 @@ def achievements_fetch_title():
 
     except Exception as e:
         return error_response(f'抓取标题失败: {str(e)}', 500)
+
+
+# ==================== 舆情总结接口 ====================
+
+import requests
+import re
+import json as json_module
+from datetime import datetime, timedelta
+from models.settings import get_llm_config, get_summary_prompt, set_summary_prompt, get_default_summary_prompt
+
+
+def get_summaries_collection():
+    """获取AI总结集合"""
+    from models.mongo import get_db
+    return get_db()[Config.COLLECTION_SUMMARIES]
+
+
+def extract_json_from_content(content: str) -> dict:
+    """从AI返回内容中提取JSON数据块"""
+    # 尝试匹配 ```json ... ``` 代码块
+    json_pattern = r'```json\s*([\s\S]*?)\s*```'
+    match = re.search(json_pattern, content)
+
+    if match:
+        json_str = match.group(1).strip()
+        try:
+            return json_module.loads(json_str)
+        except json_module.JSONDecodeError as e:
+            print(f"JSON解析失败: {e}")
+            return {}
+
+    # 如果没有代码块，尝试直接查找 JSON 对象
+    json_obj_pattern = r'\{\s*"news_data"\s*:\s*\{[\s\S]*?\}\s*\}'
+    match = re.search(json_obj_pattern, content)
+    if match:
+        try:
+            return json_module.loads(match.group(0))
+        except json_module.JSONDecodeError:
+            pass
+
+    return {}
+
+
+@api_bp.route('/summary/daily', methods=['POST'])
+def summary_daily():
+    """
+    生成当天舆情总结
+    使用 LLM 分析当天所有新闻标题
+    """
+    try:
+        # 获取今天的时间范围
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow = today + timedelta(days=1)
+
+        # 从数据库获取今天的所有文章
+        from models.mongo import get_articles_collection
+        articles_collection = get_articles_collection()
+
+        # 查询今天的文章
+        cursor = articles_collection.find({
+            'pub_date': {'$gte': today, '$lt': tomorrow}
+        }).sort('pub_date', -1)
+
+        articles = list(cursor)
+        article_count = len(articles)
+
+        if article_count == 0:
+            return success_response({
+                'summary': '今日暂无新闻数据。',
+                'hot_news': [],
+                'risk_analysis': '暂无数据进行风险分析。',
+                'article_count': 0,
+                'date': today.strftime('%Y年%m月%d日')
+            })
+
+        # 构建新闻列表（包含标题和URL）
+        news_items = []
+        title_url_map = {}  # 标题 -> {url, source}
+
+        for i, article in enumerate(articles[:200], 1):  # 最多取200条
+            source = article.get('source_name', '未知来源')
+            title = article.get('title', '')
+            url = article.get('url', '')
+
+            if title:
+                # 新格式：包含标题和链接
+                news_items.append(f"{i}. [{source}] {title}\n   链接: {url}")
+                # 保存标题到URL的映射
+                title_url_map[title] = {
+                    'url': url,
+                    'source': source,
+                    'article_id': str(article.get('_id', ''))
+                }
+
+        news_list_text = '\n'.join(news_items)
+
+        # 获取 LLM 配置
+        llm_config = get_llm_config()
+        api_key = llm_config.get('api_key')
+        api_url = llm_config.get('api_url')
+        model = llm_config.get('model')
+
+        if not api_key:
+            return error_response('未配置 LLM API Key，请在系统设置中配置', 400)
+
+        # 获取提示词模板并填充变量
+        prompt_template = get_summary_prompt()
+        prompt = prompt_template.format(
+            date=today.strftime('%Y年%m月%d日'),
+            count=article_count,
+            news_list=news_list_text
+        )
+
+        # 调用 LLM API
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}'
+        }
+
+        payload = {
+            'model': model,
+            'messages': [
+                {'role': 'user', 'content': prompt}
+            ],
+            'temperature': 0.7,
+            'max_tokens': 4000  # 增加token限制以容纳JSON
+        }
+
+        response = requests.post(api_url, json=payload, headers=headers, timeout=180)
+
+        if response.status_code != 200:
+            log_operation(
+                action='舆情总结生成失败',
+                details={'status_code': response.status_code, 'response': response.text[:500]},
+                status='error'
+            )
+            return error_response(f'LLM API 调用失败: {response.status_code}', 500)
+
+        result = response.json()
+        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+        if not content:
+            return error_response('LLM 返回内容为空', 500)
+
+        # 提取JSON结构化数据
+        news_data = extract_json_from_content(content)
+
+        # 解析文本报告部分
+        # 移除JSON代码块后的内容用于文本解析
+        text_content = re.sub(r'```json[\s\S]*?```', '', content).strip()
+
+        sections = text_content.split('##')
+        summary = ''
+        hot_news_text = ''
+        risk_analysis = ''
+
+        for section in sections:
+            section = section.strip()
+            if '今日舆情总结' in section or '舆情总结' in section:
+                summary = section.split('\n', 1)[1].strip() if '\n' in section else section
+            elif '热点新闻' in section or 'TOP5' in section:
+                hot_news_text = section.split('\n', 1)[1].strip() if '\n' in section else section
+            elif '风险分析' in section or '应对建议' in section:
+                risk_analysis = section.split('\n', 1)[1].strip() if '\n' in section else section
+
+        # 如果解析失败，直接返回原文
+        if not summary and not hot_news_text and not risk_analysis:
+            summary = text_content
+            hot_news_text = ''
+            risk_analysis = ''
+
+        # 从news_data中提取结构化引用
+        structured_refs = {}
+        if news_data and 'news_data' in news_data:
+            nd = news_data['news_data']
+            structured_refs = {
+                'category_news': nd.get('category_news', {}),
+                'top_5_news': nd.get('top_5_news', [])
+            }
+
+        # 保存到数据库
+        summary_doc = {
+            'date': today,
+            'date_str': today.strftime('%Y年%m月%d日'),
+            'summary': summary,
+            'hot_news': hot_news_text,
+            'risk_analysis': risk_analysis,
+            'full_content': content,
+            'article_count': article_count,
+            'model': model,
+            'title_url_map': title_url_map,
+            'structured_refs': structured_refs,  # 新增：结构化引用数据
+            'created_at': datetime.now()
+        }
+
+        summaries_collection = get_summaries_collection()
+        # 更新或插入当天的记录
+        summaries_collection.update_one(
+            {'date': today},
+            {'$set': summary_doc},
+            upsert=True
+        )
+
+        # 记录日志
+        log_operation(
+            action='生成舆情总结',
+            details={
+                'article_count': article_count,
+                'date': today.strftime('%Y-%m-%d'),
+                'model': model,
+                'has_structured_refs': bool(structured_refs)
+            },
+            status='success'
+        )
+
+        return success_response({
+            'summary': summary,
+            'hot_news': hot_news_text,
+            'risk_analysis': risk_analysis,
+            'full_content': content,
+            'article_count': article_count,
+            'date': today.strftime('%Y年%m月%d日'),
+            'model': model,
+            'title_url_map': title_url_map,
+            'structured_refs': structured_refs,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+
+    except requests.Timeout:
+        log_operation(action='舆情总结生成超时', status='error')
+        return error_response('LLM API 请求超时，请稍后重试', 504)
+    except Exception as e:
+        log_operation(action='舆情总结生成异常', details={'error': str(e)}, status='error')
+        return error_response(f'生成舆情总结失败: {str(e)}', 500)
+
+
+@api_bp.route('/summary/history', methods=['GET'])
+def summary_history():
+    """获取AI总结历史列表"""
+    try:
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 20))
+
+        summaries_collection = get_summaries_collection()
+
+        # 查询总数
+        total = summaries_collection.count_documents({})
+
+        # 分页查询，按日期倒序
+        cursor = summaries_collection.find(
+            {},
+            {'title_url_map': 0}  # 不返回映射表（数据太大）
+        ).sort('date', -1).skip((page - 1) * page_size).limit(page_size)
+
+        items = []
+        for doc in cursor:
+            items.append({
+                'id': str(doc['_id']),
+                'date': doc['date'].strftime('%Y-%m-%d'),
+                'date_str': doc.get('date_str', doc['date'].strftime('%Y年%m月%d日')),
+                'article_count': doc.get('article_count', 0),
+                'model': doc.get('model', ''),
+                'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S'),
+                'summary_preview': doc.get('summary', '')[:100] + '...' if len(doc.get('summary', '')) > 100 else doc.get('summary', '')
+            })
+
+        return success_response({
+            'items': items,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total + page_size - 1) // page_size
+        })
+    except Exception as e:
+        return error_response(f'获取历史记录失败: {str(e)}', 500)
+
+
+@api_bp.route('/summary/<date_str>', methods=['GET'])
+def summary_get_by_date(date_str):
+    """获取指定日期的AI总结"""
+    try:
+        # 解析日期
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
+        except ValueError:
+            return error_response('日期格式错误，请使用 YYYY-MM-DD 格式', 400)
+
+        summaries_collection = get_summaries_collection()
+        doc = summaries_collection.find_one({'date': target_date})
+
+        if not doc:
+            return success_response(None)
+
+        return success_response({
+            'id': str(doc['_id']),
+            'date': doc['date'].strftime('%Y-%m-%d'),
+            'date_str': doc.get('date_str', doc['date'].strftime('%Y年%m月%d日')),
+            'summary': doc.get('summary', ''),
+            'hot_news': doc.get('hot_news', ''),
+            'risk_analysis': doc.get('risk_analysis', ''),
+            'full_content': doc.get('full_content', ''),
+            'article_count': doc.get('article_count', 0),
+            'model': doc.get('model', ''),
+            'title_url_map': doc.get('title_url_map', {}),
+            'structured_refs': doc.get('structured_refs', {}),
+            'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S')
+        })
+    except Exception as e:
+        return error_response(f'获取总结失败: {str(e)}', 500)
+
+
+@api_bp.route('/summary/today', methods=['GET'])
+def summary_get_today():
+    """获取今天的AI总结（如果有）"""
+    try:
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        summaries_collection = get_summaries_collection()
+        doc = summaries_collection.find_one({'date': today})
+
+        if not doc:
+            return success_response(None)
+
+        return success_response({
+            'id': str(doc['_id']),
+            'date': doc['date'].strftime('%Y-%m-%d'),
+            'date_str': doc.get('date_str', doc['date'].strftime('%Y年%m月%d日')),
+            'summary': doc.get('summary', ''),
+            'hot_news': doc.get('hot_news', ''),
+            'risk_analysis': doc.get('risk_analysis', ''),
+            'full_content': doc.get('full_content', ''),
+            'article_count': doc.get('article_count', 0),
+            'model': doc.get('model', ''),
+            'title_url_map': doc.get('title_url_map', {}),
+            'structured_refs': doc.get('structured_refs', {}),
+            'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S')
+        })
+    except Exception as e:
+        return error_response(f'获取总结失败: {str(e)}', 500)
+
+
+@api_bp.route('/summary/prompt', methods=['GET'])
+def summary_get_prompt():
+    """获取AI总结提示词配置"""
+    try:
+        current_prompt = get_summary_prompt()
+        default_prompt = get_default_summary_prompt()
+        return success_response({
+            'prompt': current_prompt,
+            'default_prompt': default_prompt,
+            'is_custom': current_prompt != default_prompt
+        })
+    except Exception as e:
+        return error_response(f'获取提示词失败: {str(e)}', 500)
+
+
+@api_bp.route('/summary/prompt', methods=['PUT'])
+def summary_set_prompt():
+    """设置AI总结提示词"""
+    try:
+        data = request.get_json()
+        if data is None:
+            return error_response('请求体不能为空', 400)
+
+        prompt = data.get('prompt', '')
+
+        # 验证提示词包含必要的占位符
+        if prompt and prompt.strip():
+            required_placeholders = ['{date}', '{count}', '{news_list}']
+            missing = [p for p in required_placeholders if p not in prompt]
+            if missing:
+                return error_response(f'提示词必须包含以下占位符: {", ".join(missing)}', 400)
+
+        set_summary_prompt(prompt)
+
+        log_operation(
+            action='修改AI总结提示词',
+            details={'is_custom': bool(prompt and prompt.strip())},
+            status='success'
+        )
+
+        return success_response({'message': '提示词已保存'})
+    except Exception as e:
+        return error_response(f'保存提示词失败: {str(e)}', 500)

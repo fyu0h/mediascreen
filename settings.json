@@ -1,11 +1,33 @@
 {
   "llm": {
     "provider": "siliconflow",
-    "api_key": "sk-bgyzpzozdwghavpnsnglmbnmwakalhspstohaoasancrtokl",
-    "api_url": "https://api.siliconflow.cn/v1/chat/completions",
     "model": "deepseek-ai/DeepSeek-V3",
+    "providers": {
+      "siliconflow": {
+        "api_key": "sk-bgyzpzozdwghavpnsnglmbnmwakalhspstohaoasancrtokl",
+        "api_url": "https://api.siliconflow.cn/v1/chat/completions"
+      },
+      "deepseek": {
+        "api_key": "",
+        "api_url": "https://api.deepseek.com/v1/chat/completions"
+      },
+      "openai": {
+        "api_key": "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",
+        "api_url": "https://api.openai.com/v1/chat/completions"
+      },
+      "gemini": {
+        "api_key": "AIzaSyDkknpA4htjKSC2saFqQWEEMQPgNqzopEg",
+        "api_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+      },
+      "custom": {
+        "api_key": "",
+        "api_url": ""
+      }
+    },
+    "api_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     "api_key_masked": "",
-    "api_key_set": false
+    "api_key_set": false,
+    "api_key": "AIzaSyARk0zI09F6dLjkRkkjAVsjNaGey-bAJ1o"
   },
   "crawler": {
     "timeout": 30,
@@ -14,14 +36,16 @@
   },
   "duty": {
     "leaders": [
-      "领导1",
-      "22"
+      "林聪"
     ],
     "officers": [
-      "值班员1",
-      "11"
+      "王朝",
+      "龚俊毅"
     ],
     "person_name": "后逸凡1"
   },
-  "updated_at": "2026-02-03 10:40:14"
+  "summary": {
+    "custom_prompt": ""
+  },
+  "updated_at": "2026-02-04 18:50:05"
 }

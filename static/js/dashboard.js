@@ -5,14 +5,12 @@
 
 // ==================== 全局配置 ====================
 const CONFIG = {
-    refreshInterval: 60000,  // 自动刷新间隔（毫秒）
-    trendDays: 7,           // 趋势图天数
-    alertLimit: 30          // 告警列表数量
+    refreshInterval: 30000,  // 自动刷新间隔（毫秒）- 30秒
+    alertLimit: 30           // 告警列表数量
 };
 
 // 全局变量
 let sourceChart = null;
-let trendChart = null;
 let keywordChart = null;
 let worldMap = null;
 let refreshTimer = null;
@@ -72,13 +70,15 @@ function escapeHtml(text) {
 
 function updateDateTime() {
     const now = new Date();
-    const dateStr = now.toLocaleDateString('zh-CN', {
-        year: 'numeric', month: '2-digit', day: '2-digit'
-    });
+    const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    const weekDay = weekDays[now.getDay()];
     const timeStr = now.toLocaleTimeString('zh-CN', {
         hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
-    document.getElementById('datetime').textContent = `${dateStr} ${timeStr}`;
+    document.getElementById('datetime').textContent = `${year}年${month}月${day}日${weekDay} ${timeStr}`;
 }
 
 function showRefreshIndicator() {
@@ -100,13 +100,14 @@ async function loadOverviewStats() {
         document.getElementById('totalArticles').textContent = formatNumber(overview.total_articles);
         document.getElementById('totalSources').textContent = overview.total_sources;
         document.getElementById('totalCountries').textContent = overview.total_countries;
+        // 活跃源使用监控的总新闻源数（与底部一致）
+        document.getElementById('activeSources').textContent = overview.total_sources;
     }
 
     if (realtime) {
         document.getElementById('todayCount').textContent = formatNumber(realtime.today_count);
         document.getElementById('weekCount').textContent = formatNumber(realtime.week_count);
-        document.getElementById('activeSources').textContent = realtime.active_sources;
-        document.getElementById('updateTime').textContent = realtime.update_time;
+        // 更新时间由 updateRefreshTime() 处理
 
         // 环比变化
         const changeEl = document.getElementById('changeRate');
@@ -138,10 +139,10 @@ async function loadSourceChart() {
         });
     }
 
-    // 取前10个源
-    const topData = data.slice(0, 10).reverse();
-    const sources = topData.map(item => item.source || '未知');
-    const counts = topData.map(item => item.count);
+    // 显示所有新闻源（按数量倒序）
+    const sortedData = data.sort((a, b) => b.count - a.count).reverse();
+    const sources = sortedData.map(item => item.source || '未知');
+    const counts = sortedData.map(item => item.count);
 
     const option = {
         tooltip: {
@@ -156,6 +157,21 @@ async function loadSourceChart() {
             left: '3%', right: '15%', top: '5%', bottom: '5%',
             containLabel: true
         },
+        dataZoom: [
+            {
+                type: 'slider',
+                yAxisIndex: 0,
+                right: 0,
+                width: 15,
+                start: sortedData.length > 15 ? 100 - (15 / sortedData.length * 100) : 0,
+                end: 100,
+                showDetail: false,
+                borderColor: 'transparent',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                fillerColor: 'rgba(0,240,255,0.2)',
+                handleStyle: { color: 'rgba(0,240,255,0.5)' }
+            }
+        ],
         xAxis: {
             type: 'value',
             axisLine: { show: false },
@@ -219,72 +235,103 @@ async function loadSourceChart() {
     });
 }
 
-async function loadTrendChart() {
-    const data = await fetchAPI(`/stats/trend?days=${CONFIG.trendDays}`);
+// ==================== 最新获取文章（无限滚动） ====================
 
-    const chartDom = document.getElementById('trendChart');
-    if (!trendChart) {
-        trendChart = echarts.init(chartDom);
+let latestArticlesPage = 1;
+let latestArticlesTotal = 0;
+let latestArticlesLoading = false;
+let latestArticlesHasMore = true;
+let latestArticlesInitialized = false;
+
+async function loadLatestArticles(append = false, silent = false) {
+    if (latestArticlesLoading) return;
+
+    const listEl = document.getElementById('latestArticlesList');
+    const countEl = document.getElementById('latestArticleCount');
+
+    if (!append) {
+        latestArticlesPage = 1;
+        latestArticlesHasMore = true;
+        // 只在首次加载时显示加载提示，无感刷新时不显示
+        if (!silent && !latestArticlesInitialized) {
+            listEl.innerHTML = '<div class="loading-text">加载中...</div>';
+        }
     }
 
-    if (!data || data.length === 0) {
-        trendChart.setOption({
-            graphic: {
-                type: 'text',
-                left: 'center', top: 'center',
-                style: { text: '暂无趋势数据', fill: 'rgba(255,255,255,0.3)', fontSize: 14 }
-            }
-        });
+    if (!latestArticlesHasMore) return;
+
+    latestArticlesLoading = true;
+
+    const data = await fetchAPI(`/articles?page=${latestArticlesPage}&page_size=20`);
+
+    latestArticlesLoading = false;
+
+    if (!data || !data.items) {
+        if (!append && !latestArticlesInitialized) {
+            listEl.innerHTML = '<div class="loading-text">暂无文章</div>';
+            countEl.textContent = '0';
+        }
         return;
     }
 
-    const dates = data.map(item => item.date.slice(5)); // MM-DD
-    const counts = data.map(item => item.count);
+    latestArticlesTotal = data.total;
+    countEl.textContent = data.total;
 
-    const option = {
-        tooltip: {
-            trigger: 'axis',
-            backgroundColor: 'rgba(10,20,40,0.9)',
-            borderColor: 'rgba(0,240,255,0.3)',
-            textStyle: { color: '#fff' }
-        },
-        grid: {
-            left: '3%', right: '4%', top: '10%', bottom: '15%',
-            containLabel: true
-        },
-        xAxis: {
-            type: 'category',
-            data: dates,
-            boundaryGap: false,
-            axisLine: { lineStyle: { color: 'rgba(0,240,255,0.3)' } },
-            axisTick: { show: false },
-            axisLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 10, rotate: 0 }
-        },
-        yAxis: {
-            type: 'value',
-            axisLine: { show: false },
-            axisTick: { show: false },
-            axisLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 10 },
-            splitLine: { lineStyle: { color: 'rgba(0,240,255,0.1)' } }
-        },
-        series: [{
-            type: 'line',
-            data: counts,
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 6,
-            lineStyle: { width: 2, color: '#00f0ff' },
-            itemStyle: { color: '#00f0ff', borderColor: '#00f0ff' },
-            areaStyle: {
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(0,240,255,0.4)' },
-                    { offset: 1, color: 'rgba(0,240,255,0.02)' }
-                ])
+    const articlesHtml = data.items.map(article => {
+        const timeStr = article.pub_date ? article.pub_date.split(' ')[1] || article.pub_date.split(' ')[0] : '';
+        return `
+        <div class="latest-article-item" onclick="window.open('${escapeHtml(article.url)}', '_blank')">
+            <div class="latest-article-title">${escapeHtml(article.title)}</div>
+            <div class="latest-article-meta">
+                <span class="latest-article-source">${escapeHtml(article.source)}</span>
+                <span class="latest-article-time">${timeStr}</span>
+            </div>
+        </div>
+    `}).join('');
+
+    if (append) {
+        // 移除加载提示
+        const loadingEl = listEl.querySelector('.loading-more');
+        if (loadingEl) loadingEl.remove();
+        // 追加内容
+        listEl.insertAdjacentHTML('beforeend', articlesHtml);
+    } else {
+        // 无感刷新时保持滚动位置
+        const scrollTop = listEl.scrollTop;
+        listEl.innerHTML = articlesHtml;
+        if (silent && scrollTop > 0) {
+            listEl.scrollTop = scrollTop;
+        }
+    }
+
+    // 检查是否还有更多
+    const loadedCount = latestArticlesPage * 20;
+    latestArticlesHasMore = loadedCount < data.total;
+
+    latestArticlesPage++;
+    latestArticlesInitialized = true;
+}
+
+function initLatestArticlesScroll() {
+    const listEl = document.getElementById('latestArticlesList');
+    if (!listEl) return;
+
+    listEl.addEventListener('scroll', () => {
+        if (latestArticlesLoading || !latestArticlesHasMore) return;
+
+        const scrollTop = listEl.scrollTop;
+        const scrollHeight = listEl.scrollHeight;
+        const clientHeight = listEl.clientHeight;
+
+        // 滚动到底部附近时加载更多
+        if (scrollTop + clientHeight >= scrollHeight - 50) {
+            // 添加加载提示
+            if (!listEl.querySelector('.loading-more')) {
+                listEl.insertAdjacentHTML('beforeend', '<div class="loading-more">加载中...</div>');
             }
-        }]
-    };
-
-    trendChart.setOption(option);
+            loadLatestArticles(true);
+        }
+    });
 }
 
 async function loadWorldMap() {
@@ -387,7 +434,7 @@ function loadKeywordChart(stats) {
         });
     }
 
-    // 合并所有关键词并排序取前8
+    // 合并所有关键词并排序（显示全部）
     const allKeywords = [];
     const levelColors = {
         high: '#ff4757',
@@ -406,14 +453,13 @@ function loadKeywordChart(stats) {
         });
     }
 
-    const topKeywords = allKeywords
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 8);
+    // 显示所有关键词，按数量排序
+    const sortedKeywords = allKeywords.sort((a, b) => b.count - a.count);
 
     // 保存到全局变量
-    keywordChartData = topKeywords;
+    keywordChartData = sortedKeywords;
 
-    if (topKeywords.length === 0) {
+    if (sortedKeywords.length === 0) {
         keywordChart.setOption({
             graphic: {
                 type: 'text',
@@ -436,9 +482,24 @@ function loadKeywordChart(stats) {
             }
         },
         grid: {
-            left: '3%', right: '10%', top: '5%', bottom: '5%',
+            left: '3%', right: '8%', top: '5%', bottom: '5%',
             containLabel: true
         },
+        dataZoom: sortedKeywords.length > 10 ? [
+            {
+                type: 'slider',
+                yAxisIndex: 0,
+                right: 0,
+                width: 12,
+                start: 100 - (10 / sortedKeywords.length * 100),
+                end: 100,
+                showDetail: false,
+                borderColor: 'transparent',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                fillerColor: 'rgba(0,240,255,0.2)',
+                handleStyle: { color: 'rgba(0,240,255,0.5)' }
+            }
+        ] : [],
         xAxis: {
             type: 'value',
             axisLine: { show: false },
@@ -448,7 +509,7 @@ function loadKeywordChart(stats) {
         },
         yAxis: {
             type: 'category',
-            data: topKeywords.map(k => k.keyword).reverse(),
+            data: sortedKeywords.map(k => k.keyword).reverse(),
             axisLine: { show: false },
             axisTick: { show: false },
             axisLabel: {
@@ -460,7 +521,7 @@ function loadKeywordChart(stats) {
         },
         series: [{
             type: 'bar',
-            data: topKeywords.map(k => ({
+            data: sortedKeywords.map(k => ({
                 value: k.count,
                 itemStyle: { color: k.color },
                 name: k.keyword  // 保存关键词名称
@@ -505,6 +566,58 @@ function clearAlertFilter() {
     renderFilteredAlerts();
 }
 
+// 标记告警已读
+async function markAlertAsRead(url, event) {
+    // 阻止事件冒泡到父元素的 onclick
+    if (event) {
+        event.stopPropagation();
+    }
+
+    try {
+        const response = await fetch('/api/risk/alerts/read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                url: url,
+                reader_name: '' // 可以扩展为获取当前值班员姓名
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // 更新本地数据
+            const alertIndex = allAlertsData.findIndex(a => a.url === url);
+            if (alertIndex >= 0) {
+                allAlertsData[alertIndex].is_read = true;
+                allAlertsData[alertIndex].read_at = new Date().toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }).replace(/\//g, '-');
+            }
+
+            // 重新渲染列表
+            renderFilteredAlerts();
+
+            // 打开新窗口
+            window.open(url, '_blank');
+        } else {
+            console.error('标记已读失败:', result.error);
+            // 即使标记失败也打开链接
+            window.open(url, '_blank');
+        }
+    } catch (error) {
+        console.error('标记已读请求失败:', error);
+        // 即使请求失败也打开链接
+        window.open(url, '_blank');
+    }
+}
+
 // 渲染筛选后的告警列表
 function renderFilteredAlerts() {
     const alertList = document.getElementById('alertList');
@@ -543,9 +656,19 @@ function renderFilteredAlerts() {
         return;
     }
 
-    alertList.innerHTML = filteredData.map(alert => `
-        <div class="alert-item ${alert.risk_level}" onclick="window.open('${escapeHtml(alert.url)}', '_blank')">
-            <div class="alert-title">${highlightKeyword(escapeHtml(alert.title), currentFilterKeyword)}</div>
+    alertList.innerHTML = filteredData.map(alert => {
+        const isRead = alert.is_read;
+        const readClass = isRead ? 'is-read' : '';
+        const readBadge = isRead
+            ? `<span class="read-badge" title="已读于 ${alert.read_at || ''}">已读</span>`
+            : `<span class="unread-badge">未读</span>`;
+
+        return `
+        <div class="alert-item ${alert.risk_level} ${readClass}" onclick="markAlertAsRead('${escapeHtml(alert.url)}', event)">
+            <div class="alert-title-row">
+                <div class="alert-title">${highlightKeyword(escapeHtml(alert.title), currentFilterKeyword)}</div>
+                ${readBadge}
+            </div>
             <div class="alert-meta">
                 <span class="alert-source">
                     <span>${escapeHtml(alert.source)}</span>
@@ -558,7 +681,7 @@ function renderFilteredAlerts() {
                 </div>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // 高亮关键词
@@ -594,41 +717,87 @@ async function loadRiskAlerts() {
 
 // ==================== 初始化与刷新 ====================
 
-async function loadAllData() {
-    showRefreshIndicator();
+// 上一次数据的摘要（用于检测变化）
+let lastDataDigest = {
+    totalArticles: 0,
+    todayCount: 0,
+    alertCount: 0
+};
 
+async function loadAllData(silent = false) {
+    if (!silent) {
+        showRefreshIndicator();
+    }
+
+    // 分批加载，避免同时发起太多请求导致卡顿
+    // 第一批：关键数据
     await Promise.all([
         loadOverviewStats(),
+        loadLatestArticles(false, silent),
+        loadRiskAlerts()
+    ]);
+
+    // 第二批：图表和地图（稍微延迟以让UI先响应）
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    await Promise.all([
         loadSourceChart(),
-        loadTrendChart(),
         loadWorldMap(),
-        loadRiskStats(),
-        loadRiskAlerts(),
+        loadRiskStats()
+    ]);
+
+    // 第三批：次要数据
+    await Promise.all([
         loadAchievements(),
         loadDutyInfo()
     ]);
+
+    // 更新刷新时间显示
+    updateRefreshTime();
+}
+
+// 更新刷新时间
+function updateRefreshTime() {
+    const updateTimeEl = document.getElementById('updateTime');
+    if (updateTimeEl) {
+        const now = new Date();
+        updateTimeEl.textContent = now.toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
 }
 
 function startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(loadAllData, CONFIG.refreshInterval);
+    // 静默刷新（不显示加载指示器）
+    refreshTimer = setInterval(() => loadAllData(true), CONFIG.refreshInterval);
 }
 
 function handleResize() {
     if (sourceChart) sourceChart.resize();
-    if (trendChart) trendChart.resize();
     if (keywordChart) keywordChart.resize();
     if (worldMap) worldMap.invalidateSize();
 }
 
 // 页面初始化
 document.addEventListener('DOMContentLoaded', async () => {
-    // 更新时间
+    // 更新顶部时间
     updateDateTime();
     setInterval(updateDateTime, 1000);
 
-    // 加载数据
-    await loadAllData();
+    // 初始化底部刷新时间
+    updateRefreshTime();
+
+    // 加载数据（首次加载显示加载指示器）
+    await loadAllData(false);
+
+    // 初始化最新文章滚动加载
+    initLatestArticlesScroll();
+
+    // 检查今天是否已有AI总结
+    checkTodaySummary();
 
     // 启动自动刷新
     startAutoRefresh();
@@ -652,6 +821,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             closeArticleCalendar();
             closeAchievementModal();
             closeDutyModal();
+            closeSummaryModal();
+            closeSummaryHistory();
+            closeRefsModal();
         }
     });
 
@@ -866,380 +1038,516 @@ function showToast(message, type = 'info') {
 }
 
 
-// ==================== 订阅管理 ====================
+// ==================== 插件管理 ====================
 
-let sitesData = [];
+let pluginsData = [];
 
 function openSitesModal() {
     document.getElementById('sitesModal').classList.add('active');
-    loadSites();
+    loadPlugins();
 }
 
 function closeSitesModal() {
     document.getElementById('sitesModal').classList.remove('active');
 }
 
-function openEditSiteModal(id, name, url, countryCode, fetchMethod) {
-    document.getElementById('editSiteId').value = id;
-    document.getElementById('editSiteName').value = name;
-    document.getElementById('editSiteUrl').value = url;
-    document.getElementById('editSiteCountry').value = countryCode || '';
-    document.getElementById('editSiteMethod').value = fetchMethod || 'sitemap';
-    document.getElementById('editSiteModal').classList.add('active');
-}
+async function loadPlugins() {
+    const pluginList = document.getElementById('pluginList');
+    pluginList.innerHTML = '<div class="loading-text">加载中...</div>';
 
-function closeEditSiteModal() {
-    document.getElementById('editSiteModal').classList.remove('active');
-}
-
-async function loadSites() {
-    const siteList = document.getElementById('siteList');
-    siteList.innerHTML = '<div class="loading-text">加载中...</div>';
-
-    const data = await fetchAPI('/sites');
+    const data = await fetchAPI('/plugins');
     if (data) {
-        sitesData = data;
-        renderSites();
-        updateSiteStats();
+        pluginsData = data;
+        renderPlugins();
+        updatePluginStats();
     } else {
-        siteList.innerHTML = '<div class="loading-text">加载失败</div>';
+        pluginList.innerHTML = '<div class="loading-text">加载失败</div>';
     }
 }
 
-function updateSiteStats() {
-    const sitemapCount = sitesData.filter(s => s.fetch_method === 'sitemap').length;
-    const crawlerCount = sitesData.filter(s => s.fetch_method === 'crawler').length;
-    const unknownCount = sitesData.filter(s => !s.fetch_method || s.fetch_method === 'unknown').length;
+function updatePluginStats() {
+    let enabledCount = 0;
+    let totalCount = 0;
 
-    document.getElementById('sitemapCount').textContent = sitemapCount;
-    document.getElementById('crawlerCount').textContent = crawlerCount;
-    document.getElementById('unknownCount').textContent = unknownCount;
-    document.getElementById('siteTotalCount').textContent = sitesData.length;
+    pluginsData.forEach(plugin => {
+        plugin.sites.forEach(site => {
+            totalCount++;
+            if (site.enabled) {
+                enabledCount++;
+            }
+        });
+    });
+
+    document.getElementById('enabledCount').textContent = enabledCount;
+    document.getElementById('siteTotalCount').textContent = totalCount;
 }
 
-function renderSites() {
-    const siteList = document.getElementById('siteList');
+function renderPlugins() {
+    const pluginList = document.getElementById('pluginList');
 
-    if (sitesData.length === 0) {
-        siteList.innerHTML = `
+    if (pluginsData.length === 0) {
+        pluginList.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">+</div>
-                <div>暂无订阅站点，请添加</div>
+                <div class="empty-state-icon">📦</div>
+                <div>暂无可用插件</div>
             </div>
         `;
         return;
     }
 
-    siteList.innerHTML = sitesData.map(site => {
-        const methodClass = site.fetch_method === 'sitemap' ? 'sitemap' : (site.fetch_method === 'crawler' ? 'crawler' : 'unknown');
-        const methodText = site.fetch_method === 'sitemap' ? 'Sitemap' : (site.fetch_method === 'crawler' ? '爬虫' : '未知');
+    pluginList.innerHTML = pluginsData.map(plugin => {
+        const sitesHtml = plugin.sites.map(site => {
+            const enabledClass = site.enabled ? 'enabled' : 'disabled';
+            const autoUpdateChecked = site.auto_update ? 'checked' : '';
+            const intervalMinutes = Math.floor((site.update_interval || 300) / 60);
+
+            return `
+            <div class="plugin-site-item ${enabledClass}" data-site-id="${site.id}">
+                <div class="site-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" ${site.enabled ? 'checked' : ''}
+                               onchange="toggleSite('${plugin.id}', '${site.id}', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="site-info">
+                    <div class="site-name">${escapeHtml(site.name)}</div>
+                    <div class="site-url">${escapeHtml(site.url || '')}</div>
+                </div>
+                <div class="site-meta">
+                    <span class="site-country">${site.country_code || '未知'}</span>
+                </div>
+                <div class="site-auto-update ${site.enabled ? '' : 'hidden'}">
+                    <label class="auto-update-label" title="定时自动更新">
+                        <input type="checkbox" ${autoUpdateChecked}
+                               onchange="toggleAutoUpdate('${plugin.id}', '${site.id}', this.checked)"
+                               ${site.enabled ? '' : 'disabled'}>
+                        <span class="auto-update-text">定时</span>
+                    </label>
+                    <select class="interval-select ${site.auto_update ? '' : 'hidden'}"
+                            onchange="setUpdateInterval('${plugin.id}', '${site.id}', this.value)"
+                            ${site.enabled && site.auto_update ? '' : 'disabled'}>
+                        <option value="5" ${intervalMinutes === 5 ? 'selected' : ''}>5分钟</option>
+                        <option value="10" ${intervalMinutes === 10 ? 'selected' : ''}>10分钟</option>
+                        <option value="15" ${intervalMinutes === 15 ? 'selected' : ''}>15分钟</option>
+                        <option value="30" ${intervalMinutes === 30 ? 'selected' : ''}>30分钟</option>
+                        <option value="60" ${intervalMinutes === 60 ? 'selected' : ''}>1小时</option>
+                        <option value="120" ${intervalMinutes === 120 ? 'selected' : ''}>2小时</option>
+                        <option value="360" ${intervalMinutes === 360 ? 'selected' : ''}>6小时</option>
+                        <option value="720" ${intervalMinutes === 720 ? 'selected' : ''}>12小时</option>
+                        <option value="1440" ${intervalMinutes === 1440 ? 'selected' : ''}>24小时</option>
+                    </select>
+                </div>
+            </div>
+            `;
+        }).join('');
+
         return `
-        <div class="site-item ${methodClass}">
-            <div class="site-info">
-                <div class="site-name">${escapeHtml(site.name)}</div>
-                <div class="site-url">${escapeHtml(site.url)}</div>
+        <div class="plugin-card">
+            <div class="plugin-header" onclick="togglePluginExpand('${plugin.id}')">
+                <div class="plugin-icon">📦</div>
+                <div class="plugin-info">
+                    <div class="plugin-name">${escapeHtml(plugin.name)}</div>
+                    <div class="plugin-desc">${escapeHtml(plugin.description || '')}</div>
+                </div>
+                <div class="plugin-stats">
+                    <span class="enabled-count">${plugin.enabled_count}/${plugin.site_count}</span>
+                </div>
+                <div class="plugin-expand-icon" id="expand-icon-${plugin.id}">▼</div>
             </div>
-            <div class="site-meta">
-                <span class="site-country">${site.country_code || '未知'}</span>
-                <span class="site-method ${methodClass}">
-                    ${methodText}
-                </span>
-            </div>
-            <div class="site-actions">
-                <button class="btn-icon recheck" onclick="recheckSitemap('${site.id}')" title="重新检测">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="23 4 23 10 17 10"></polyline>
-                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                    </svg>
-                </button>
-                <button class="btn-icon edit" onclick="openEditSiteModal('${site.id}', '${escapeHtml(site.name)}', '${escapeHtml(site.url)}', '${site.country_code || ''}', '${site.fetch_method || 'sitemap'}')" title="编辑">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                </button>
-                <button class="btn-icon delete" onclick="deleteSite('${site.id}')" title="删除">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                </button>
+            <div class="plugin-sites" id="plugin-sites-${plugin.id}" style="display: none;">
+                ${sitesHtml}
             </div>
         </div>
-    `;
+        `;
     }).join('');
 }
 
-async function addSite() {
-    const nameInput = document.getElementById('newSiteName');
-    const urlInput = document.getElementById('newSiteUrl');
-    const addBtn = document.getElementById('btnAddSite');
-    const btnText = addBtn.querySelector('.btn-text');
-    const btnLoading = addBtn.querySelector('.btn-loading');
+function togglePluginExpand(pluginId) {
+    const sitesDiv = document.getElementById(`plugin-sites-${pluginId}`);
+    const iconDiv = document.getElementById(`expand-icon-${pluginId}`);
 
-    const name = nameInput.value.trim();
-    let url = urlInput.value.trim();
-
-    if (!name) {
-        showToast('请输入站点名称', 'error');
-        return;
+    if (sitesDiv.style.display === 'none') {
+        sitesDiv.style.display = 'block';
+        iconDiv.textContent = '▲';
+    } else {
+        sitesDiv.style.display = 'none';
+        iconDiv.textContent = '▼';
     }
+}
 
-    if (!url) {
-        showToast('请输入站点 URL', 'error');
-        return;
-    }
-
-    // 添加 https 前缀
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-    }
-
-    // 显示加载状态
-    addBtn.disabled = true;
-    btnText.style.display = 'none';
-    btnLoading.style.display = 'inline';
-
+async function toggleSite(pluginId, siteId, enabled) {
     try {
-        const response = await fetch('/api/sites', {
+        const response = await fetch(`/api/plugins/${pluginId}/sites/${siteId}/toggle`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, url, auto_detect: true })
+            body: JSON.stringify({ enabled })
         });
 
         const data = await response.json();
 
         if (data.success) {
-            const site = data.data;
-            const methodText = site.fetch_method === 'sitemap' ? 'Sitemap' : '爬虫';
-            showToast(`添加成功，获取方式: ${methodText}`, 'success');
-            nameInput.value = '';
-            urlInput.value = '';
-            loadSites();
+            // 更新本地数据
+            pluginsData.forEach(plugin => {
+                if (plugin.id === pluginId) {
+                    plugin.sites.forEach(site => {
+                        if (site.id === siteId) {
+                            site.enabled = enabled;
+                            // 禁用站点时同时禁用定时更新
+                            if (!enabled) {
+                                site.auto_update = false;
+                            }
+                        }
+                    });
+                    // 重新计算启用数量
+                    plugin.enabled_count = plugin.sites.filter(s => s.enabled).length;
+                }
+            });
+
+            // 更新统计和UI
+            updatePluginStats();
+
+            // 重新渲染以更新定时更新控件状态
+            renderPlugins();
+            // 重新展开当前插件
+            const sitesDiv = document.getElementById(`plugin-sites-${pluginId}`);
+            if (sitesDiv) {
+                sitesDiv.style.display = 'block';
+                const iconDiv = document.getElementById(`expand-icon-${pluginId}`);
+                if (iconDiv) iconDiv.textContent = '▲';
+            }
+
+            showToast(enabled ? '已启用' : '已禁用', 'success');
         } else {
-            showToast(data.error || '添加失败', 'error');
+            showToast(data.error || '操作失败', 'error');
+            loadPlugins();
         }
     } catch (error) {
         showToast('网络错误', 'error');
-    } finally {
-        // 恢复按钮状态
-        addBtn.disabled = false;
-        btnText.style.display = 'inline';
-        btnLoading.style.display = 'none';
+        loadPlugins();
     }
 }
 
-async function saveSite() {
-    const id = document.getElementById('editSiteId').value;
-    const name = document.getElementById('editSiteName').value.trim();
-    const url = document.getElementById('editSiteUrl').value.trim();
-    const countryCode = document.getElementById('editSiteCountry').value;
-    const fetchMethod = document.getElementById('editSiteMethod').value;
+async function toggleAutoUpdate(pluginId, siteId, autoUpdate) {
+    try {
+        const response = await fetch(`/api/plugins/${pluginId}/sites/${siteId}/auto-update`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ auto_update: autoUpdate })
+        });
 
-    if (!name) {
-        showToast('站点名称不能为空', 'error');
-        return;
-    }
+        const data = await response.json();
 
-    if (!url) {
-        showToast('站点 URL 不能为空', 'error');
-        return;
+        if (data.success) {
+            // 更新本地数据
+            pluginsData.forEach(plugin => {
+                if (plugin.id === pluginId) {
+                    plugin.sites.forEach(site => {
+                        if (site.id === siteId) {
+                            site.auto_update = autoUpdate;
+                            if (data.data && data.data.update_interval) {
+                                site.update_interval = data.data.update_interval;
+                            }
+                        }
+                    });
+                }
+            });
+
+            // 更新间隔选择器的显示状态
+            const siteItem = document.querySelector(`.plugin-site-item[data-site-id="${siteId}"]`);
+            if (siteItem) {
+                const intervalSelect = siteItem.querySelector('.interval-select');
+                if (intervalSelect) {
+                    if (autoUpdate) {
+                        intervalSelect.classList.remove('hidden');
+                        intervalSelect.disabled = false;
+                    } else {
+                        intervalSelect.classList.add('hidden');
+                        intervalSelect.disabled = true;
+                    }
+                }
+            }
+
+            showToast(autoUpdate ? '定时更新已启用' : '定时更新已禁用', 'success');
+        } else {
+            showToast(data.error || '操作失败', 'error');
+            loadPlugins();
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+        loadPlugins();
     }
+}
+
+async function setUpdateInterval(pluginId, siteId, minutes) {
+    const intervalSeconds = parseInt(minutes) * 60;
 
     try {
-        const response = await fetch(`/api/sites/${id}`, {
+        const response = await fetch(`/api/plugins/${pluginId}/sites/${siteId}/auto-update`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                name,
-                url,
-                country_code: countryCode || null,
-                fetch_method: fetchMethod
+                auto_update: true,
+                update_interval: intervalSeconds
             })
         });
 
         const data = await response.json();
 
         if (data.success) {
-            showToast('保存成功', 'success');
-            closeEditSiteModal();
-            loadSites();
-        } else {
-            showToast(data.error || '保存失败', 'error');
-        }
-    } catch (error) {
-        showToast('网络错误', 'error');
-    }
-}
-
-async function deleteSite(id) {
-    if (!confirm('确定要删除这个站点吗？')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/sites/${id}`, {
-            method: 'DELETE'
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            showToast('删除成功', 'success');
-            loadSites();
-        } else {
-            showToast(data.error || '删除失败', 'error');
-        }
-    } catch (error) {
-        showToast('网络错误', 'error');
-    }
-}
-
-async function recheckSitemap(id) {
-    showToast('正在检测...', 'info');
-
-    try {
-        const response = await fetch(`/api/sites/${id}/recheck`, {
-            method: 'POST'
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            const result = data.data;
-            const site = result.site;
-            const methodText = site.fetch_method === 'sitemap' ? 'Sitemap' : '爬虫';
-            showToast(`检测完成，获取方式: ${methodText}`, 'success');
-            loadSites();
-        } else {
-            showToast(data.error || '检测失败', 'error');
-        }
-    } catch (error) {
-        showToast('网络错误', 'error');
-    }
-}
-
-
-// ==================== 批量导入 ====================
-
-function openBatchImportModal() {
-    document.getElementById('batchImportModal').classList.add('active');
-    document.getElementById('batchImportText').value = '';
-    document.getElementById('batchAutoDetect').checked = false;
-}
-
-function closeBatchImportModal() {
-    document.getElementById('batchImportModal').classList.remove('active');
-}
-
-function parseBatchInput(text) {
-    const lines = text.split('\n');
-    const sites = [];
-
-    for (let line of lines) {
-        line = line.trim();
-        if (!line) continue;
-
-        let name, url;
-
-        // 尝试用逗号分割
-        if (line.includes(',')) {
-            const parts = line.split(',');
-            name = parts[0].trim();
-            url = parts.slice(1).join(',').trim();
-        }
-        // 尝试用空格/制表符分割
-        else {
-            const match = line.match(/^(.+?)\s+(https?:\/\/.+)$/i);
-            if (match) {
-                name = match[1].trim();
-                url = match[2].trim();
-            } else {
-                // 尝试用最后一个空格分割
-                const lastSpaceIdx = line.lastIndexOf(' ');
-                if (lastSpaceIdx > 0) {
-                    name = line.slice(0, lastSpaceIdx).trim();
-                    url = line.slice(lastSpaceIdx + 1).trim();
-                } else {
-                    // 无法解析，跳过
-                    continue;
+            // 更新本地数据
+            pluginsData.forEach(plugin => {
+                if (plugin.id === pluginId) {
+                    plugin.sites.forEach(site => {
+                        if (site.id === siteId) {
+                            site.update_interval = intervalSeconds;
+                        }
+                    });
                 }
-            }
-        }
+            });
 
-        if (name && url) {
-            // 自动添加 https
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                url = 'https://' + url;
-            }
-            sites.push({ name, url });
-        }
-    }
-
-    return sites;
-}
-
-async function doBatchImport() {
-    const textInput = document.getElementById('batchImportText');
-    const autoDetect = document.getElementById('batchAutoDetect').checked;
-    const btn = document.getElementById('btnDoBatchImport');
-    const btnText = btn.querySelector('.btn-text');
-    const btnLoading = btn.querySelector('.btn-loading');
-
-    const text = textInput.value.trim();
-    if (!text) {
-        showToast('请输入站点列表', 'error');
-        return;
-    }
-
-    const sites = parseBatchInput(text);
-    if (sites.length === 0) {
-        showToast('未能解析出有效的站点', 'error');
-        return;
-    }
-
-    // 显示加载状态
-    btn.disabled = true;
-    btnText.style.display = 'none';
-    btnLoading.style.display = 'inline';
-
-    try {
-        const response = await fetch('/api/sites/batch-import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sites, auto_detect: autoDetect })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            const result = data.data;
-            const successCount = result.success.length;
-            const failedCount = result.failed.length;
-
-            if (failedCount > 0) {
-                const failedNames = result.failed.map(f => f.name).join(', ');
-                showToast(`导入完成: ${successCount} 成功, ${failedCount} 失败 (${failedNames})`, 'info');
-            } else {
-                showToast(`成功导入 ${successCount} 个站点`, 'success');
-            }
-
-            closeBatchImportModal();
-            loadSites();
+            showToast(`更新间隔已设为 ${minutes} 分钟`, 'success');
         } else {
-            showToast(data.error || '导入失败', 'error');
+            showToast(data.error || '操作失败', 'error');
+            loadPlugins();
         }
     } catch (error) {
         showToast('网络错误', 'error');
-    } finally {
-        btn.disabled = false;
-        btnText.style.display = 'inline';
-        btnLoading.style.display = 'none';
+        loadPlugins();
     }
 }
 
 
-// ==================== 一键检测 ====================
+// ==================== 更新文章功能（后台执行 + 气泡进度） ====================
+
+let crawlEventSource = null;
+let crawlSiteResults = [];
+let crawlIsRunning = false;
+let crawlStats = { success: 0, failed: 0, articles: 0, saved: 0 };
+
+function startCrawlUpdate() {
+    if (crawlIsRunning) {
+        showToast('更新正在进行中', 'warning');
+        // 显示气泡
+        showCrawlBubble();
+        return;
+    }
+
+    // 重置状态
+    crawlSiteResults = [];
+    crawlIsRunning = true;
+    crawlStats = { success: 0, failed: 0, articles: 0, saved: 0 };
+    crawlPendingUpdates = [];  // 待处理的更新队列
+
+    // 显示气泡
+    showCrawlBubble();
+    updateBubbleProgress(0, 0);
+    updateBubbleStatus('正在获取站点列表...');
+    document.getElementById('bubbleDetails').innerHTML = '';
+
+    // 禁用按钮
+    const btn = document.getElementById('btnStartCrawl');
+    if (btn) {
+        btn.querySelector('.btn-text').style.display = 'none';
+        btn.querySelector('.btn-loading').style.display = 'inline';
+        btn.disabled = true;
+    }
+
+    // 建立 SSE 连接
+    crawlEventSource = new EventSource('/api/crawl/update/stream');
+
+    crawlEventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            // 使用 requestAnimationFrame 避免阻塞主线程
+            crawlPendingUpdates.push(data);
+            scheduleCrawlUpdate();
+        } catch (e) {
+            console.error('解析事件数据失败:', e);
+        }
+    };
+
+    crawlEventSource.onerror = function(error) {
+        console.error('SSE连接错误:', error);
+        crawlEventSource.close();
+        crawlIsRunning = false;
+        resetCrawlButton();
+        updateBubbleStatus('连接失败', 'error');
+    };
+}
+
+// 待处理的更新队列
+let crawlPendingUpdates = [];
+let crawlUpdateScheduled = false;
+
+// 调度批量更新
+function scheduleCrawlUpdate() {
+    if (crawlUpdateScheduled) return;
+    crawlUpdateScheduled = true;
+
+    requestAnimationFrame(() => {
+        processCrawlUpdates();
+        crawlUpdateScheduled = false;
+    });
+}
+
+// 批量处理更新
+function processCrawlUpdates() {
+    const updates = crawlPendingUpdates.splice(0);  // 取出所有待处理更新
+
+    for (const data of updates) {
+        handleCrawlBubbleEvent(data);
+    }
+}
+
+function handleCrawlBubbleEvent(data) {
+    const type = data.type;
+
+    switch (type) {
+        case 'init':
+            updateBubbleProgress(0, data.total);
+            updateBubbleStatus(`正在并发获取 ${data.total} 个站点...`);
+            break;
+
+        case 'progress':
+            if (data.message) {
+                updateBubbleStatus(data.message);
+            }
+            break;
+
+        case 'site_done':
+            // 更新进度
+            updateBubbleProgress(data.completed, data.total);
+
+            // 更新统计
+            if (data.success) {
+                crawlStats.success++;
+                crawlStats.articles += data.article_count || 0;
+                crawlStats.saved += data.saved_count || 0;
+            } else {
+                crawlStats.failed++;
+            }
+
+            // 更新状态文字
+            updateBubbleStatus(`${data.site_name} ${data.success ? '完成' : '失败'}`);
+
+            // 添加到详情列表（只显示最近5条）
+            addBubbleDetail(data.site_name, data.success,
+                data.success ? `${data.saved_count}篇` : (data.error || '失败'));
+
+            // 保存结果
+            crawlSiteResults.push({
+                site_id: data.site_id,
+                site_name: data.site_name,
+                success: data.success,
+                article_count: data.article_count || 0,
+                saved_count: data.saved_count || 0,
+                error: data.error
+            });
+            break;
+
+        case 'complete':
+            crawlEventSource.close();
+            crawlIsRunning = false;
+            resetCrawlButton();
+
+            updateBubbleProgress(data.success_count + data.failed_count, data.success_count + data.failed_count);
+            updateBubbleStatus(`完成: ${data.success_count}成功 ${data.failed_count}失败, 保存${data.total_saved}篇`, 'success');
+
+            // 延迟刷新数据，避免阻塞主线程
+            setTimeout(() => {
+                loadAllData(true);
+            }, 500);
+
+            // 5秒后自动隐藏气泡
+            setTimeout(() => {
+                if (!crawlIsRunning) {
+                    hideCrawlBubble();
+                }
+            }, 5000);
+            break;
+
+        case 'error':
+            crawlEventSource.close();
+            crawlIsRunning = false;
+            resetCrawlButton();
+            updateBubbleStatus(`错误: ${data.message}`, 'error');
+            break;
+    }
+}
+
+function showCrawlBubble() {
+    const bubble = document.getElementById('crawlBubble');
+    bubble.classList.add('show');
+    bubble.classList.remove('minimized');
+}
+
+function hideCrawlBubble() {
+    document.getElementById('crawlBubble').classList.remove('show');
+}
+
+function closeCrawlBubble() {
+    if (crawlIsRunning) {
+        // 最小化而不是关闭
+        document.getElementById('crawlBubble').classList.add('minimized');
+    } else {
+        hideCrawlBubble();
+    }
+}
+
+function updateBubbleProgress(completed, total) {
+    const percent = total > 0 ? (completed / total) * 100 : 0;
+    document.getElementById('bubbleProgressFill').style.width = `${percent}%`;
+    document.getElementById('bubbleProgressText').textContent = `${completed}/${total}`;
+}
+
+function updateBubbleStatus(text, type = '') {
+    const statusEl = document.getElementById('bubbleStatus');
+    statusEl.textContent = text;
+    statusEl.className = 'bubble-status' + (type ? ` ${type}` : '');
+}
+
+function addBubbleDetail(name, success, status) {
+    const detailsEl = document.getElementById('bubbleDetails');
+    const itemHtml = `
+        <div class="bubble-detail-item ${success ? 'success' : 'failed'}">
+            <span class="detail-name">${escapeHtml(name)}</span>
+            <span class="detail-status">${escapeHtml(status)}</span>
+        </div>
+    `;
+
+    // 插入到顶部
+    detailsEl.insertAdjacentHTML('afterbegin', itemHtml);
+
+    // 只保留最近10条
+    const items = detailsEl.querySelectorAll('.bubble-detail-item');
+    if (items.length > 10) {
+        items[items.length - 1].remove();
+    }
+}
+
+function resetCrawlButton() {
+    const btn = document.getElementById('btnStartCrawl');
+    if (btn) {
+        btn.querySelector('.btn-text').style.display = 'inline';
+        btn.querySelector('.btn-loading').style.display = 'none';
+        btn.disabled = false;
+    }
+}
+
+// 保留旧的弹窗函数以兼容（但不再使用）
+function openCrawlProgressModal() {
+    // 现在使用气泡代替
+    showCrawlBubble();
+}
+
+function closeCrawlProgressModal() {
+    // 兼容旧代码
+    closeCrawlBubble();
+}
+
+
+// ==================== 一键检测（已废弃） ====================
 
 // ==================== 全部告警与日历筛选 ====================
 
@@ -1350,15 +1658,23 @@ function renderFullAlerts() {
         }
 
         const riskText = { high: '高风险', medium: '中风险', low: '关注' }[alert.risk_level] || '未知';
+        const isRead = alert.is_read;
+        const readClass = isRead ? 'is-read' : '';
+        const readBadge = isRead
+            ? `<span class="read-badge" title="已读于 ${alert.read_at || ''}">已读</span>`
+            : `<span class="unread-badge">未读</span>`;
 
         return `
-        <div class="full-alert-item ${alert.risk_level}" onclick="window.open('${escapeHtml(alert.url)}', '_blank')">
+        <div class="full-alert-item ${alert.risk_level} ${readClass}" onclick="markFullAlertAsRead('${escapeHtml(alert.url)}', event)">
             <div class="alert-date">
                 <span class="date">${dateStr}</span>
                 <span class="time">${timeStr}</span>
             </div>
             <div class="alert-content">
-                <div class="alert-title">${escapeHtml(alert.title)}</div>
+                <div class="alert-title-row">
+                    <div class="alert-title">${escapeHtml(alert.title)}</div>
+                    ${readBadge}
+                </div>
                 <div class="alert-meta">
                     <span class="alert-source-tag">${escapeHtml(alert.source)}</span>
                     <span class="alert-risk-tag ${alert.risk_level}">${riskText}</span>
@@ -1370,6 +1686,63 @@ function renderFullAlerts() {
         </div>
     `;
     }).join('');
+}
+
+// 标记全部告警列表中的告警已读
+async function markFullAlertAsRead(url, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    try {
+        const response = await fetch('/api/risk/alerts/read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                url: url,
+                reader_name: ''
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // 更新全部告警列表数据
+            const alertIndex = fullAlertsData.findIndex(a => a.url === url);
+            if (alertIndex >= 0) {
+                fullAlertsData[alertIndex].is_read = true;
+                fullAlertsData[alertIndex].read_at = new Date().toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }).replace(/\//g, '-');
+            }
+
+            // 同步更新主页告警列表数据
+            const mainAlertIndex = allAlertsData.findIndex(a => a.url === url);
+            if (mainAlertIndex >= 0) {
+                allAlertsData[mainAlertIndex].is_read = true;
+                allAlertsData[mainAlertIndex].read_at = fullAlertsData[alertIndex]?.read_at || '';
+            }
+
+            // 重新渲染两个列表
+            renderFullAlerts();
+            renderFilteredAlerts();
+
+            // 打开新窗口
+            window.open(url, '_blank');
+        } else {
+            console.error('标记已读失败:', result.error);
+            window.open(url, '_blank');
+        }
+    } catch (error) {
+        console.error('标记已读请求失败:', error);
+        window.open(url, '_blank');
+    }
 }
 
 // ==================== 自定义日历组件 ====================
@@ -1616,481 +1989,7 @@ async function batchCheckAll() {
 }
 
 
-// ==================== 更新文章功能 ====================
-
-let currentCrawlMethod = 'auto';
-let crawlSitesData = [];
-let crawlEventSource = null;  // SSE 连接
-let isCrawling = false;       // 是否正在爬取
-
-function openCrawlModal() {
-    document.getElementById('crawlModal').classList.add('active');
-    currentCrawlMethod = 'auto';
-    updateCrawlMethodUI();
-    loadCrawlSites();
-    hideCrawlResult();
-    hideCrawlProgress();
-}
-
-function closeCrawlModal() {
-    // 如果正在爬取，先停止
-    if (crawlEventSource) {
-        crawlEventSource.close();
-        crawlEventSource = null;
-    }
-    isCrawling = false;
-    resetCrawlUI();
-    document.getElementById('crawlModal').classList.remove('active');
-}
-
-function selectCrawlMethod(method) {
-    currentCrawlMethod = method;
-    updateCrawlMethodUI();
-}
-
-function updateCrawlMethodUI() {
-    // 更新按钮状态
-    document.querySelectorAll('.option-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.method === currentCrawlMethod);
-    });
-
-    // 更新描述
-    const descEl = document.getElementById('crawlMethodDesc');
-    const descriptions = {
-        'auto': '根据站点配置自动选择：支持 Sitemap 的使用 Sitemap，否则使用 AI 分析',
-        'sitemap': '从网站的 sitemap.xml 获取文章列表，速度快，适合支持 Sitemap 的网站',
-        'ai': '使用 Crawl4AI 爬取网页内容，通过 DeepSeek 分析提取文章信息（需配置 API Key）'
-    };
-    descEl.textContent = descriptions[currentCrawlMethod];
-}
-
-async function loadCrawlSites() {
-    const listEl = document.getElementById('crawlSiteList');
-    listEl.innerHTML = '<div class="loading-text">加载中...</div>';
-
-    const data = await fetchAPI('/sites');
-    if (data) {
-        crawlSitesData = data;
-        renderCrawlSites();
-    } else {
-        listEl.innerHTML = '<div class="loading-text">加载失败</div>';
-    }
-}
-
-function renderCrawlSites() {
-    const listEl = document.getElementById('crawlSiteList');
-
-    if (crawlSitesData.length === 0) {
-        listEl.innerHTML = '<div class="loading-text">暂无站点</div>';
-        return;
-    }
-
-    listEl.innerHTML = crawlSitesData.map(site => {
-        const methodClass = site.fetch_method === 'sitemap' ? 'sitemap' : 'crawler';
-        const methodText = site.fetch_method === 'sitemap' ? 'Sitemap' : 'AI爬取';
-        return `
-        <div class="crawl-site-item" id="crawl-site-${site.id}">
-            <div class="crawl-site-info">
-                <div class="crawl-site-name">${escapeHtml(site.name)}</div>
-                <div class="crawl-site-meta">
-                    <span>${site.country_code || '未知'}</span>
-                    <span class="crawl-site-method ${methodClass}">${methodText}</span>
-                </div>
-            </div>
-            <div class="crawl-site-actions">
-                <button class="btn-crawl" onclick="crawlSingleSite('${site.id}')" id="btn-crawl-${site.id}">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                    </svg>
-                    更新
-                </button>
-            </div>
-        </div>
-    `;
-    }).join('');
-}
-
-async function crawlSingleSite(siteId) {
-    const btn = document.getElementById(`btn-crawl-${siteId}`);
-    const siteItem = document.getElementById(`crawl-site-${siteId}`);
-    const site = crawlSitesData.find(s => s.id === siteId);
-
-    if (!site) return;
-
-    // 确定爬取方式
-    let method = currentCrawlMethod;
-    if (method === 'auto') {
-        method = site.fetch_method === 'sitemap' && site.sitemap_url ? 'sitemap' : 'ai';
-    }
-
-    // 显示加载状态
-    btn.disabled = true;
-    btn.innerHTML = `<span class="btn-loading">更新中...</span>`;
-
-    try {
-        const response = await fetch(`/api/crawl/${method}/${siteId}`, {
-            method: 'POST'
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            const result = data.data;
-            // 显示成功状态
-            btn.outerHTML = `<span class="crawl-status success">+${result.saved} 篇</span>`;
-            showToast(`${site.name}: 获取 ${result.fetched} 篇，新增 ${result.saved} 篇`, 'success');
-        } else {
-            btn.outerHTML = `<span class="crawl-status error">失败</span>`;
-            showToast(`${site.name}: ${data.error}`, 'error');
-        }
-    } catch (error) {
-        btn.outerHTML = `<span class="crawl-status error">错误</span>`;
-        showToast('网络错误', 'error');
-    }
-}
-
-async function crawlAllSites() {
-    if (crawlSitesData.length === 0) {
-        showToast('没有可更新的站点', 'error');
-        return;
-    }
-
-    const btn = document.getElementById('btnCrawlAll');
-    const btnText = btn.querySelector('.btn-text');
-    const btnLoading = btn.querySelector('.btn-loading');
-
-    // 显示加载状态
-    btn.disabled = true;
-    btnText.style.display = 'none';
-    btnLoading.style.display = 'inline';
-
-    showToast(`开始更新 ${crawlSitesData.length} 个站点，请稍候...`, 'info');
-
-    try {
-        const response = await fetch('/api/crawl/batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ method: currentCrawlMethod })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            const result = data.data;
-            showCrawlResult(result);
-            showToast(`更新完成: 成功 ${result.success} 个，共获取 ${result.total_articles} 篇文章`, 'success');
-            // 刷新主页面数据
-            loadAllData();
-        } else {
-            showToast(data.error || '更新失败', 'error');
-        }
-    } catch (error) {
-        showToast('网络错误', 'error');
-    } finally {
-        btn.disabled = false;
-        btnText.style.display = 'inline';
-        btnLoading.style.display = 'none';
-        // 重新加载站点列表
-        loadCrawlSites();
-    }
-}
-
-// 带进度显示的批量更新
-function crawlAllSitesWithProgress() {
-    if (crawlSitesData.length === 0) {
-        showToast('没有可更新的站点', 'error');
-        return;
-    }
-
-    if (isCrawling) {
-        showToast('正在更新中，请稍候...', 'info');
-        return;
-    }
-
-    isCrawling = true;
-
-    // 更新 UI 状态
-    const btn = document.getElementById('btnCrawlAll');
-    const btnStop = document.getElementById('btnCrawlStop');
-    const hint = document.getElementById('crawlHint');
-
-    btn.style.display = 'none';
-    btnStop.style.display = 'inline-flex';
-    hint.style.display = 'none';
-
-    // 显示进度面板
-    showCrawlProgress();
-
-    // 隐藏站点列表（可选，保持简洁）
-    // document.getElementById('crawlSiteList').style.display = 'none';
-
-    // 开始 SSE 连接
-    const url = `/api/crawl/batch/stream?method=${encodeURIComponent(currentCrawlMethod)}`;
-    crawlEventSource = new EventSource(url);
-
-    crawlEventSource.onmessage = function(event) {
-        try {
-            const data = JSON.parse(event.data);
-            handleCrawlEvent(data);
-        } catch (e) {
-            console.error('解析 SSE 数据失败:', e);
-        }
-    };
-
-    crawlEventSource.onerror = function(event) {
-        console.error('SSE 连接错误:', event);
-        if (crawlEventSource) {
-            crawlEventSource.close();
-            crawlEventSource = null;
-        }
-        if (isCrawling) {
-            isCrawling = false;
-            resetCrawlUI();
-            showToast('连接中断，请重试', 'error');
-        }
-    };
-}
-
-// 停止爬取进度
-function stopCrawlProgress() {
-    if (crawlEventSource) {
-        crawlEventSource.close();
-        crawlEventSource = null;
-    }
-    isCrawling = false;
-    resetCrawlUI();
-    addCrawlLog('已手动停止更新', 'error');
-    showToast('已停止更新', 'info');
-}
-
-// 处理 SSE 事件
-function handleCrawlEvent(data) {
-    switch (data.type) {
-        case 'init':
-            // 初始化
-            document.getElementById('liveTotal').textContent = data.total;
-            document.getElementById('liveProcessed').textContent = '0';
-            document.getElementById('liveSuccess').textContent = '0';
-            document.getElementById('liveFailed').textContent = '0';
-            document.getElementById('liveArticles').textContent = '0';
-            document.getElementById('crawlProgressBarFill').style.width = '0%';
-            document.getElementById('crawlProgressPercent').textContent = '0%';
-            document.getElementById('crawlProgressText').textContent = `准备更新 ${data.total} 个站点...`;
-            clearCrawlLog();
-            addCrawlLog(`开始更新 ${data.total} 个站点`, 'info');
-            break;
-
-        case 'progress':
-            // 正在处理某站点
-            document.getElementById('currentSiteName').textContent = data.site_name;
-            document.getElementById('currentSiteStatus').className = 'current-site-status';
-            document.getElementById('currentSiteStatus').innerHTML = `
-                <span class="status-spinner"></span>
-                <span class="status-text">获取中...</span>
-            `;
-
-            const progressPercent = Math.round((data.current - 1) / data.total * 100);
-            document.getElementById('crawlProgressBarFill').style.width = `${progressPercent}%`;
-            document.getElementById('crawlProgressPercent').textContent = `${progressPercent}%`;
-            document.getElementById('crawlProgressText').textContent = `正在处理 ${data.current}/${data.total}`;
-
-            addCrawlLog(`正在获取: ${data.site_name}`, 'info');
-
-            // 更新站点列表中对应项的状态
-            updateSiteItemStatus(data.site_id, 'processing');
-            break;
-
-        case 'site_done':
-            // 单个站点完成
-            document.getElementById('liveProcessed').textContent = data.current;
-            document.getElementById('liveSuccess').textContent = data.success_count;
-            document.getElementById('liveFailed').textContent = data.failed_count;
-            document.getElementById('liveArticles').textContent = data.total_articles;
-
-            const donePercent = Math.round(data.current / data.total * 100);
-            document.getElementById('crawlProgressBarFill').style.width = `${donePercent}%`;
-            document.getElementById('crawlProgressPercent').textContent = `${donePercent}%`;
-            document.getElementById('crawlProgressText').textContent = `已完成 ${data.current}/${data.total}`;
-
-            if (data.success) {
-                document.getElementById('currentSiteStatus').className = 'current-site-status done';
-                document.getElementById('currentSiteStatus').innerHTML = `
-                    <span class="status-text">+${data.saved} 篇</span>
-                `;
-                addCrawlLog(`✓ ${data.site_name}: 获取 ${data.fetched} 篇，新增 ${data.saved} 篇`, 'success');
-                updateSiteItemStatus(data.site_id, 'success', data.saved);
-            } else {
-                document.getElementById('currentSiteStatus').className = 'current-site-status error';
-                document.getElementById('currentSiteStatus').innerHTML = `
-                    <span class="status-text">失败</span>
-                `;
-                addCrawlLog(`✗ ${data.site_name}: ${data.error || '失败'}`, 'error');
-                updateSiteItemStatus(data.site_id, 'error', data.error);
-            }
-            break;
-
-        case 'complete':
-            // 全部完成
-            isCrawling = false;
-
-            if (crawlEventSource) {
-                crawlEventSource.close();
-                crawlEventSource = null;
-            }
-
-            document.getElementById('crawlProgressBarFill').style.width = '100%';
-            document.getElementById('crawlProgressPercent').textContent = '100%';
-            document.getElementById('crawlProgressText').textContent = '更新完成';
-            document.getElementById('currentSiteName').textContent = '-';
-            document.getElementById('currentSiteStatus').className = 'current-site-status';
-            document.getElementById('currentSiteStatus').innerHTML = `
-                <span class="status-text">已完成</span>
-            `;
-
-            // 添加完成样式
-            const progressPanel = document.getElementById('crawlProgressPanel');
-            if (data.failed > 0) {
-                progressPanel.classList.add('has-errors');
-            } else {
-                progressPanel.classList.add('completed');
-            }
-
-            addCrawlLog(`更新完成: 成功 ${data.success} 个, 失败 ${data.failed} 个, 新增 ${data.total_articles} 篇文章`, 'info');
-
-            // 恢复 UI
-            resetCrawlUI();
-
-            // 刷新主页面数据
-            loadAllData();
-
-            // 显示完成提示
-            if (data.failed > 0) {
-                showToast(`更新完成: 成功 ${data.success} 个, 失败 ${data.failed} 个`, 'info');
-            } else {
-                showToast(`更新完成: 成功 ${data.success} 个, 新增 ${data.total_articles} 篇文章`, 'success');
-            }
-            break;
-    }
-}
-
-// 显示进度面板
-function showCrawlProgress() {
-    const panel = document.getElementById('crawlProgressPanel');
-    panel.style.display = 'block';
-    panel.classList.remove('completed', 'has-errors');
-}
-
-// 隐藏进度面板
-function hideCrawlProgress() {
-    document.getElementById('crawlProgressPanel').style.display = 'none';
-}
-
-// 重置爬取 UI
-function resetCrawlUI() {
-    const btn = document.getElementById('btnCrawlAll');
-    const btnStop = document.getElementById('btnCrawlStop');
-    const hint = document.getElementById('crawlHint');
-
-    btn.style.display = 'inline-flex';
-    btnStop.style.display = 'none';
-    hint.style.display = 'inline';
-}
-
-// 清空日志
-function clearCrawlLog() {
-    document.getElementById('crawlLiveLog').innerHTML = '';
-}
-
-// 添加日志条目
-function addCrawlLog(message, type = 'info') {
-    const logContainer = document.getElementById('crawlLiveLog');
-
-    // 移除占位符
-    const placeholder = logContainer.querySelector('.log-placeholder');
-    if (placeholder) {
-        placeholder.remove();
-    }
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${type}`;
-    entry.innerHTML = `
-        <span class="log-time">${timeStr}</span>
-        <span class="log-message">${escapeHtml(message)}</span>
-    `;
-
-    logContainer.appendChild(entry);
-
-    // 自动滚动到底部
-    logContainer.scrollTop = logContainer.scrollHeight;
-}
-
-// 更新站点列表中的状态
-function updateSiteItemStatus(siteId, status, extra = null) {
-    const siteItem = document.getElementById(`crawl-site-${siteId}`);
-    if (!siteItem) return;
-
-    const actionsDiv = siteItem.querySelector('.crawl-site-actions');
-    if (!actionsDiv) return;
-
-    if (status === 'processing') {
-        actionsDiv.innerHTML = `<span class="crawl-status">处理中...</span>`;
-    } else if (status === 'success') {
-        actionsDiv.innerHTML = `<span class="crawl-status success">+${extra} 篇</span>`;
-    } else if (status === 'error') {
-        actionsDiv.innerHTML = `<span class="crawl-status error">失败</span>`;
-    }
-}
-
-function showCrawlResult(result) {
-    const resultEl = document.getElementById('crawlResult');
-    const bodyEl = document.getElementById('crawlResultBody');
-
-    let detailsHtml = '';
-    if (result.details && result.details.length > 0) {
-        detailsHtml = result.details.map(d => {
-            if (d.success) {
-                return `<div style="margin-bottom:5px;"><span style="color:var(--risk-low);">✓</span> ${escapeHtml(d.name)}: +${d.saved} 篇</div>`;
-            } else {
-                return `<div style="margin-bottom:5px;"><span style="color:var(--risk-high);">✗</span> ${escapeHtml(d.name)}: ${escapeHtml(d.error || '失败')}</div>`;
-            }
-        }).join('');
-    }
-
-    bodyEl.innerHTML = `
-        <div class="result-summary">
-            <div class="result-stat">
-                <span class="label">总站点:</span>
-                <span class="value">${result.total}</span>
-            </div>
-            <div class="result-stat">
-                <span class="label">成功:</span>
-                <span class="value success">${result.success}</span>
-            </div>
-            <div class="result-stat">
-                <span class="label">失败:</span>
-                <span class="value error">${result.failed}</span>
-            </div>
-            <div class="result-stat">
-                <span class="label">新增文章:</span>
-                <span class="value">${result.total_articles}</span>
-            </div>
-        </div>
-        ${detailsHtml}
-    `;
-
-    resultEl.style.display = 'block';
-}
-
-function hideCrawlResult() {
-    document.getElementById('crawlResult').style.display = 'none';
-}
-
-function closeCrawlResult() {
-    hideCrawlResult();
-}
+// ==================== 更新文章功能（已移除，由插件独立实现） ====================
 
 
 // ==================== 系统设置 ====================
@@ -2106,6 +2005,9 @@ function closeSettingsModal() {
     document.getElementById('settingsModal').classList.remove('active');
 }
 
+// 保存各提供商的状态数据
+let providersStatusData = {};
+
 async function loadSettings() {
     const data = await fetchAPI('/settings');
     if (!data) return;
@@ -2116,17 +2018,24 @@ async function loadSettings() {
     // LLM 设置
     if (data.llm) {
         const provider = data.llm.provider || 'siliconflow';
+
+        // 保存各提供商的状态
+        providersStatusData = data.llm.providers_status || {};
+
         document.getElementById('llmProvider').value = provider;
-        document.getElementById('llmApiUrl').value = data.llm.api_url || '';
+
+        // 获取当前提供商的状态
+        const providerStatus = providersStatusData[provider] || {};
+        document.getElementById('llmApiUrl').value = providerStatus.api_url || data.llm.api_url || '';
         document.getElementById('llmApiKey').value = '';
-        document.getElementById('llmApiKey').placeholder = data.llm.api_key_set ? '已配置（输入新值覆盖）' : 'sk-...';
+        document.getElementById('llmApiKey').placeholder = providerStatus.api_key_set ? '已配置（输入新值覆盖）' : 'sk-...';
 
         // 更新模型列表
         updateModelOptions(provider, data.llm.model);
 
         // 更新状态
         const statusEl = document.getElementById('llmStatus');
-        if (data.llm.api_key_set) {
+        if (providerStatus.api_key_set) {
             statusEl.textContent = '已配置';
             statusEl.className = 'section-status configured';
         } else {
@@ -2136,25 +2045,100 @@ async function loadSettings() {
 
         // 显示遮蔽的 Key
         const hintEl = document.getElementById('llmKeyHint');
-        if (data.llm.api_key_masked) {
-            hintEl.textContent = `当前: ${data.llm.api_key_masked}`;
+        if (providerStatus.api_key_masked) {
+            hintEl.textContent = `当前: ${providerStatus.api_key_masked}`;
         } else {
             hintEl.textContent = '';
         }
+    }
+
+    // 加载 AI 总结提示词
+    await loadSummaryPrompt();
+}
+
+// 加载 AI 总结提示词
+async function loadSummaryPrompt() {
+    try {
+        const response = await fetch('/api/summary/prompt');
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            const textarea = document.getElementById('summaryPrompt');
+            if (textarea) {
+                // 显示当前提示词（自定义或默认）
+                textarea.value = result.data.prompt || result.data.default_prompt || '';
+                // 保存默认提示词以便恢复
+                textarea.dataset.defaultPrompt = result.data.default_prompt || '';
+            }
+        }
+    } catch (error) {
+        console.error('加载提示词失败:', error);
+    }
+}
+
+// 恢复默认提示词
+async function resetPromptToDefault() {
+    const textarea = document.getElementById('summaryPrompt');
+    if (!textarea) return;
+
+    // 如果已经有缓存的默认提示词，直接使用
+    if (textarea.dataset.defaultPrompt) {
+        textarea.value = textarea.dataset.defaultPrompt;
+        showToast('已恢复默认提示词，请保存设置', 'info');
+        return;
+    }
+
+    // 否则从服务器获取
+    try {
+        const response = await fetch('/api/summary/prompt');
+        const result = await response.json();
+
+        if (result.success && result.data && result.data.default_prompt) {
+            textarea.value = result.data.default_prompt;
+            textarea.dataset.defaultPrompt = result.data.default_prompt;
+            showToast('已恢复默认提示词，请保存设置', 'info');
+        } else {
+            showToast('获取默认提示词失败', 'error');
+        }
+    } catch (error) {
+        console.error('获取默认提示词失败:', error);
+        showToast('获取默认提示词失败', 'error');
     }
 }
 
 function onProviderChange() {
     const provider = document.getElementById('llmProvider').value;
     const providerConfig = providersData[provider];
+    const providerStatus = providersStatusData[provider] || {};
 
+    // 更新 API URL（优先使用已保存的，否则使用默认）
+    const apiUrl = providerStatus.api_url || (providerConfig ? providerConfig.api_url : '');
+    document.getElementById('llmApiUrl').value = apiUrl;
+
+    // 更新 API Key 提示
+    document.getElementById('llmApiKey').value = '';
+    document.getElementById('llmApiKey').placeholder = providerStatus.api_key_set ? '已配置（输入新值覆盖）' : 'sk-...';
+
+    // 更新状态显示
+    const statusEl = document.getElementById('llmStatus');
+    if (providerStatus.api_key_set) {
+        statusEl.textContent = '已配置';
+        statusEl.className = 'section-status configured';
+    } else {
+        statusEl.textContent = '未配置';
+        statusEl.className = 'section-status not-configured';
+    }
+
+    // 显示遮蔽的 Key
+    const hintEl = document.getElementById('llmKeyHint');
+    if (providerStatus.api_key_masked) {
+        hintEl.textContent = `当前: ${providerStatus.api_key_masked}`;
+    } else {
+        hintEl.textContent = '';
+    }
+
+    // 更新模型列表
     if (providerConfig) {
-        // 更新 API URL
-        if (providerConfig.api_url) {
-            document.getElementById('llmApiUrl').value = providerConfig.api_url;
-        }
-
-        // 更新模型列表
         updateModelOptions(provider);
     }
 }
@@ -2202,6 +2186,7 @@ async function saveSettings() {
     }
 
     try {
+        // 保存 LLM 设置
         const response = await fetch('/api/settings', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -2210,14 +2195,53 @@ async function saveSettings() {
 
         const data = await response.json();
 
-        if (data.success) {
+        if (!data.success) {
+            showToast(data.error || '保存LLM设置失败', 'error');
+            return;
+        }
+
+        // 保存 AI 总结提示词
+        const promptSaved = await saveSummaryPrompt();
+
+        if (promptSaved) {
             showToast('设置已保存', 'success');
             closeSettingsModal();
-        } else {
-            showToast(data.error || '保存失败', 'error');
         }
     } catch (error) {
         showToast('网络错误', 'error');
+    }
+}
+
+// 保存 AI 总结提示词
+async function saveSummaryPrompt() {
+    const textarea = document.getElementById('summaryPrompt');
+    if (!textarea) return true;
+
+    const customPrompt = textarea.value.trim();
+    const defaultPrompt = textarea.dataset.defaultPrompt || '';
+
+    // 如果与默认相同，则清空自定义（使用默认）
+    const promptToSave = customPrompt === defaultPrompt ? '' : customPrompt;
+
+    try {
+        const response = await fetch('/api/summary/prompt', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: promptToSave })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            showToast(data.error || '保存提示词失败', 'error');
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error('保存提示词失败:', error);
+        showToast('保存提示词失败', 'error');
+        return false;
     }
 }
 
@@ -2226,6 +2250,7 @@ async function testLLMConnection() {
     const btnText = btn.querySelector('.btn-text');
     const btnLoading = btn.querySelector('.btn-loading');
 
+    const provider = document.getElementById('llmProvider').value;
     const apiUrl = document.getElementById('llmApiUrl').value.trim();
     const apiKey = document.getElementById('llmApiKey').value.trim();
     const model = document.getElementById('llmModel').value;
@@ -2245,6 +2270,7 @@ async function testLLMConnection() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                provider: provider,
                 api_url: apiUrl,
                 api_key: apiKey,
                 model: model,
@@ -3215,6 +3241,584 @@ async function deleteAchievement(id) {
 }
 
 
+// ==================== AI舆情总结功能 ====================
+
+let summaryData = null;
+let summaryGenerating = false;
+let summaryProgressTimer = null;
+let summaryGeneratedTime = null;  // 上次生成时间
+let summaryTitleUrlMap = {};  // 标题->URL映射
+
+// 页面加载时检查今天是否有已生成的总结
+async function checkTodaySummary() {
+    try {
+        const response = await fetch('/api/summary/today');
+        const result = await response.json();
+        if (result.success && result.data) {
+            summaryData = result.data;
+            summaryTitleUrlMap = result.data.title_url_map || {};
+            summaryStructuredRefs = result.data.structured_refs || {};
+            summaryGeneratedTime = new Date(result.data.created_at);
+        }
+    } catch (error) {
+        console.error('检查今日总结失败:', error);
+    }
+}
+
+// 点击AI总结按钮
+function startSummaryGenerate() {
+    if (summaryGenerating) {
+        showToast('正在生成中，请稍候', 'warning');
+        showSummaryBubble();
+        return;
+    }
+
+    // 检查是否有上次生成的结果
+    if (summaryData && summaryGeneratedTime) {
+        const timeStr = summaryGeneratedTime.toLocaleString('zh-CN');
+        showSummaryConfirm(timeStr);
+        return;
+    }
+
+    // 开始生成
+    doGenerateSummary();
+}
+
+// 显示确认对话框
+function showSummaryConfirm(timeStr) {
+    const modal = document.createElement('div');
+    modal.className = 'confirm-modal';
+    modal.id = 'summaryConfirmModal';
+    modal.innerHTML = `
+        <div class="confirm-content">
+            <div class="confirm-title">已有舆情总结报告</div>
+            <div class="confirm-text">上次生成时间：${timeStr}</div>
+            <div class="confirm-buttons">
+                <button class="btn btn-secondary" onclick="closeSummaryConfirm(); viewSummaryResult();">查看上次报告</button>
+                <button class="btn btn-primary" onclick="closeSummaryConfirm(); doGenerateSummary();">重新生成</button>
+                <button class="btn btn-outline" onclick="closeSummaryConfirm(); openSummaryHistory();">历史记录</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    setTimeout(() => modal.classList.add('show'), 10);
+}
+
+function closeSummaryConfirm() {
+    const modal = document.getElementById('summaryConfirmModal');
+    if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => modal.remove(), 300);
+    }
+}
+
+function doGenerateSummary() {
+    // 显示气泡
+    showSummaryBubble();
+    updateSummaryBubbleStatus('正在获取今日新闻...');
+    updateSummaryProgress(10);
+
+    summaryGenerating = true;
+    summaryData = null;
+    summaryTitleUrlMap = {};
+
+    // 启动伪进度
+    startFakeProgress();
+
+    // 异步生成
+    generateSummaryAsync();
+}
+
+// 伪进度动画
+function startFakeProgress() {
+    let progress = 10;
+    const maxProgress = 85;
+
+    if (summaryProgressTimer) {
+        clearInterval(summaryProgressTimer);
+    }
+
+    summaryProgressTimer = setInterval(() => {
+        if (progress < maxProgress) {
+            // 速度随进度递减
+            const speed = Math.max(0.3, (maxProgress - progress) / 50);
+            progress += speed;
+            updateSummaryProgress(Math.min(progress, maxProgress));
+
+            // 更新状态文字
+            if (progress > 20 && progress < 40) {
+                updateSummaryBubbleStatus('AI正在阅读新闻...');
+            } else if (progress > 40 && progress < 60) {
+                updateSummaryBubbleStatus('AI正在分析舆情态势...');
+            } else if (progress > 60 && progress < 80) {
+                updateSummaryBubbleStatus('AI正在识别风险隐患...');
+            } else if (progress >= 80) {
+                updateSummaryBubbleStatus('AI正在生成报告...');
+            }
+        }
+    }, 200);
+}
+
+function stopFakeProgress() {
+    if (summaryProgressTimer) {
+        clearInterval(summaryProgressTimer);
+        summaryProgressTimer = null;
+    }
+}
+
+async function generateSummaryAsync() {
+    try {
+        const response = await fetch('/api/summary/daily', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        stopFakeProgress();
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || '生成失败');
+        }
+
+        summaryData = result.data;
+        summaryTitleUrlMap = result.data.title_url_map || {};
+        summaryStructuredRefs = result.data.structured_refs || {};
+        summaryGeneratedTime = new Date();
+
+        updateSummaryProgress(100);
+        updateSummaryBubbleStatus(`分析完成！共${summaryData.article_count}条新闻`, true);
+
+        // 显示查看按钮
+        document.getElementById('summaryViewBtn').style.display = 'block';
+        document.getElementById('summaryBubble').classList.add('complete');
+
+        // 弹出提示
+        showToast('舆情分析完成，点击查看结果', 'success');
+
+    } catch (error) {
+        stopFakeProgress();
+        updateSummaryBubbleStatus(`失败: ${error.message}`, false, true);
+        showToast(error.message || '生成失败', 'error');
+    } finally {
+        summaryGenerating = false;
+    }
+}
+
+function showSummaryBubble() {
+    const bubble = document.getElementById('summaryBubble');
+    bubble.classList.add('show');
+    bubble.classList.remove('complete');
+    document.getElementById('summaryViewBtn').style.display = 'none';
+}
+
+function hideSummaryBubble() {
+    document.getElementById('summaryBubble').classList.remove('show');
+}
+
+function closeSummaryBubble() {
+    if (summaryGenerating) {
+        // 生成中只是隐藏，不取消
+        hideSummaryBubble();
+    } else {
+        hideSummaryBubble();
+    }
+}
+
+function updateSummaryProgress(percent) {
+    document.getElementById('summaryProgressFill').style.width = `${percent}%`;
+}
+
+function updateSummaryBubbleStatus(text, isComplete = false, isError = false) {
+    const statusEl = document.getElementById('summaryBubbleStatus');
+    statusEl.textContent = text;
+    statusEl.className = 'bubble-status' + (isComplete ? ' success' : '') + (isError ? ' error' : '');
+}
+
+function viewSummaryResult() {
+    if (!summaryData) {
+        showToast('暂无分析结果', 'warning');
+        return;
+    }
+
+    // 隐藏气泡
+    hideSummaryBubble();
+
+    // 打开弹窗并填充数据
+    openSummaryModal();
+}
+
+function openSummaryModal() {
+    document.getElementById('summaryModal').classList.add('active');
+
+    // 显示当前日期
+    const dateStr = summaryData?.date_str || summaryData?.date || `${new Date().getFullYear()}年${new Date().getMonth() + 1}月${new Date().getDate()}日`;
+    document.getElementById('summaryDate').textContent = dateStr;
+
+    // 如果有数据则显示
+    if (summaryData) {
+        displaySummaryData(summaryData);
+    } else {
+        // 清空内容
+        document.getElementById('summarySummary').innerHTML = '<span class="empty-hint">暂无数据，请点击"重新生成"按钮</span>';
+        document.getElementById('summaryHotNews').innerHTML = '';
+        document.getElementById('summaryRisk').innerHTML = '';
+        document.getElementById('summaryMeta').textContent = '';
+    }
+}
+
+// 简易 Markdown 渲染（支持新闻超链接）
+function renderMarkdown(text, titleUrlMap = null) {
+    if (!text) return '';
+
+    let html = escapeHtml(text);
+
+    // 处理标题 ### / ## / #
+    html = html.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');
+    html = html.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>');
+    html = html.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>');
+
+    // 处理粗体 **text**
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // 处理斜体 *text*
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // 处理有序列表 1. 2. 等
+    html = html.replace(/^(\d+)\.\s+(.+)$/gm, '<div class="md-list-item"><span class="md-list-num">$1.</span><span class="md-list-content">$2</span></div>');
+
+    // 处理无序列表 -
+    html = html.replace(/^[-•]\s+(.+)$/gm, '<div class="md-list-item"><span class="md-list-bullet">•</span><span class="md-list-content">$1</span></div>');
+
+    // 处理换行
+    html = html.replace(/\n\n/g, '</p><p>');
+    html = html.replace(/\n/g, '<br>');
+
+    // 包装段落
+    if (!html.startsWith('<')) {
+        html = '<p>' + html + '</p>';
+    }
+
+    // 如果有标题URL映射，将新闻标题转换为超链接
+    if (titleUrlMap && Object.keys(titleUrlMap).length > 0) {
+        html = addNewsLinks(html, titleUrlMap);
+    }
+
+    return html;
+}
+
+// 将文本中的新闻标题转换为可点击的超链接
+function addNewsLinks(html, titleUrlMap) {
+    // 对每个标题进行匹配和替换
+    for (const [title, info] of Object.entries(titleUrlMap)) {
+        if (!info.url) continue;
+
+        // 转义特殊正则字符
+        const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // 尝试匹配标题（可能被HTML编码）
+        const encodedTitle = escapeHtml(title);
+        const escapedEncodedTitle = encodedTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // 创建超链接
+        const link = `<a href="${escapeHtml(info.url)}" target="_blank" class="news-link" title="点击查看原文">${encodedTitle}</a>`;
+
+        // 替换匹配的标题（避免重复替换已经是链接的部分）
+        const regex = new RegExp(`(?<!<a[^>]*>)${escapedEncodedTitle}(?![^<]*</a>)`, 'g');
+        html = html.replace(regex, link);
+    }
+
+    return html;
+}
+
+function displaySummaryData(data) {
+    const urlMap = data.title_url_map || summaryTitleUrlMap || {};
+
+    // 保存结构化引用数据
+    summaryStructuredRefs = data.structured_refs || {};
+
+    document.getElementById('summarySummary').innerHTML = renderMarkdown(data.summary, urlMap) || '<span class="empty-hint">暂无总结</span>';
+    document.getElementById('summaryHotNews').innerHTML = renderMarkdown(data.hot_news, urlMap) || '<span class="empty-hint">暂无热点新闻</span>';
+    document.getElementById('summaryRisk').innerHTML = renderMarkdown(data.risk_analysis, urlMap) || '<span class="empty-hint">暂无风险分析</span>';
+
+    let metaText = `基于 ${data.article_count} 条新闻 | 模型: ${data.model || 'AI'}`;
+    if (data.date_str || data.date) {
+        metaText += ` | ${data.date_str || data.date}`;
+    }
+    if (data.created_at) {
+        metaText += ` | 生成于 ${data.created_at}`;
+    } else if (summaryGeneratedTime) {
+        metaText += ` | 生成于 ${summaryGeneratedTime.toLocaleTimeString('zh-CN')}`;
+    }
+    document.getElementById('summaryMeta').textContent = metaText;
+}
+
+function closeSummaryModal() {
+    document.getElementById('summaryModal').classList.remove('active');
+}
+
+// ==================== 引用来源功能 ====================
+
+let summaryStructuredRefs = {};  // 结构化引用数据
+let currentRefsCategory = 'all';
+
+// 分类名称映射
+const CATEGORY_NAMES = {
+    'international_conflict': '国际冲突与人道主义危机',
+    'international_relations': '重大国际关系动态',
+    'economy_tech': '经济与科技热点',
+    'immigration_border': '移民与边境管理',
+    'society_culture': '社会与文化议题'
+};
+
+function showCategoryRefs(section) {
+    const refs = summaryStructuredRefs || {};
+
+    if (section === 'summary') {
+        // 显示舆情总结的所有分类引用
+        showRefsModal('今日舆情总结 - 引用来源', refs.category_news || {}, 'categories');
+    } else if (section === 'top5') {
+        // 显示热点TOP5的引用
+        showRefsModal('热点新闻TOP5 - 引用来源', refs.top_5_news || [], 'top5');
+    }
+}
+
+function showRefsModal(title, data, type) {
+    document.getElementById('refsModalTitle').textContent = title;
+    document.getElementById('refsModal').classList.add('active');
+
+    const tabsEl = document.getElementById('refsCategoriesTabs');
+    const listEl = document.getElementById('refsList');
+
+    if (type === 'categories') {
+        // 显示分类标签
+        let hasAnyData = false;
+        let tabsHtml = '';
+
+        for (const [key, name] of Object.entries(CATEGORY_NAMES)) {
+            const items = data[key] || [];
+            const count = items.length;
+            if (count > 0) hasAnyData = true;
+
+            tabsHtml += `
+                <button class="refs-tab ${currentRefsCategory === key ? 'active' : ''}"
+                        onclick="switchRefsCategory('${key}')"
+                        data-count="${count}">
+                    ${name}
+                    <span class="refs-count">${count}</span>
+                </button>
+            `;
+        }
+
+        tabsEl.innerHTML = tabsHtml;
+        tabsEl.style.display = 'flex';
+
+        if (!hasAnyData) {
+            listEl.innerHTML = '<div class="empty-hint">AI未返回结构化引用数据，请查看报告中的新闻链接</div>';
+            return;
+        }
+
+        // 默认显示第一个有数据的分类
+        let firstCategory = null;
+        for (const key of Object.keys(CATEGORY_NAMES)) {
+            if (data[key] && data[key].length > 0) {
+                firstCategory = key;
+                break;
+            }
+        }
+
+        if (firstCategory) {
+            currentRefsCategory = firstCategory;
+            renderRefsList(data[firstCategory]);
+            // 更新tab高亮
+            document.querySelectorAll('.refs-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.textContent.includes(CATEGORY_NAMES[firstCategory]));
+            });
+        }
+
+        // 保存数据供切换使用
+        window._refsData = data;
+
+    } else if (type === 'top5') {
+        // TOP5不需要分类标签
+        tabsEl.style.display = 'none';
+
+        if (!data || data.length === 0) {
+            listEl.innerHTML = '<div class="empty-hint">AI未返回TOP5结构化数据，请查看报告中的新闻链接</div>';
+            return;
+        }
+
+        // 按rank排序
+        const sorted = [...data].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+        renderRefsList(sorted, true);
+    }
+}
+
+function switchRefsCategory(category) {
+    currentRefsCategory = category;
+    const data = window._refsData || {};
+
+    // 更新tab高亮
+    document.querySelectorAll('.refs-tab').forEach(tab => {
+        const isActive = tab.textContent.includes(CATEGORY_NAMES[category]);
+        tab.classList.toggle('active', isActive);
+    });
+
+    renderRefsList(data[category] || []);
+}
+
+function renderRefsList(items, showRank = false) {
+    const listEl = document.getElementById('refsList');
+
+    if (!items || items.length === 0) {
+        listEl.innerHTML = '<div class="empty-hint">该分类暂无引用的新闻</div>';
+        return;
+    }
+
+    let html = '';
+    items.forEach((item, index) => {
+        const rank = showRank && item.rank ? `<span class="refs-rank">${item.rank}</span>` : '';
+        const title = escapeHtml(item.title || '未知标题');
+        const url = item.url || '#';
+
+        html += `
+            <a href="${escapeHtml(url)}" target="_blank" class="refs-item">
+                ${rank}
+                <span class="refs-title">${title}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+            </a>
+        `;
+    });
+
+    listEl.innerHTML = html;
+}
+
+function closeRefsModal() {
+    document.getElementById('refsModal').classList.remove('active');
+}
+
+// ==================== AI总结历史记录 ====================
+
+let summaryHistoryPage = 1;
+let summaryHistoryLoading = false;
+
+function openSummaryHistory() {
+    document.getElementById('summaryHistoryModal').classList.add('active');
+    summaryHistoryPage = 1;
+    loadSummaryHistory();
+}
+
+function closeSummaryHistory() {
+    document.getElementById('summaryHistoryModal').classList.remove('active');
+}
+
+// 从历史记录返回到AI总结页面
+function backToSummary() {
+    closeSummaryHistory();
+    openSummaryModal();
+}
+
+async function loadSummaryHistory() {
+    if (summaryHistoryLoading) return;
+
+    summaryHistoryLoading = true;
+    const listEl = document.getElementById('summaryHistoryList');
+
+    if (summaryHistoryPage === 1) {
+        listEl.innerHTML = '<div class="loading-hint">加载中...</div>';
+    }
+
+    try {
+        const response = await fetch(`/api/summary/history?page=${summaryHistoryPage}&page_size=20`);
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || '加载失败');
+        }
+
+        const data = result.data;
+
+        if (summaryHistoryPage === 1) {
+            listEl.innerHTML = '';
+        }
+
+        if (data.items.length === 0 && summaryHistoryPage === 1) {
+            listEl.innerHTML = '<div class="empty-hint">暂无历史记录</div>';
+            return;
+        }
+
+        data.items.forEach(item => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'history-item';
+            itemEl.innerHTML = `
+                <div class="history-item-header">
+                    <span class="history-date">${item.date_str}</span>
+                    <span class="history-count">${item.article_count} 条新闻</span>
+                </div>
+                <div class="history-preview">${escapeHtml(item.summary_preview)}</div>
+                <div class="history-meta">
+                    <span>模型: ${item.model || 'AI'}</span>
+                    <span>生成时间: ${item.created_at}</span>
+                </div>
+            `;
+            itemEl.onclick = () => viewHistorySummary(item.date);
+            listEl.appendChild(itemEl);
+        });
+
+        // 显示/隐藏加载更多按钮
+        const loadMoreBtn = document.getElementById('summaryHistoryLoadMore');
+        if (summaryHistoryPage < data.total_pages) {
+            loadMoreBtn.style.display = 'block';
+        } else {
+            loadMoreBtn.style.display = 'none';
+        }
+
+    } catch (error) {
+        if (summaryHistoryPage === 1) {
+            listEl.innerHTML = `<div class="error-hint">加载失败: ${error.message}</div>`;
+        }
+        showToast('加载历史记录失败', 'error');
+    } finally {
+        summaryHistoryLoading = false;
+    }
+}
+
+function loadMoreSummaryHistory() {
+    summaryHistoryPage++;
+    loadSummaryHistory();
+}
+
+async function viewHistorySummary(dateStr) {
+    try {
+        const response = await fetch(`/api/summary/${dateStr}`);
+        const result = await response.json();
+
+        if (!result.success || !result.data) {
+            showToast('获取总结详情失败', 'error');
+            return;
+        }
+
+        // 关闭历史弹窗
+        closeSummaryHistory();
+
+        // 设置数据并打开总结弹窗
+        summaryData = result.data;
+        summaryTitleUrlMap = result.data.title_url_map || {};
+        summaryStructuredRefs = result.data.structured_refs || {};
+        summaryGeneratedTime = new Date(result.data.created_at);
+
+        openSummaryModal();
+
+    } catch (error) {
+        showToast('加载失败: ' + error.message, 'error');
+    }
+}
+
+
 // ==================== 今日值班功能 ====================
 
 // 值班人员临时数据
@@ -3228,7 +3832,6 @@ async function loadDutyInfo() {
     if (data) {
         const leadersEl = document.getElementById('dutyLeaders');
         const officersEl = document.getElementById('dutyOfficers');
-        const dateEl = document.getElementById('dutyDate');
 
         // 显示值班领导
         if (data.leaders && data.leaders.length > 0) {
@@ -3247,16 +3850,6 @@ async function loadDutyInfo() {
         } else {
             officersEl.innerHTML = '<span class="duty-empty">未设置</span>';
         }
-
-        // 显示今日日期
-        const today = new Date();
-        const dateStr = today.toLocaleDateString('zh-CN', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            weekday: 'long'
-        });
-        dateEl.textContent = dateStr;
     }
 }
 

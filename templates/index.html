@@ -26,21 +26,6 @@
             <span class="status-text">系统运行中</span>
         </div>
         <div class="header-right">
-            <button class="header-btn" onclick="openLogsModal()" title="后台日志">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                </svg>
-            </button>
-            <button class="header-btn" onclick="openSettingsModal()" title="系统设置">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-            </button>
             <div class="datetime" id="datetime"></div>
         </div>
     </header>
@@ -72,7 +57,7 @@
                         </div>
                         <div class="stat-item">
                             <div class="stat-value" id="activeSources">--</div>
-                            <div class="stat-label">活跃源</div>
+                            <div class="stat-label">监控源</div>
                         </div>
                     </div>
                 </div>
@@ -88,13 +73,16 @@
                 </div>
             </section>
 
-            <!-- 时间趋势 -->
+            <!-- 最新获取文章 -->
             <section class="card flex-1">
                 <div class="card-header">
-                    <span class="card-title">发布趋势 (近7天)</span>
+                    <span class="card-title">最新获取文章</span>
+                    <span class="article-count" id="latestArticleCount">0</span>
                 </div>
-                <div class="card-body">
-                    <div id="trendChart" class="chart-container"></div>
+                <div class="card-body latest-articles-body">
+                    <div class="latest-articles-list" id="latestArticlesList">
+                        <div class="loading-text">加载中...</div>
+                    </div>
                 </div>
             </section>
         </aside>
@@ -149,24 +137,29 @@
                     </button>
                 </div>
                 <div class="card-body duty-body">
-                    <div class="duty-date-row">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                        <span id="dutyDate">--</span>
-                    </div>
                     <div class="duty-roles">
-                        <div class="duty-role">
-                            <div class="duty-role-label">值班领导</div>
+                        <div class="duty-role duty-role-leader">
+                            <div class="duty-role-label leader-label">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                值班领导
+                            </div>
                             <div class="duty-role-names" id="dutyLeaders">
                                 <span class="duty-empty">未设置</span>
                             </div>
                         </div>
-                        <div class="duty-role">
-                            <div class="duty-role-label">值班员</div>
+                        <div class="duty-role duty-role-officer">
+                            <div class="duty-role-label officer-label">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                                值班员
+                            </div>
                             <div class="duty-role-names" id="dutyOfficers">
                                 <span class="duty-empty">未设置</span>
                             </div>
@@ -258,24 +251,50 @@
     <!-- 底部信息栏 -->
     <footer class="footer">
         <div class="footer-left">
-            <span>数据更新时间: <span id="updateTime">--</span></span>
+            <span class="update-time-label">数据更新: <span id="updateTime">--</span></span>
+            <span class="refresh-status" id="autoRefreshStatus">
+                <span class="refresh-dot"></span>
+                自动刷新中
+            </span>
         </div>
         <div class="footer-center">
-            <span>覆盖 <span id="totalCountries">--</span> 个国家/地区</span>
+            <span class="footer-stat">覆盖 <span id="totalCountries">--</span> 个国家/地区</span>
             <span class="divider">|</span>
-            <span>监控 <span id="totalSources">--</span> 个新闻源</span>
-            <span class="divider">|</span>
-            <button class="footer-btn" onclick="openSitesModal()">
+            <span class="footer-stat">监控 <span id="totalSources">--</span> 个新闻源</span>
+        </div>
+        <div class="footer-right">
+            <button class="footer-btn footer-btn-primary" onclick="startSummaryGenerate()" title="AI舆情总结">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                    <path d="M2 17l10 5 10-5"></path>
+                    <path d="M2 12l10 5 10-5"></path>
+                </svg>
+                <span>AI总结</span>
+            </button>
+            <button class="footer-btn" onclick="openSitesModal()" title="插件管理">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <line x1="12" y1="8" x2="12" y2="16"></line>
                     <line x1="8" y1="12" x2="16" y2="12"></line>
                 </svg>
-                订阅管理
+                插件
             </button>
-        </div>
-        <div class="footer-right">
-            <span>自动刷新: 60秒</span>
+            <button class="footer-btn" onclick="openLogsModal()" title="后台日志">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+                日志
+            </button>
+            <button class="footer-btn" onclick="openSettingsModal()" title="系统设置">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                设置
+            </button>
         </div>
     </footer>
 
@@ -348,166 +367,46 @@
         </div>
     </div>
 
-    <!-- 订阅管理弹窗 -->
+    <!-- 插件管理弹窗 -->
     <div class="modal-overlay" id="sitesModal">
         <div class="modal modal-lg">
             <div class="modal-header">
-                <h3 class="modal-title">订阅管理</h3>
+                <h3 class="modal-title">插件管理</h3>
                 <button class="modal-close" onclick="closeSitesModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- 添加站点表单 -->
-                <div class="site-form">
-                    <input type="text" id="newSiteName" class="form-input" placeholder="站点名称（如：纽约时报）">
-                    <input type="text" id="newSiteUrl" class="form-input flex-2" placeholder="站点 URL（如：https://www.nytimes.com）">
-                    <button class="btn btn-add" onclick="addSite()" id="btnAddSite">
-                        <span class="btn-text">添加并检测</span>
-                        <span class="btn-loading" style="display:none;">检测中...</span>
-                    </button>
-                </div>
-
                 <!-- 操作按钮栏 -->
                 <div class="site-toolbar">
-                    <button class="btn btn-outline" onclick="openBatchImportModal()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="17 8 12 3 7 8"></polyline>
-                            <line x1="12" y1="3" x2="12" y2="15"></line>
-                        </svg>
-                        批量导入
-                    </button>
-                    <button class="btn btn-outline" onclick="batchCheckAll()" id="btnBatchCheck">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                        </svg>
-                        <span class="btn-text">一键检测</span>
-                        <span class="btn-loading" style="display:none;">检测中...</span>
-                    </button>
-                    <div class="toolbar-divider"></div>
-                    <button class="btn btn-primary" onclick="openCrawlModal()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9"></path>
-                        </svg>
-                        更新文章
-                    </button>
+                    <div class="toolbar-info">
+                        <span class="info-text">通过启用/禁用插件中的站点来管理订阅</span>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-primary" onclick="startCrawlUpdate()" id="btnStartCrawl">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                            <span class="btn-text">更新文章</span>
+                            <span class="btn-loading" style="display:none;">更新中...</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 站点统计 -->
                 <div class="site-stats">
-                    <span class="stat-badge sitemap">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        Sitemap: <span id="sitemapCount">0</span>
-                    </span>
-                    <span class="stat-badge crawler">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M12 6v6l4 2"></path>
-                        </svg>
-                        爬虫: <span id="crawlerCount">0</span>
-                    </span>
-                    <span class="stat-badge unknown">
-                        未知: <span id="unknownCount">0</span>
-                    </span>
                     <span class="stat-badge total">
-                        共 <span id="siteTotalCount">0</span> 个站点
+                        已启用 <span id="enabledCount">0</span> / <span id="siteTotalCount">0</span> 个站点
                     </span>
                 </div>
 
-                <!-- 站点列表 -->
-                <div class="site-list" id="siteList">
+                <!-- 插件列表 -->
+                <div class="plugin-list" id="pluginList">
                     <div class="loading-text">加载中...</div>
                 </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- 批量导入弹窗 -->
-    <div class="modal-overlay" id="batchImportModal">
-        <div class="modal modal-md">
-            <div class="modal-header">
-                <h3 class="modal-title">批量导入站点</h3>
-                <button class="modal-close" onclick="closeBatchImportModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">
-                        站点列表
-                        <span class="form-hint">（每行一个，格式：名称,URL 或 名称 URL）</span>
-                    </label>
-                    <textarea id="batchImportText" class="form-textarea" rows="10" placeholder="纽约时报,https://www.nytimes.com
-BBC,https://www.bbc.com
-路透社 https://www.reuters.com"></textarea>
-                </div>
-                <div class="form-group">
-                    <label class="form-checkbox">
-                        <input type="checkbox" id="batchAutoDetect">
-                        <span>自动检测 Sitemap（较慢）</span>
-                    </label>
-                </div>
-                <div class="form-actions">
-                    <button class="btn btn-cancel" onclick="closeBatchImportModal()">取消</button>
-                    <button class="btn btn-add" onclick="doBatchImport()" id="btnDoBatchImport">
-                        <span class="btn-text">开始导入</span>
-                        <span class="btn-loading" style="display:none;">导入中...</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 编辑站点弹窗 -->
-    <div class="modal-overlay" id="editSiteModal">
-        <div class="modal modal-sm">
-            <div class="modal-header">
-                <h3 class="modal-title">编辑站点</h3>
-                <button class="modal-close" onclick="closeEditSiteModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="editSiteId">
-                <div class="form-group">
-                    <label class="form-label">站点名称</label>
-                    <input type="text" id="editSiteName" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">站点 URL</label>
-                    <input type="text" id="editSiteUrl" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">国家/地区</label>
-                    <select id="editSiteCountry" class="form-select">
-                        <option value="">自动检测</option>
-                        <option value="CN">中国</option>
-                        <option value="US">美国</option>
-                        <option value="GB">英国</option>
-                        <option value="JP">日本</option>
-                        <option value="KR">韩国</option>
-                        <option value="HK">香港</option>
-                        <option value="TW">台湾</option>
-                        <option value="RU">俄罗斯</option>
-                        <option value="DE">德国</option>
-                        <option value="FR">法国</option>
-                        <option value="AU">澳大利亚</option>
-                        <option value="IN">印度</option>
-                        <option value="BR">巴西</option>
-                        <option value="IL">以色列</option>
-                        <option value="PK">巴基斯坦</option>
-                        <option value="KZ">哈萨克斯坦</option>
-                        <option value="AR">阿根廷</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">获取方式</label>
-                    <select id="editSiteMethod" class="form-select">
-                        <option value="sitemap">Sitemap</option>
-                        <option value="crawler">爬虫</option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button class="btn btn-cancel" onclick="closeEditSiteModal()">取消</button>
-                    <button class="btn btn-save" onclick="saveSite()">保存</button>
+                <!-- 定制提示 -->
+                <div class="custom-hint">
+                    <p>如需添加其他站点，请联系开发者定制插件</p>
                 </div>
             </div>
         </div>
@@ -533,6 +432,7 @@ BBC,https://www.bbc.com
                             <option value="siliconflow">SiliconFlow</option>
                             <option value="deepseek">DeepSeek</option>
                             <option value="openai">OpenAI</option>
+                            <option value="gemini">Google Gemini</option>
                             <option value="custom">自定义</option>
                         </select>
                     </div>
@@ -567,132 +467,25 @@ BBC,https://www.bbc.com
                     </div>
                 </div>
 
+                <!-- AI总结提示词设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <span class="section-title">AI总结提示词</span>
+                        <button class="btn-link" onclick="resetPromptToDefault()">恢复默认</button>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">自定义提示词模板</label>
+                        <textarea id="summaryPrompt" class="form-textarea" rows="10" placeholder="输入自定义提示词..."></textarea>
+                        <div class="form-hint">
+                            必须包含以下占位符：<code>{date}</code> 日期、<code>{count}</code> 新闻数量、<code>{news_list}</code> 新闻列表
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 保存按钮 -->
                 <div class="form-actions">
                     <button class="btn btn-cancel" onclick="closeSettingsModal()">取消</button>
                     <button class="btn btn-save" onclick="saveSettings()">保存设置</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 更新文章弹窗 -->
-    <div class="modal-overlay" id="crawlModal">
-        <div class="modal modal-lg">
-            <div class="modal-header">
-                <h3 class="modal-title">更新文章</h3>
-                <button class="modal-close" onclick="closeCrawlModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <!-- 爬取方式选择 -->
-                <div class="crawl-options">
-                    <div class="option-group">
-                        <label class="option-label">爬取方式:</label>
-                        <div class="option-buttons">
-                            <button class="option-btn active" data-method="auto" onclick="selectCrawlMethod('auto')">
-                                自动选择
-                            </button>
-                            <button class="option-btn" data-method="sitemap" onclick="selectCrawlMethod('sitemap')">
-                                Sitemap
-                            </button>
-                            <button class="option-btn" data-method="ai" onclick="selectCrawlMethod('ai')">
-                                AI 分析
-                            </button>
-                        </div>
-                    </div>
-                    <div class="option-desc" id="crawlMethodDesc">
-                        根据站点配置自动选择：支持 Sitemap 的使用 Sitemap，否则使用 AI 分析
-                    </div>
-                </div>
-
-                <!-- 批量操作 -->
-                <div class="crawl-actions">
-                    <button class="btn btn-primary" onclick="crawlAllSitesWithProgress()" id="btnCrawlAll">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
-                        <span class="btn-text">开始更新全部站点</span>
-                        <span class="btn-loading" style="display:none;">更新中...</span>
-                    </button>
-                    <button class="btn btn-cancel" onclick="stopCrawlProgress()" id="btnCrawlStop" style="display:none;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="6" y="6" width="12" height="12"></rect>
-                        </svg>
-                        停止
-                    </button>
-                    <span class="crawl-hint" id="crawlHint">或选择下方站点单独更新</span>
-                </div>
-
-                <!-- 进度显示区域 -->
-                <div class="crawl-progress-panel" id="crawlProgressPanel" style="display:none;">
-                    <!-- 进度条 -->
-                    <div class="progress-bar-container">
-                        <div class="progress-bar">
-                            <div class="progress-bar-fill" id="crawlProgressBarFill" style="width: 0%"></div>
-                        </div>
-                        <div class="progress-text">
-                            <span id="crawlProgressText">准备中...</span>
-                            <span id="crawlProgressPercent">0%</span>
-                        </div>
-                    </div>
-
-                    <!-- 当前站点 -->
-                    <div class="current-site-info" id="currentSiteInfo">
-                        <div class="current-site-label">正在处理:</div>
-                        <div class="current-site-name" id="currentSiteName">-</div>
-                        <div class="current-site-status" id="currentSiteStatus">
-                            <span class="status-spinner"></span>
-                            <span class="status-text">获取中...</span>
-                        </div>
-                    </div>
-
-                    <!-- 实时统计 -->
-                    <div class="crawl-live-stats">
-                        <div class="live-stat">
-                            <span class="live-stat-value" id="liveTotal">0</span>
-                            <span class="live-stat-label">总站点</span>
-                        </div>
-                        <div class="live-stat">
-                            <span class="live-stat-value" id="liveProcessed">0</span>
-                            <span class="live-stat-label">已处理</span>
-                        </div>
-                        <div class="live-stat success">
-                            <span class="live-stat-value" id="liveSuccess">0</span>
-                            <span class="live-stat-label">成功</span>
-                        </div>
-                        <div class="live-stat error">
-                            <span class="live-stat-value" id="liveFailed">0</span>
-                            <span class="live-stat-label">失败</span>
-                        </div>
-                        <div class="live-stat primary">
-                            <span class="live-stat-value" id="liveArticles">0</span>
-                            <span class="live-stat-label">新增文章</span>
-                        </div>
-                    </div>
-
-                    <!-- 实时日志 -->
-                    <div class="crawl-live-log" id="crawlLiveLog">
-                        <div class="log-placeholder">等待开始...</div>
-                    </div>
-                </div>
-
-                <!-- 站点列表 -->
-                <div class="crawl-site-list" id="crawlSiteList">
-                    <div class="loading-text">加载中...</div>
-                </div>
-
-                <!-- 爬取结果 -->
-                <div class="crawl-result" id="crawlResult" style="display:none;">
-                    <div class="result-header">
-                        <span class="result-title">更新结果</span>
-                        <button class="btn-icon-sm" onclick="closeCrawlResult()">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="result-body" id="crawlResultBody"></div>
                 </div>
             </div>
         </div>
@@ -1074,6 +867,165 @@ BBC,https://www.bbc.com
 
     <!-- 提示消息 -->
     <div class="toast" id="toast"></div>
+
+    <!-- AI舆情总结弹窗（全屏横屏） -->
+    <div class="modal-overlay" id="summaryModal">
+        <div class="modal modal-fullscreen">
+            <div class="modal-header">
+                <h3 class="modal-title">AI舆情总结</h3>
+                <span class="modal-subtitle" id="summaryDate"></span>
+                <button class="modal-close" onclick="closeSummaryModal()">&times;</button>
+            </div>
+            <div class="modal-body summary-body">
+                <div class="summary-grid">
+                    <div class="summary-section summary-section-main">
+                        <div class="summary-section-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            今日舆情总结
+                            <button class="btn-refs" onclick="showCategoryRefs('summary')" title="查看引用的新闻">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                                </svg>
+                                引用来源
+                            </button>
+                        </div>
+                        <div class="summary-section-content" id="summarySummary"></div>
+                    </div>
+                    <div class="summary-section summary-section-hot">
+                        <div class="summary-section-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </svg>
+                            热点新闻TOP5
+                            <button class="btn-refs" onclick="showCategoryRefs('top5')" title="查看引用的新闻">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                                </svg>
+                                引用来源
+                            </button>
+                        </div>
+                        <div class="summary-section-content summary-hot-news" id="summaryHotNews"></div>
+                    </div>
+                    <div class="summary-section summary-section-risk">
+                        <div class="summary-section-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            移民管理风险分析与应对建议
+                        </div>
+                        <div class="summary-section-content summary-risk" id="summaryRisk"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span class="summary-meta" id="summaryMeta"></span>
+                <div class="footer-buttons">
+                    <button class="btn btn-outline" onclick="closeSummaryModal(); openSummaryHistory();">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        历史记录
+                    </button>
+                    <button class="btn btn-primary" onclick="startSummaryGenerate()" id="btnRegenerate">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                        重新生成
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI总结历史记录弹窗 -->
+    <div class="modal-overlay" id="summaryHistoryModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <button class="btn-back" onclick="backToSummary()" title="返回">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+                <h3 class="modal-title">AI舆情总结历史</h3>
+                <button class="modal-close" onclick="closeSummaryHistory()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="history-list" id="summaryHistoryList">
+                    <div class="loading-hint">加载中...</div>
+                </div>
+                <button class="btn btn-outline load-more-btn" id="summaryHistoryLoadMore" style="display: none;" onclick="loadMoreSummaryHistory()">
+                    加载更多
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引用来源弹窗 -->
+    <div class="modal-overlay" id="refsModal">
+        <div class="modal modal-md">
+            <div class="modal-header">
+                <button class="btn-back" onclick="closeRefsModal()" title="返回">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+                <h3 class="modal-title" id="refsModalTitle">引用来源</h3>
+                <button class="modal-close" onclick="closeRefsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="refs-categories" id="refsCategoriesTabs"></div>
+                <div class="refs-list" id="refsList">
+                    <div class="empty-hint">暂无引用数据</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI总结进度气泡 -->
+    <div class="summary-bubble" id="summaryBubble">
+        <div class="bubble-header">
+            <span class="bubble-title">AI舆情分析</span>
+            <button class="bubble-close" onclick="closeSummaryBubble()" title="关闭">&times;</button>
+        </div>
+        <div class="bubble-progress">
+            <div class="bubble-progress-bar">
+                <div class="bubble-progress-fill summary-progress-fill" id="summaryProgressFill"></div>
+            </div>
+        </div>
+        <div class="bubble-status" id="summaryBubbleStatus">准备中...</div>
+        <button class="bubble-view-btn" id="summaryViewBtn" onclick="viewSummaryResult()" style="display: none;">
+            查看分析结果
+        </button>
+    </div>
+
+    <!-- 更新文章进度气泡 -->
+    <div class="crawl-bubble" id="crawlBubble">
+        <div class="bubble-header">
+            <span class="bubble-title">更新文章</span>
+            <button class="bubble-close" onclick="closeCrawlBubble()" title="关闭">&times;</button>
+        </div>
+        <div class="bubble-progress">
+            <div class="bubble-progress-bar">
+                <div class="bubble-progress-fill" id="bubbleProgressFill"></div>
+            </div>
+            <span class="bubble-progress-text" id="bubbleProgressText">0/0</span>
+        </div>
+        <div class="bubble-status" id="bubbleStatus">准备中...</div>
+        <div class="bubble-details" id="bubbleDetails"></div>
+    </div>
 
     <!-- 自定义脚本 -->
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>

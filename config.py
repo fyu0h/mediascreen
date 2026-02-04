@@ -33,6 +33,8 @@ class Config:
     COLLECTION_ARTICLES = 'news_articles'
     COLLECTION_SOURCES = 'news_sources'
     COLLECTION_SITES = 'sites'  # 订阅站点集合
+    COLLECTION_PLUGIN_SUBSCRIPTIONS = 'plugin_subscriptions'  # 插件订阅配置
+    COLLECTION_SUMMARIES = 'ai_summaries'  # AI舆情总结历史
 
     # 分页默认值
     DEFAULT_PAGE_SIZE = 20

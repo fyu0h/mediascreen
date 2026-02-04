@@ -51,17 +51,31 @@ def get_keywords_collection() -> Collection:
     return get_db()['risk_keywords']
 
 
+def get_alert_reads_collection() -> Collection:
+    """获取告警已读记录集合"""
+    return get_db()['alert_reads']
+
+
 # ==================== 文章保存 ====================
 
-def save_articles(articles: List[Dict[str, Any]]) -> int:
+def save_articles(articles: List[Dict[str, Any]], translate: bool = True) -> int:
     """
     保存文章到数据库（去重）
     参数：
         articles: 文章列表
+        translate: 是否翻译非中文标题
     返回：新增的文章数量
     """
     if not articles:
         return 0
+
+    # 如果启用翻译，处理标题
+    if translate:
+        try:
+            from plugins.translator import process_articles_translation
+            articles = process_articles_translation(articles)
+        except Exception as e:
+            print(f"[翻译] 标题翻译失败: {e}")
 
     collection = get_articles_collection()
     saved_count = 0
@@ -71,26 +85,36 @@ def save_articles(articles: List[Dict[str, Any]]) -> int:
         if not loc:
             continue
 
+        # 获取标题（优先使用翻译后的标题）
+        title = article.get('title_cn') or article.get('title', '')
+        title_original = article.get('title_original', '')
+
         # 使用 upsert 避免重复
         try:
+            update_data = {
+                '$set': {
+                    'title': title,
+                    'source_name': article.get('source_name', ''),
+                    'country_code': article.get('country_code', ''),
+                    'coords': article.get('coords', []),
+                    'summary': article.get('summary', ''),
+                    'lastmod': article.get('lastmod'),
+                    'updated_at': datetime.now()
+                },
+                '$setOnInsert': {
+                    'loc': loc,
+                    'pub_date': article.get('pub_date'),
+                    'imported_at': datetime.now()
+                }
+            }
+
+            # 如果有原始标题，也保存
+            if title_original:
+                update_data['$set']['title_original'] = title_original
+
             result = collection.update_one(
                 {'loc': loc},
-                {
-                    '$set': {
-                        'title': article.get('title', ''),
-                        'source_name': article.get('source_name', ''),
-                        'country_code': article.get('country_code', ''),
-                        'coords': article.get('coords', []),
-                        'summary': article.get('summary', ''),
-                        'lastmod': article.get('lastmod'),
-                        'updated_at': datetime.now()
-                    },
-                    '$setOnInsert': {
-                        'loc': loc,
-                        'pub_date': article.get('pub_date'),
-                        'imported_at': datetime.now()
-                    }
-                },
+                update_data,
                 upsert=True
             )
             if result.upserted_id:
@@ -101,6 +125,14 @@ def save_articles(articles: List[Dict[str, Any]]) -> int:
     return saved_count
 
 
+def article_exists(url: str) -> bool:
+    """检查文章是否已存在"""
+    if not url:
+        return False
+    collection = get_articles_collection()
+    return collection.count_documents({'loc': url}) > 0
+
+
 # ==================== 统计查询 ====================
 
 def get_overview_stats() -> Dict[str, Any]:
@@ -109,14 +141,26 @@ def get_overview_stats() -> Dict[str, Any]:
     返回：总文章数、源数、国家数、日期范围
     """
     articles = get_articles_collection()
-    sources = get_sources_collection()
 
     total_articles = articles.count_documents({})
-    total_sources = sources.count_documents({})
 
-    # 统计不同国家数量
-    country_codes = articles.distinct('country_code')
-    total_countries = len([c for c in country_codes if c])
+    # 从插件系统获取已启用的站点数和国家数
+    try:
+        from plugins.registry import plugin_registry, register_builtin_plugins
+        # 确保插件已注册
+        if len(plugin_registry.get_all_plugins()) == 0:
+            register_builtin_plugins()
+
+        from models.plugins import get_enabled_sites
+        enabled_sites = get_enabled_sites()
+        total_sources = len(enabled_sites)
+        # 统计已启用站点覆盖的国家
+        enabled_countries = set(site.get('country_code') for site in enabled_sites if site.get('country_code'))
+        total_countries = len(enabled_countries)
+    except Exception as e:
+        print(f"[统计] 获取插件站点失败: {e}")
+        total_sources = 0
+        total_countries = 0
 
     # 获取日期范围（只统计有 pub_date 的记录）
     date_pipeline = [
@@ -454,9 +498,15 @@ def get_risk_alerts(keywords_by_level: Dict[str, List[str]], limit: int = 50,
 
     cursor = articles.find(query).sort('pub_date', -1).limit(limit)
 
+    # 先收集所有结果和URL
     results = []
+    article_urls = []
+
     for doc in cursor:
         title = doc.get('title', '')
+        url = doc.get('loc', '')
+        article_urls.append(url)
+
         # 确定匹配的关键词和风险等级
         matched_level = 'low'
         matched_keywords = []
@@ -481,13 +531,28 @@ def get_risk_alerts(keywords_by_level: Dict[str, List[str]], limit: int = 50,
 
         results.append({
             'title': title,
-            'url': doc.get('loc', ''),
+            'url': url,
             'source': doc.get('source_name', ''),
             'country': doc.get('country_code', ''),
             'pub_date': pub_date_str,
             'risk_level': matched_level,
             'matched_keywords': matched_keywords[:3]  # 最多显示3个匹配关键词
         })
+
+    # 批量获取已读状态
+    read_status = get_read_alerts(article_urls) if article_urls else {}
+
+    # 为每个结果添加已读状态
+    for item in results:
+        url = item['url']
+        if url in read_status:
+            item['is_read'] = True
+            item['read_at'] = read_status[url].get('read_at', '')
+            item['reader_name'] = read_status[url].get('reader_name', '')
+        else:
+            item['is_read'] = False
+            item['read_at'] = None
+            item['reader_name'] = None
 
     return results
 
@@ -795,3 +860,69 @@ def init_default_risk_keywords() -> int:
         collection.insert_many(docs)
 
     return len(docs)
+
+
+# ==================== 告警已读管理 ====================
+
+def mark_alert_read(article_url: str, reader_name: str = None) -> bool:
+    """
+    标记告警为已读
+    参数：
+        article_url: 文章URL（唯一标识）
+        reader_name: 阅读者姓名（可选）
+    返回：是否成功
+    """
+    collection = get_alert_reads_collection()
+
+    try:
+        collection.update_one(
+            {'article_url': article_url},
+            {
+                '$set': {
+                    'article_url': article_url,
+                    'read_at': datetime.now(),
+                    'reader_name': reader_name
+                }
+            },
+            upsert=True
+        )
+        return True
+    except Exception as e:
+        print(f"标记已读失败: {e}")
+        return False
+
+
+def get_read_alerts(article_urls: List[str] = None) -> Dict[str, Dict[str, Any]]:
+    """
+    获取告警已读状态
+    参数：
+        article_urls: 文章URL列表，为空则返回所有
+    返回：{article_url: {read_at, reader_name}, ...}
+    """
+    collection = get_alert_reads_collection()
+
+    query = {}
+    if article_urls:
+        query = {'article_url': {'$in': article_urls}}
+
+    result = {}
+    for doc in collection.find(query):
+        url = doc.get('article_url')
+        read_at = doc.get('read_at')
+        result[url] = {
+            'read_at': read_at.strftime('%Y-%m-%d %H:%M') if isinstance(read_at, datetime) else str(read_at)[:16],
+            'reader_name': doc.get('reader_name', '')
+        }
+
+    return result
+
+
+def is_alert_read(article_url: str) -> bool:
+    """
+    检查告警是否已读
+    参数：
+        article_url: 文章URL
+    返回：是否已读
+    """
+    collection = get_alert_reads_collection()
+    return collection.count_documents({'article_url': article_url}) > 0
