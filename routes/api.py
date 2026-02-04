@@ -762,6 +762,14 @@ def update_settings():
             if 'max_articles' in cr:
                 current_settings['crawler']['max_articles'] = int(cr['max_articles'])
 
+        # 更新值班人员设置
+        if 'duty' in data:
+            duty = data['duty']
+            if 'duty' not in current_settings:
+                current_settings['duty'] = {}
+            if 'person_name' in duty:
+                current_settings['duty']['person_name'] = duty['person_name'].strip()
+
         if save_settings(current_settings):
             log_operation(
                 action='更新系统设置',
@@ -841,6 +849,53 @@ def test_api_connection():
 
     except Exception as e:
         return error_response(f'测试失败: {str(e)}', 500)
+
+
+@api_bp.route('/duty', methods=['GET'])
+def get_duty():
+    """获取今日值班人员"""
+    try:
+        settings = load_settings()
+        duty = settings.get('duty', {})
+        return success_response({
+            'leaders': duty.get('leaders', []),
+            'officers': duty.get('officers', [])
+        })
+    except Exception as e:
+        return error_response(f'获取值班信息失败: {str(e)}', 500)
+
+
+@api_bp.route('/duty', methods=['PUT'])
+def update_duty():
+    """设置今日值班人员"""
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('请求体不能为空', 400)
+
+        leaders = data.get('leaders', [])
+        officers = data.get('officers', [])
+
+        # 清理空字符串
+        leaders = [name.strip() for name in leaders if name and name.strip()]
+        officers = [name.strip() for name in officers if name and name.strip()]
+
+        settings = load_settings()
+        if 'duty' not in settings:
+            settings['duty'] = {}
+        settings['duty']['leaders'] = leaders
+        settings['duty']['officers'] = officers
+
+        if save_settings(settings):
+            return success_response({
+                'message': '值班人员已更新',
+                'leaders': leaders,
+                'officers': officers
+            })
+        else:
+            return error_response('保存失败', 500)
+    except Exception as e:
+        return error_response(f'设置值班人员失败: {str(e)}', 500)
 
 
 # ==================== 文章爬取接口 ====================
@@ -1169,3 +1224,176 @@ def logs_clear():
         return success_response({'message': f'已清空 {count} 条日志', 'count': count})
     except Exception as e:
         return error_response(f'清空日志失败: {str(e)}', 500)
+
+
+# ==================== 成果展示接口 ====================
+
+from models.achievements import (
+    get_all_achievements,
+    get_achievement,
+    add_achievement,
+    update_achievement,
+    delete_achievement,
+    fetch_page_title,
+    save_uploaded_image,
+    delete_image
+)
+
+
+@api_bp.route('/achievements', methods=['GET'])
+def achievements_list():
+    """获取所有成果展示"""
+    try:
+        data = get_all_achievements()
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取成果列表失败: {str(e)}', 500)
+
+
+@api_bp.route('/achievements', methods=['POST'])
+def achievements_add():
+    """
+    添加新成果
+    支持 multipart/form-data 格式（带图片上传）
+    """
+    try:
+        # 获取表单数据
+        url = request.form.get('url', '').strip()
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+
+        if not url:
+            return error_response('引用链接不能为空', 400)
+
+        # 确保 URL 有协议前缀
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+
+        # 如果没有提供标题，从链接抓取
+        if not title:
+            title = fetch_page_title(url)
+            if not title:
+                # 如果抓取失败，使用域名作为标题
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                title = parsed.netloc or '未命名成果'
+
+        # 处理图片上传
+        image_filename = None
+        if 'image' in request.files:
+            image_file = request.files['image']
+            if image_file and image_file.filename:
+                # 检查文件类型
+                allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+                ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else ''
+                if ext not in allowed_extensions:
+                    return error_response('不支持的图片格式，请上传 PNG/JPG/GIF/WEBP 格式', 400)
+
+                # 保存图片
+                image_data = image_file.read()
+                image_filename = save_uploaded_image(image_data, image_file.filename)
+
+        # 添加成果
+        achievement = add_achievement(
+            title=title,
+            url=url,
+            image_filename=image_filename,
+            description=description or None
+        )
+
+        log_operation(
+            action=f'添加成果: {title[:30]}',
+            details={'url': url, 'has_image': bool(image_filename)},
+            status='success'
+        )
+
+        return success_response(achievement)
+
+    except Exception as e:
+        return error_response(f'添加成果失败: {str(e)}', 500)
+
+
+@api_bp.route('/achievements/<achievement_id>', methods=['PUT'])
+def achievements_update(achievement_id: str):
+    """更新成果"""
+    try:
+        url = request.form.get('url', '').strip() if request.form else None
+        title = request.form.get('title', '').strip() if request.form else None
+        description = request.form.get('description', '').strip() if request.form else None
+
+        # 处理图片上传
+        image_filename = None
+        if request.files and 'image' in request.files:
+            image_file = request.files['image']
+            if image_file and image_file.filename:
+                # 删除旧图片
+                old_achievement = get_achievement(achievement_id)
+                if old_achievement and old_achievement.get('image'):
+                    delete_image(old_achievement['image'])
+
+                # 保存新图片
+                image_data = image_file.read()
+                image_filename = save_uploaded_image(image_data, image_file.filename)
+
+        # 更新成果
+        achievement = update_achievement(
+            achievement_id,
+            title=title if title else None,
+            url=url if url else None,
+            image_filename=image_filename,
+            description=description
+        )
+
+        if achievement:
+            return success_response(achievement)
+        return error_response('成果不存在', 404)
+
+    except Exception as e:
+        return error_response(f'更新成果失败: {str(e)}', 500)
+
+
+@api_bp.route('/achievements/<achievement_id>', methods=['DELETE'])
+def achievements_delete(achievement_id: str):
+    """删除成果"""
+    try:
+        achievement = get_achievement(achievement_id)
+        if delete_achievement(achievement_id):
+            log_operation(
+                action=f'删除成果: {achievement.get("title", "")[:30] if achievement else achievement_id}',
+                details={'achievement_id': achievement_id},
+                status='success'
+            )
+            return success_response({'message': '删除成功'})
+        return error_response('成果不存在', 404)
+    except Exception as e:
+        return error_response(f'删除成果失败: {str(e)}', 500)
+
+
+@api_bp.route('/achievements/fetch-title', methods=['POST'])
+def achievements_fetch_title():
+    """
+    从URL抓取页面标题
+    请求体：{url: "链接地址"}
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('请求体不能为空', 400)
+
+        url = data.get('url', '').strip()
+        if not url:
+            return error_response('URL 不能为空', 400)
+
+        # 确保 URL 有协议前缀
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+
+        title = fetch_page_title(url)
+
+        if title:
+            return success_response({'title': title, 'url': url})
+        else:
+            return error_response('无法获取页面标题', 400)
+
+    except Exception as e:
+        return error_response(f'抓取标题失败: {str(e)}', 500)

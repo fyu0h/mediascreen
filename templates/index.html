@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>全球新闻态势感知平台</title>
+    <title>皇岗边检站全球舆情态势感知平台</title>
     <!-- ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- Leaflet CSS & JS -->
@@ -17,8 +17,8 @@
     <header class="header">
         <div class="header-left">
             <div class="logo">
-                <span class="logo-icon"></span>
-                <span class="logo-text">全球新闻态势感知平台</span>
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo-img">
+                <span class="logo-text">皇岗边检站全球舆情态势感知平台</span>
             </div>
         </div>
         <div class="header-center">
@@ -114,10 +114,67 @@
                     <div id="worldMap"></div>
                 </div>
             </div>
+
+            <!-- 成果展示 -->
+            <div class="card achievements-card">
+                <div class="card-header">
+                    <span class="card-title">成果展示</span>
+                    <button class="btn-manage" onclick="openAchievementModal()" title="添加成果">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="16"></line>
+                            <line x1="8" y1="12" x2="16" y2="12"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="card-body achievements-body">
+                    <div class="achievements-list" id="achievementsList">
+                        <div class="loading-text">加载中...</div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- 右侧面板 -->
         <aside class="panel panel-right">
+            <!-- 今日值班 -->
+            <section class="card duty-card">
+                <div class="card-header">
+                    <span class="card-title">今日值班</span>
+                    <button class="btn-manage" onclick="openDutyModal()" title="设置值班人员">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="card-body duty-body">
+                    <div class="duty-date-row">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <span id="dutyDate">--</span>
+                    </div>
+                    <div class="duty-roles">
+                        <div class="duty-role">
+                            <div class="duty-role-label">值班领导</div>
+                            <div class="duty-role-names" id="dutyLeaders">
+                                <span class="duty-empty">未设置</span>
+                            </div>
+                        </div>
+                        <div class="duty-role">
+                            <div class="duty-role-label">值班员</div>
+                            <div class="duty-role-names" id="dutyOfficers">
+                                <span class="duty-empty">未设置</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- 风控告警统计 -->
             <section class="card">
                 <div class="card-header">
@@ -806,6 +863,210 @@ BBC,https://www.bbc.com
             <div class="modal-body">
                 <div class="log-detail-content" id="logDetailContent">
                     <!-- 详情内容由 JS 填充 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新闻源文章列表弹窗 -->
+    <div class="modal-overlay" id="sourceArticlesModal">
+        <div class="modal modal-xl">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <span id="sourceArticlesTitle">文章列表</span>
+                    <span class="modal-subtitle" id="sourceArticlesSubtitle"></span>
+                </h3>
+                <button class="modal-close" onclick="closeSourceArticlesModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 筛选工具栏 -->
+                <div class="articles-toolbar">
+                    <div class="toolbar-left">
+                        <!-- 日期选择 -->
+                        <div class="date-picker-group">
+                            <label class="toolbar-label">日期:</label>
+                            <div class="custom-date-picker">
+                                <button class="date-picker-btn" id="articleDatePickerBtn" onclick="toggleArticleCalendar()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    <span id="articleDatePickerText">选择日期</span>
+                                </button>
+                                <div class="calendar-dropdown" id="articleCalendarDropdown">
+                                    <div class="calendar-header">
+                                        <button class="calendar-nav" onclick="changeArticleMonth(-1)">&lt;</button>
+                                        <span class="calendar-title" id="articleCalendarTitle">2024年1月</span>
+                                        <button class="calendar-nav" onclick="changeArticleMonth(1)">&gt;</button>
+                                    </div>
+                                    <div class="calendar-weekdays">
+                                        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                                    </div>
+                                    <div class="calendar-days" id="articleCalendarDays">
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn-icon-sm" onclick="clearArticleDateFilter()" title="清除日期">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <!-- 搜索框 -->
+                        <div class="search-group">
+                            <label class="toolbar-label">搜索:</label>
+                            <input type="text" id="articleSearchInput" class="form-input-sm" placeholder="搜索标题关键词..." onkeyup="debounceArticleSearch()">
+                            <button class="btn-icon-sm" onclick="clearArticleSearch()" title="清除搜索">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <!-- 快捷日期 -->
+                        <div class="quick-dates">
+                            <button class="btn-quick-date" onclick="setArticleQuickDate('today')">今天</button>
+                            <button class="btn-quick-date" onclick="setArticleQuickDate('week')">近7天</button>
+                            <button class="btn-quick-date" onclick="setArticleQuickDate('month')">近30天</button>
+                        </div>
+                    </div>
+                    <div class="toolbar-right">
+                        <span class="articles-total">共 <span id="sourceArticleCount">0</span> 篇</span>
+                        <button class="btn btn-outline btn-sm" onclick="refreshSourceArticles()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                            刷新
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 文章列表 -->
+                <div class="source-article-list" id="sourceArticleList">
+                    <div class="loading-text">加载中...</div>
+                </div>
+
+                <!-- 分页 -->
+                <div class="articles-pagination" id="articlesPagination">
+                    <button class="btn btn-sm" onclick="loadArticlesPage(articlesCurrentPage - 1)" id="articlesPrevBtn" disabled>上一页</button>
+                    <span class="page-info">第 <span id="articlesCurrentPageNum">1</span> / <span id="articlesTotalPages">1</span> 页</span>
+                    <button class="btn btn-sm" onclick="loadArticlesPage(articlesCurrentPage + 1)" id="articlesNextBtn">下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/编辑成果弹窗 -->
+    <div class="modal-overlay" id="achievementModal">
+        <div class="modal modal-md">
+            <div class="modal-header">
+                <h3 class="modal-title" id="achievementModalTitle">添加成果</h3>
+                <button class="modal-close" onclick="closeAchievementModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editAchievementId">
+                <div class="form-group">
+                    <label class="form-label">引用链接 <span class="required">*</span></label>
+                    <div class="input-with-btn">
+                        <input type="text" id="achievementUrl" class="form-input" placeholder="https://example.com/article">
+                        <button class="btn btn-outline btn-sm" onclick="fetchAchievementTitle()" id="btnFetchTitle">
+                            <span class="btn-text">抓取标题</span>
+                            <span class="btn-loading" style="display:none;">抓取中...</span>
+                        </button>
+                    </div>
+                    <div class="form-hint">输入链接后点击"抓取标题"自动获取页面标题</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">成果标题</label>
+                    <input type="text" id="achievementTitle" class="form-input" placeholder="自动从链接抓取，或手动输入">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">封面图片</label>
+                    <div class="image-upload-area" id="imageUploadArea" onclick="triggerImageUpload()">
+                        <div class="upload-placeholder" id="uploadPlaceholder">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <polyline points="21 15 16 10 5 21"></polyline>
+                            </svg>
+                            <span>点击上传图片</span>
+                            <span class="upload-hint">支持 PNG/JPG/GIF/WEBP</span>
+                        </div>
+                        <img id="imagePreview" class="image-preview" style="display:none;">
+                        <button class="btn-remove-image" id="btnRemoveImage" onclick="removeAchievementImage(event)" style="display:none;" title="移除图片">
+                            &times;
+                        </button>
+                    </div>
+                    <input type="file" id="achievementImage" accept="image/*" style="display:none;" onchange="previewAchievementImage(this)">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">描述（可选）</label>
+                    <textarea id="achievementDesc" class="form-textarea" rows="2" placeholder="简要描述成果内容..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-cancel" onclick="closeAchievementModal()">取消</button>
+                    <button class="btn btn-save" onclick="saveAchievement()" id="btnSaveAchievement">
+                        <span class="btn-text">保存</span>
+                        <span class="btn-loading" style="display:none;">保存中...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 值班人员设置弹窗 -->
+    <div class="modal-overlay" id="dutyModal">
+        <div class="modal modal-md">
+            <div class="modal-header">
+                <h3 class="modal-title">设置今日值班人员</h3>
+                <button class="modal-close" onclick="closeDutyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 值班领导 -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        值班领导
+                    </label>
+                    <div class="duty-input-group">
+                        <input type="text" id="leaderNameInput" class="form-input" placeholder="输入姓名后按回车或点击添加">
+                        <button class="btn btn-outline btn-sm" onclick="addDutyPerson('leader')">添加</button>
+                    </div>
+                    <div class="duty-tags" id="leaderTags">
+                        <!-- 标签由 JS 生成 -->
+                    </div>
+                </div>
+
+                <!-- 值班员 -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        值班员
+                    </label>
+                    <div class="duty-input-group">
+                        <input type="text" id="officerNameInput" class="form-input" placeholder="输入姓名后按回车或点击添加">
+                        <button class="btn btn-outline btn-sm" onclick="addDutyPerson('officer')">添加</button>
+                    </div>
+                    <div class="duty-tags" id="officerTags">
+                        <!-- 标签由 JS 生成 -->
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-cancel" onclick="closeDutyModal()">取消</button>
+                    <button class="btn btn-save" onclick="saveDutyPersons()">保存</button>
                 </div>
             </div>
         </div>

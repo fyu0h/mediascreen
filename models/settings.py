@@ -24,6 +24,10 @@ DEFAULT_SETTINGS = {
         'timeout': 30,
         'max_articles': 500,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    },
+    'duty': {
+        'leaders': [],   # 值班领导列表
+        'officers': []   # 值班员列表
     }
 }
 

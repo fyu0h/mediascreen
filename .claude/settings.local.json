@@ -21,7 +21,12 @@
       "Bash(findstr:*)",
       "Bash(where:*)",
       "Bash(dir \"C:\\\\Program Files\\\\MongoDB\" /s /b)",
-      "Bash(docker:*)"
+      "Bash(docker:*)",
+      "Bash(if not exist \"D:\\\\code\\\\态势感知\\\\static\\\\uploads\\\\achievements\" mkdir \"D:\\\\code\\\\态势感知\\\\static\\\\uploads\\\\achievements\")",
+      "Bash(dir:*)",
+      "Bash(if not exist \"D:\\\\code\\\\态势感知\\\\static\\\\images\" mkdir \"D:\\\\code\\\\态势感知\\\\static\\\\images\")",
+      "Bash(move \"D:\\\\code\\\\态势感知\\\\logo.png\" \"D:\\\\code\\\\态势感知\\\\static\\\\images\\\\logo.png\")",
+      "Bash(find:*)"
     ]
   }
 }

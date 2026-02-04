@@ -32,6 +32,7 @@ class Config:
     # 集合名称
     COLLECTION_ARTICLES = 'news_articles'
     COLLECTION_SOURCES = 'news_sources'
+    COLLECTION_SITES = 'sites'  # 订阅站点集合
 
     # 分页默认值
     DEFAULT_PAGE_SIZE = 20

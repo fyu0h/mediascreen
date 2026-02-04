@@ -36,17 +36,38 @@ def create_app() -> Flask:
     return app
 
 
+def init_database():
+    """初始化数据库（迁移和索引）"""
+    from models.sites import migrate_from_json, ensure_indexes
+    from models.mongo import init_default_risk_keywords
+
+    # 迁移 sites.json 到 MongoDB
+    migrated = migrate_from_json()
+    if migrated > 0:
+        print(f"[数据迁移] 已从 sites.json 迁移 {migrated} 个站点到 MongoDB")
+
+    # 确保索引存在
+    ensure_indexes()
+
+    # 初始化默认风控关键词
+    init_default_risk_keywords()
+
+
 # 创建应用实例
 app = create_app()
 
 
 if __name__ == '__main__':
     print("=" * 50)
-    print("新闻态势感知仪表盘")
+    print("皇岗边检站全球舆情态势感知平台")
     print("=" * 50)
     print(f"访问地址: http://localhost:5000")
     print(f"MongoDB: {Config.MONGO_HOST}:{Config.MONGO_PORT}/{Config.MONGO_DB}")
     print("=" * 50)
+
+    # 初始化数据库（迁移和索引）
+    init_database()
+
     print("按 Ctrl+C 停止服务器")
     print()
 

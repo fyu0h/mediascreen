@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 网站订阅管理模块
-处理 sites.json 的读写和 sitemap 检测
+使用 MongoDB 存储站点数据
 """
 
 import json
@@ -12,8 +12,11 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
 import xml.etree.ElementTree as ET
+from bson import ObjectId
 
-# sites.json 文件路径
+from config import Config
+
+# 旧版 sites.json 文件路径（用于数据迁移）
 SITES_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sites.json')
 
 # 常见 sitemap 路径
@@ -110,58 +113,38 @@ COUNTRY_COORDS = {
 }
 
 
+def get_sites_collection():
+    """获取站点集合"""
+    from models.mongo import get_db
+    return get_db()[Config.COLLECTION_SITES]
+
+
+def _format_site(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """格式化站点文档，将 MongoDB _id 转换为 id 字符串"""
+    if doc is None:
+        return None
+    site = dict(doc)
+    if '_id' in site:
+        site['id'] = str(site.pop('_id'))
+    # 格式化日期字段
+    for field in ['created_at', 'updated_at']:
+        if field in site and isinstance(site[field], datetime):
+            site[field] = site[field].strftime('%Y-%m-%d %H:%M:%S')
+    return site
+
+
 def load_sites() -> List[Dict[str, Any]]:
-    """加载 sites.json，自动为旧数据添加必要字段"""
-    if not os.path.exists(SITES_FILE):
-        return []
-    try:
-        with open(SITES_FILE, 'r', encoding='utf-8') as f:
-            sites = json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return []
-
-    # 检查并为旧数据添加必要字段
-    needs_save = False
-    for site in sites:
-        if 'id' not in site:
-            site['id'] = generate_site_id()
-            needs_save = True
-        if 'domain' not in site and site.get('url'):
-            site['domain'] = extract_domain(site['url'])
-            needs_save = True
-        if 'fetch_method' not in site:
-            site['fetch_method'] = 'unknown'
-            needs_save = True
-        if 'sitemap_supported' not in site:
-            site['sitemap_supported'] = None
-            needs_save = True
-        if 'status' not in site:
-            site['status'] = 'active'
-            needs_save = True
-        if 'created_at' not in site:
-            site['created_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            needs_save = True
-        if 'updated_at' not in site:
-            site['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            needs_save = True
-
-    # 保存更新后的数据
-    if needs_save:
-        save_sites(sites)
-
+    """加载所有站点"""
+    collection = get_sites_collection()
+    sites = []
+    for doc in collection.find().sort('created_at', -1):
+        sites.append(_format_site(doc))
     return sites
 
 
-def save_sites(sites: List[Dict[str, Any]]) -> None:
-    """保存到 sites.json"""
-    with open(SITES_FILE, 'w', encoding='utf-8') as f:
-        json.dump(sites, f, ensure_ascii=False, indent=2)
-
-
 def generate_site_id() -> str:
-    """生成站点 ID"""
-    import uuid
-    return str(uuid.uuid4())[:8]
+    """生成站点 ID（兼容旧接口，实际使用 MongoDB ObjectId）"""
+    return str(ObjectId())
 
 
 def extract_domain(url: str) -> str:
@@ -276,7 +259,7 @@ def add_site(name: str, site_url: str, auto_detect: bool = True) -> Dict[str, An
         auto_detect: 是否自动检测 sitemap
     返回：新建的站点信息
     """
-    sites = load_sites()
+    collection = get_sites_collection()
 
     # 标准化 URL
     if not site_url.startswith(('http://', 'https://')):
@@ -284,17 +267,18 @@ def add_site(name: str, site_url: str, auto_detect: bool = True) -> Dict[str, An
 
     # 检查是否已存在
     domain = extract_domain(site_url)
-    for site in sites:
-        if extract_domain(site.get('url', '')) == domain:
-            raise ValueError(f'站点 {domain} 已存在')
+    existing = collection.find_one({'domain': domain})
+    if existing:
+        raise ValueError(f'站点 {domain} 已存在')
 
     # 推断国家和坐标
     country_code = guess_country_code(site_url)
     coords = get_coords_by_country(country_code)
 
+    now = datetime.now()
+
     # 创建站点记录
     site = {
-        'id': generate_site_id(),
         'name': name.strip(),
         'url': site_url,
         'domain': domain,
@@ -303,8 +287,8 @@ def add_site(name: str, site_url: str, auto_detect: bool = True) -> Dict[str, An
         'sitemap_supported': None,
         'sitemap_url': None,
         'fetch_method': 'unknown',  # sitemap / crawler / unknown
-        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'created_at': now,
+        'updated_at': now,
         'status': 'active'
     }
 
@@ -319,65 +303,81 @@ def add_site(name: str, site_url: str, auto_detect: bool = True) -> Dict[str, An
             site['sitemap_supported'] = False
             site['fetch_method'] = 'crawler'
 
-    sites.append(site)
-    save_sites(sites)
+    result = collection.insert_one(site)
+    site['_id'] = result.inserted_id
 
-    return site
+    return _format_site(site)
 
 
 def update_site(site_id: str, **kwargs) -> Optional[Dict[str, Any]]:
     """
     更新站点信息
-    支持更新：name, url, country_code, status
+    支持更新：name, url, country_code, status, fetch_method
     """
-    sites = load_sites()
+    collection = get_sites_collection()
 
-    for i, site in enumerate(sites):
-        if site.get('id') == site_id:
-            # 更新允许的字段
-            allowed_fields = ['name', 'url', 'country_code', 'status', 'fetch_method']
-            for field in allowed_fields:
-                if field in kwargs and kwargs[field] is not None:
-                    site[field] = kwargs[field]
+    try:
+        obj_id = ObjectId(site_id)
+    except Exception:
+        return None
 
-            # 如果更新了 URL，重新推断国家和坐标
-            if 'url' in kwargs and kwargs['url']:
-                site['domain'] = extract_domain(kwargs['url'])
-                if 'country_code' not in kwargs:
-                    site['country_code'] = guess_country_code(kwargs['url'])
-                site['coords'] = get_coords_by_country(site['country_code'])
+    # 更新允许的字段
+    allowed_fields = ['name', 'url', 'country_code', 'status', 'fetch_method']
+    update_data = {}
 
-            # 如果更新了国家代码，更新坐标
-            if 'country_code' in kwargs:
-                site['coords'] = get_coords_by_country(kwargs['country_code'])
+    for field in allowed_fields:
+        if field in kwargs and kwargs[field] is not None:
+            update_data[field] = kwargs[field]
 
-            site['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            sites[i] = site
-            save_sites(sites)
-            return site
+    # 如果更新了 URL，重新推断域名和坐标
+    if 'url' in kwargs and kwargs['url']:
+        update_data['domain'] = extract_domain(kwargs['url'])
+        if 'country_code' not in kwargs:
+            update_data['country_code'] = guess_country_code(kwargs['url'])
+        update_data['coords'] = get_coords_by_country(update_data.get('country_code') or kwargs.get('country_code'))
 
-    return None
+    # 如果更新了国家代码，更新坐标
+    if 'country_code' in kwargs:
+        update_data['coords'] = get_coords_by_country(kwargs['country_code'])
+
+    if not update_data:
+        return None
+
+    update_data['updated_at'] = datetime.now()
+
+    result = collection.find_one_and_update(
+        {'_id': obj_id},
+        {'$set': update_data},
+        return_document=True
+    )
+
+    return _format_site(result) if result else None
 
 
 def delete_site(site_id: str) -> bool:
     """删除站点"""
-    sites = load_sites()
-    original_len = len(sites)
-    sites = [s for s in sites if s.get('id') != site_id]
+    collection = get_sites_collection()
 
-    if len(sites) < original_len:
-        save_sites(sites)
-        return True
-    return False
+    try:
+        obj_id = ObjectId(site_id)
+    except Exception:
+        return False
+
+    result = collection.delete_one({'_id': obj_id})
+    return result.deleted_count > 0
 
 
 def get_site(site_id: str) -> Optional[Dict[str, Any]]:
     """获取单个站点"""
-    sites = load_sites()
-    for site in sites:
-        if site.get('id') == site_id:
-            return site
-    return None
+    collection = get_sites_collection()
+
+    try:
+        obj_id = ObjectId(site_id)
+    except Exception:
+        return None
+
+    doc = collection.find_one({'_id': obj_id})
+    return _format_site(doc) if doc else None
 
 
 def get_all_sites() -> List[Dict[str, Any]]:
@@ -387,43 +387,129 @@ def get_all_sites() -> List[Dict[str, Any]]:
 
 def recheck_sitemap(site_id: str) -> Dict[str, Any]:
     """重新检测站点的 sitemap 支持"""
-    sites = load_sites()
+    collection = get_sites_collection()
 
-    for i, site in enumerate(sites):
-        if site.get('id') == site_id:
-            url = site.get('url', '')
-            if not url:
-                raise ValueError('站点 URL 为空')
+    try:
+        obj_id = ObjectId(site_id)
+    except Exception:
+        raise ValueError('无效的站点 ID')
 
-            result = check_sitemap(url)
-            site['sitemap_supported'] = result['supported']
-            site['sitemap_url'] = result['sitemap_url']
-            site['fetch_method'] = 'sitemap' if result['supported'] else 'crawler'
-            site['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    site = collection.find_one({'_id': obj_id})
+    if not site:
+        raise ValueError('站点不存在')
 
-            sites[i] = site
-            save_sites(sites)
+    url = site.get('url', '')
+    if not url:
+        raise ValueError('站点 URL 为空')
 
-            return {
-                'site': site,
-                'check_result': result
-            }
+    result = check_sitemap(url)
 
-    raise ValueError('站点不存在')
+    update_data = {
+        'sitemap_supported': result['supported'],
+        'sitemap_url': result['sitemap_url'],
+        'fetch_method': 'sitemap' if result['supported'] else 'crawler',
+        'updated_at': datetime.now()
+    }
+
+    updated_site = collection.find_one_and_update(
+        {'_id': obj_id},
+        {'$set': update_data},
+        return_document=True
+    )
+
+    return {
+        'site': _format_site(updated_site),
+        'check_result': result
+    }
+
+
+def migrate_from_json() -> int:
+    """
+    从 sites.json 迁移数据到 MongoDB
+    返回：迁移的站点数量
+    """
+    if not os.path.exists(SITES_FILE):
+        return 0
+
+    try:
+        with open(SITES_FILE, 'r', encoding='utf-8') as f:
+            sites_data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return 0
+
+    if not sites_data:
+        return 0
+
+    collection = get_sites_collection()
+    migrated_count = 0
+
+    for site in sites_data:
+        # 检查是否已存在（通过域名判断）
+        domain = site.get('domain') or extract_domain(site.get('url', ''))
+        existing = collection.find_one({'domain': domain})
+        if existing:
+            continue
+
+        # 准备文档
+        doc = {
+            'name': site.get('name', ''),
+            'url': site.get('url', ''),
+            'domain': domain,
+            'country_code': site.get('country_code'),
+            'coords': site.get('coords'),
+            'sitemap_supported': site.get('sitemap_supported'),
+            'sitemap_url': site.get('sitemap_url'),
+            'fetch_method': site.get('fetch_method', 'unknown'),
+            'status': site.get('status', 'active'),
+        }
+
+        # 处理日期字段
+        for field in ['created_at', 'updated_at']:
+            value = site.get(field)
+            if value:
+                if isinstance(value, str):
+                    try:
+                        doc[field] = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        doc[field] = datetime.now()
+                elif isinstance(value, datetime):
+                    doc[field] = value
+            else:
+                doc[field] = datetime.now()
+
+        try:
+            collection.insert_one(doc)
+            migrated_count += 1
+        except Exception as e:
+            print(f"迁移站点失败: {domain}, 错误: {e}")
+
+    # 迁移成功后，备份并清空 sites.json
+    if migrated_count > 0:
+        backup_file = SITES_FILE + '.bak'
+        try:
+            os.rename(SITES_FILE, backup_file)
+            print(f"已将 sites.json 备份为 {backup_file}")
+        except Exception:
+            pass
+
+    return migrated_count
 
 
 def init_sites_from_news_sources() -> int:
     """
-    从现有新闻源初始化 sites.json（如果为空）
+    从预设新闻源初始化站点（如果集合为空）
     返回：添加的站点数量
     """
-    from config import NEWS_SOURCE_METADATA
+    collection = get_sites_collection()
 
-    sites = load_sites()
-    if sites:
-        return 0  # 已有数据，不初始化
+    # 如果已有数据则跳过
+    if collection.count_documents({}) > 0:
+        return 0
 
-    # 这里可以添加一些预设的网站
+    # 创建索引
+    collection.create_index('domain', unique=True)
+
+    # 预设的网站列表
     preset_sites = [
         {'name': '美联社', 'url': 'https://apnews.com'},
         {'name': 'BBC', 'url': 'https://www.bbc.com'},
@@ -441,3 +527,11 @@ def init_sites_from_news_sources() -> int:
             pass  # 已存在
 
     return count
+
+
+def ensure_indexes():
+    """确保必要的索引存在"""
+    collection = get_sites_collection()
+    collection.create_index('domain', unique=True)
+    collection.create_index('status')
+    collection.create_index('created_at')

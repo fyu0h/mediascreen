@@ -1,16 +1,27 @@
 {
   "llm": {
     "provider": "siliconflow",
+    "api_key": "sk-bgyzpzozdwghavpnsnglmbnmwakalhspstohaoasancrtokl",
     "api_url": "https://api.siliconflow.cn/v1/chat/completions",
     "model": "deepseek-ai/DeepSeek-V3",
     "api_key_masked": "",
-    "api_key_set": false,
-    "api_key": "sk-bgyzpzozdwghavpnsnglmbnmwakalhspstohaoasancrtokl"
+    "api_key_set": false
   },
   "crawler": {
     "timeout": 30,
     "max_articles": 500,
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
   },
-  "updated_at": "2026-02-02 01:59:59"
+  "duty": {
+    "leaders": [
+      "领导1",
+      "22"
+    ],
+    "officers": [
+      "值班员1",
+      "11"
+    ],
+    "person_name": "后逸凡1"
+  },
+  "updated_at": "2026-02-03 10:40:14"
 }

@@ -128,6 +128,14 @@ async function loadSourceChart() {
     const chartDom = document.getElementById('sourceChart');
     if (!sourceChart) {
         sourceChart = echarts.init(chartDom);
+
+        // 添加点击事件 - 点击柱子查看该新闻源的文章
+        sourceChart.on('click', (params) => {
+            if (params.componentType === 'series') {
+                const sourceName = params.name;
+                openSourceArticlesModal(sourceName);
+            }
+        });
     }
 
     // 取前10个源
@@ -142,7 +150,7 @@ async function loadSourceChart() {
             backgroundColor: 'rgba(10,20,40,0.9)',
             borderColor: 'rgba(0,240,255,0.3)',
             textStyle: { color: '#fff' },
-            formatter: '{b}: {c} 篇'
+            formatter: (params) => `${params[0].name}: ${params[0].value} 篇<br/><span style="color:#00f0ff;font-size:10px;">点击查看文章</span>`
         },
         grid: {
             left: '3%', right: '15%', top: '5%', bottom: '5%',
@@ -164,7 +172,8 @@ async function loadSourceChart() {
                 color: 'rgba(255,255,255,0.7)',
                 fontSize: 11,
                 formatter: (val) => val.length > 8 ? val.slice(0, 8) + '...' : val
-            }
+            },
+            triggerEvent: true  // 允许Y轴标签触发事件
         },
         series: [{
             type: 'bar',
@@ -175,7 +184,8 @@ async function loadSourceChart() {
                     { offset: 0, color: 'rgba(0,240,255,0.8)' },
                     { offset: 1, color: 'rgba(0,255,136,0.8)' }
                 ]),
-                borderRadius: [0, 4, 4, 0]
+                borderRadius: [0, 4, 4, 0],
+                cursor: 'pointer'
             },
             label: {
                 show: true,
@@ -183,11 +193,30 @@ async function loadSourceChart() {
                 color: '#00f0ff',
                 fontSize: 10,
                 formatter: (p) => formatCompactNumber(p.value)
+            },
+            emphasis: {
+                itemStyle: {
+                    shadowBlur: 10,
+                    shadowColor: 'rgba(0, 240, 255, 0.5)'
+                }
             }
         }]
     };
 
     sourceChart.setOption(option);
+
+    // Y轴标签点击事件
+    sourceChart.getZr().off('click');  // 先移除旧的事件避免重复绑定
+    sourceChart.getZr().on('click', (params) => {
+        const pointInPixel = [params.offsetX, params.offsetY];
+        if (sourceChart.containPixel('grid', pointInPixel)) {
+            const yIndex = sourceChart.convertFromPixel({ seriesIndex: 0 }, pointInPixel)[1];
+            if (yIndex >= 0 && yIndex < sources.length) {
+                const sourceName = sources[Math.round(yIndex)];
+                openSourceArticlesModal(sourceName);
+            }
+        }
+    });
 }
 
 async function loadTrendChart() {
@@ -574,7 +603,9 @@ async function loadAllData() {
         loadTrendChart(),
         loadWorldMap(),
         loadRiskStats(),
-        loadRiskAlerts()
+        loadRiskAlerts(),
+        loadAchievements(),
+        loadDutyInfo()
     ]);
 }
 
@@ -617,6 +648,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             closeCrawlModal();
             closeSettingsModal();
             closeCalendar();
+            closeSourceArticlesModal();
+            closeArticleCalendar();
+            closeAchievementModal();
+            closeDutyModal();
         }
     });
 
@@ -2513,4 +2548,862 @@ function renderLogDetail(log) {
     }
 
     return html;
+}
+
+
+// ==================== 新闻源文章列表功能 ====================
+
+let currentSourceName = null;          // 当前选中的新闻源
+let articlesData = [];                 // 文章列表数据
+let articlesCurrentPage = 1;           // 当前页码
+let articlesPageSize = 20;             // 每页数量
+let articlesTotal = 0;                 // 总数
+let articleDateFilter = null;          // 日期筛选
+let articleSearchKeyword = '';         // 搜索关键词
+let articleSearchDebounceTimer = null; // 搜索防抖定时器
+
+// 文章日历相关
+let articleCalendarYear = new Date().getFullYear();
+let articleCalendarMonth = new Date().getMonth() + 1;
+
+// 打开新闻源文章列表弹窗
+function openSourceArticlesModal(sourceName) {
+    currentSourceName = sourceName;
+    articlesCurrentPage = 1;
+    articleDateFilter = null;
+    articleSearchKeyword = '';
+
+    // 更新标题
+    document.getElementById('sourceArticlesTitle').textContent = sourceName;
+    document.getElementById('sourceArticlesSubtitle').textContent = '- 文章列表';
+
+    // 重置筛选UI
+    document.getElementById('articleDatePickerText').textContent = '选择日期';
+    document.getElementById('articleSearchInput').value = '';
+    document.querySelectorAll('#sourceArticlesModal .btn-quick-date').forEach(btn => btn.classList.remove('active'));
+
+    // 初始化日历
+    articleCalendarYear = new Date().getFullYear();
+    articleCalendarMonth = new Date().getMonth() + 1;
+
+    // 显示弹窗
+    document.getElementById('sourceArticlesModal').classList.add('active');
+
+    // 加载文章
+    loadSourceArticles();
+}
+
+// 关闭新闻源文章列表弹窗
+function closeSourceArticlesModal() {
+    document.getElementById('sourceArticlesModal').classList.remove('active');
+    closeArticleCalendar();
+}
+
+// 加载新闻源文章
+async function loadSourceArticles() {
+    const listEl = document.getElementById('sourceArticleList');
+    const countEl = document.getElementById('sourceArticleCount');
+
+    listEl.innerHTML = '<div class="loading-text">加载中...</div>';
+
+    // 构建查询参数
+    let url = `/articles?source=${encodeURIComponent(currentSourceName)}&page=${articlesCurrentPage}&page_size=${articlesPageSize}`;
+
+    if (articleSearchKeyword) {
+        url += `&keyword=${encodeURIComponent(articleSearchKeyword)}`;
+    }
+
+    if (articleDateFilter) {
+        // 如果是单日筛选
+        url += `&start_date=${articleDateFilter}&end_date=${articleDateFilter}`;
+    }
+
+    const data = await fetchAPI(url);
+
+    if (!data) {
+        listEl.innerHTML = '<div class="loading-text">加载失败</div>';
+        countEl.textContent = '0';
+        return;
+    }
+
+    articlesData = data.items || [];
+    articlesTotal = data.total || 0;
+
+    countEl.textContent = articlesTotal;
+
+    if (articlesData.length === 0) {
+        listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📰</div>暂无文章数据</div>';
+        updateArticlesPagination();
+        return;
+    }
+
+    renderSourceArticles();
+    updateArticlesPagination();
+}
+
+// 渲染文章列表
+function renderSourceArticles() {
+    const listEl = document.getElementById('sourceArticleList');
+
+    listEl.innerHTML = articlesData.map(article => {
+        // 解析日期
+        let dateStr = '', timeStr = '';
+        if (article.pub_date) {
+            // 尝试解析日期
+            const pubDate = article.pub_date;
+            if (pubDate.includes(' ')) {
+                const parts = pubDate.split(' ');
+                dateStr = parts[0] || '';
+                timeStr = parts[1] || '';
+            } else if (pubDate.includes('T')) {
+                const parts = pubDate.split('T');
+                dateStr = parts[0] || '';
+                timeStr = parts[1] ? parts[1].slice(0, 5) : '';
+            } else {
+                dateStr = pubDate;
+            }
+        }
+
+        // 标题高亮搜索关键词
+        let titleHtml = escapeHtml(article.title || '无标题');
+        if (articleSearchKeyword) {
+            titleHtml = highlightKeyword(titleHtml, articleSearchKeyword);
+        }
+
+        // URL 截断显示
+        const urlDisplay = article.url ? (article.url.length > 80 ? article.url.substring(0, 80) + '...' : article.url) : '';
+
+        return `
+            <div class="source-article-item" onclick="window.open('${escapeHtml(article.url || '')}', '_blank')">
+                <div class="article-date">
+                    <span class="date">${dateStr}</span>
+                    <span class="time">${timeStr}</span>
+                </div>
+                <div class="article-content">
+                    <div class="article-title">${titleHtml}</div>
+                    <div class="article-url">${escapeHtml(urlDisplay)}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 更新文章分页
+function updateArticlesPagination() {
+    const totalPages = Math.ceil(articlesTotal / articlesPageSize);
+
+    document.getElementById('articlesCurrentPageNum').textContent = articlesCurrentPage;
+    document.getElementById('articlesTotalPages').textContent = totalPages || 1;
+    document.getElementById('articlesPrevBtn').disabled = articlesCurrentPage <= 1;
+    document.getElementById('articlesNextBtn').disabled = articlesCurrentPage >= totalPages;
+}
+
+// 翻页
+function loadArticlesPage(page) {
+    if (page < 1) page = 1;
+    const totalPages = Math.ceil(articlesTotal / articlesPageSize);
+    if (page > totalPages && totalPages > 0) page = totalPages;
+
+    articlesCurrentPage = page;
+    loadSourceArticles();
+}
+
+// 刷新文章列表
+function refreshSourceArticles() {
+    loadSourceArticles();
+    showToast('已刷新', 'success');
+}
+
+// ==================== 文章日期筛选 ====================
+
+function toggleArticleCalendar() {
+    const dropdown = document.getElementById('articleCalendarDropdown');
+    const btn = document.getElementById('articleDatePickerBtn');
+
+    if (dropdown.classList.contains('show')) {
+        closeArticleCalendar();
+    } else {
+        dropdown.classList.add('show');
+        btn.classList.add('active');
+        renderArticleCalendar();
+    }
+}
+
+function closeArticleCalendar() {
+    const dropdown = document.getElementById('articleCalendarDropdown');
+    const btn = document.getElementById('articleDatePickerBtn');
+    if (dropdown) dropdown.classList.remove('show');
+    if (btn) btn.classList.remove('active');
+}
+
+function renderArticleCalendar() {
+    const title = document.getElementById('articleCalendarTitle');
+    const daysContainer = document.getElementById('articleCalendarDays');
+
+    title.textContent = `${articleCalendarYear}年${articleCalendarMonth}月`;
+
+    // 计算这个月的第一天是星期几
+    const firstDay = new Date(articleCalendarYear, articleCalendarMonth - 1, 1);
+    const startWeekday = firstDay.getDay();
+
+    // 计算这个月有多少天
+    const daysInMonth = new Date(articleCalendarYear, articleCalendarMonth, 0).getDate();
+
+    // 计算上个月的天数（用于填充）
+    const prevMonthDays = new Date(articleCalendarYear, articleCalendarMonth - 1, 0).getDate();
+
+    // 今天的日期
+    const today = new Date();
+    const todayStr = formatDateValue(today);
+
+    let html = '';
+
+    // 填充上个月的日期
+    for (let i = startWeekday - 1; i >= 0; i--) {
+        const day = prevMonthDays - i;
+        html += `<div class="calendar-day other-month"><span class="day-number">${day}</span></div>`;
+    }
+
+    // 填充当前月的日期
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${articleCalendarYear}-${String(articleCalendarMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const isToday = dateStr === todayStr;
+        const isSelected = dateStr === articleDateFilter;
+
+        const classes = [
+            'calendar-day',
+            isToday ? 'today' : '',
+            isSelected ? 'selected' : ''
+        ].filter(c => c).join(' ');
+
+        html += `
+            <div class="${classes}" onclick="selectArticleDate('${dateStr}')">
+                <span class="day-number">${day}</span>
+            </div>
+        `;
+    }
+
+    // 填充下个月的日期
+    const totalCells = startWeekday + daysInMonth;
+    const remainingCells = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (let i = 1; i <= remainingCells; i++) {
+        html += `<div class="calendar-day other-month"><span class="day-number">${i}</span></div>`;
+    }
+
+    daysContainer.innerHTML = html;
+}
+
+function changeArticleMonth(delta) {
+    articleCalendarMonth += delta;
+
+    if (articleCalendarMonth > 12) {
+        articleCalendarMonth = 1;
+        articleCalendarYear++;
+    } else if (articleCalendarMonth < 1) {
+        articleCalendarMonth = 12;
+        articleCalendarYear--;
+    }
+
+    renderArticleCalendar();
+}
+
+function selectArticleDate(dateStr) {
+    articleDateFilter = dateStr;
+    articlesCurrentPage = 1;
+
+    // 更新按钮显示
+    const parts = dateStr.split('-');
+    document.getElementById('articleDatePickerText').textContent = `${parts[1]}月${parts[2]}日`;
+
+    // 清除快捷日期按钮状态
+    document.querySelectorAll('#sourceArticlesModal .btn-quick-date').forEach(btn => btn.classList.remove('active'));
+
+    // 关闭日历
+    closeArticleCalendar();
+
+    // 刷新日历选中状态
+    renderArticleCalendar();
+
+    // 加载数据
+    loadSourceArticles();
+}
+
+function clearArticleDateFilter() {
+    articleDateFilter = null;
+    articlesCurrentPage = 1;
+    document.getElementById('articleDatePickerText').textContent = '选择日期';
+    document.querySelectorAll('#sourceArticlesModal .btn-quick-date').forEach(btn => btn.classList.remove('active'));
+    renderArticleCalendar();
+    loadSourceArticles();
+}
+
+function setArticleQuickDate(type) {
+    const today = new Date();
+
+    // 更新按钮状态
+    document.querySelectorAll('#sourceArticlesModal .btn-quick-date').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    articlesCurrentPage = 1;
+
+    if (type === 'today') {
+        articleDateFilter = formatDateValue(today);
+        const parts = articleDateFilter.split('-');
+        document.getElementById('articleDatePickerText').textContent = `${parts[1]}月${parts[2]}日`;
+    } else if (type === 'week') {
+        // 近7天 - 清除日期筛选，让后端返回最新数据
+        articleDateFilter = null;
+        document.getElementById('articleDatePickerText').textContent = '近7天';
+    } else if (type === 'month') {
+        // 近30天
+        articleDateFilter = null;
+        document.getElementById('articleDatePickerText').textContent = '近30天';
+    }
+
+    // 更新日历月份
+    articleCalendarYear = today.getFullYear();
+    articleCalendarMonth = today.getMonth() + 1;
+    renderArticleCalendar();
+
+    loadSourceArticles();
+}
+
+// ==================== 文章搜索 ====================
+
+function debounceArticleSearch() {
+    if (articleSearchDebounceTimer) {
+        clearTimeout(articleSearchDebounceTimer);
+    }
+    articleSearchDebounceTimer = setTimeout(() => {
+        articleSearchKeyword = document.getElementById('articleSearchInput').value.trim();
+        articlesCurrentPage = 1;
+        loadSourceArticles();
+    }, 300);
+}
+
+function clearArticleSearch() {
+    document.getElementById('articleSearchInput').value = '';
+    articleSearchKeyword = '';
+    articlesCurrentPage = 1;
+    loadSourceArticles();
+}
+
+// 关闭弹窗时也关闭文章日历
+document.addEventListener('click', (e) => {
+    const articleCalendarDropdown = document.getElementById('articleCalendarDropdown');
+    const articleDatePickerBtn = document.getElementById('articleDatePickerBtn');
+    if (articleCalendarDropdown && articleDatePickerBtn) {
+        if (!articleCalendarDropdown.contains(e.target) && !articleDatePickerBtn.contains(e.target)) {
+            closeArticleCalendar();
+        }
+    }
+});
+
+
+// ==================== 成果展示功能 ====================
+
+let achievementsData = [];
+let editingAchievementId = null;
+let selectedImageFile = null;
+
+// 加载成果列表
+async function loadAchievements() {
+    const listEl = document.getElementById('achievementsList');
+
+    const data = await fetchAPI('/achievements');
+
+    if (!data || data.length === 0) {
+        achievementsData = [];
+        listEl.innerHTML = `
+            <div class="achievements-empty">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+                </svg>
+                <span>暂无成果，点击右上角添加</span>
+            </div>
+        `;
+        return;
+    }
+
+    achievementsData = data;
+    renderAchievements();
+}
+
+// 渲染成果列表
+function renderAchievements() {
+    const listEl = document.getElementById('achievementsList');
+
+    if (achievementsData.length === 0) {
+        listEl.innerHTML = `
+            <div class="achievements-empty">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+                </svg>
+                <span>暂无成果，点击右上角添加</span>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = achievementsData.map(item => {
+        // 解析日期
+        const dateStr = item.created_at ? item.created_at.split(' ')[0] : '';
+
+        // 图片显示
+        let imageHtml = '';
+        if (item.image) {
+            imageHtml = `<img src="/static/uploads/achievements/${item.image}" alt="${escapeHtml(item.title)}">`;
+        } else {
+            imageHtml = `
+                <svg class="placeholder-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+            `;
+        }
+
+        return `
+            <div class="achievement-item" onclick="openAchievementLink('${escapeHtml(item.url)}')">
+                <div class="achievement-actions" onclick="event.stopPropagation()">
+                    <button class="btn-icon-sm edit" onclick="editAchievement('${item.id}')" title="编辑">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                    <button class="btn-icon-sm delete" onclick="deleteAchievement('${item.id}')" title="删除">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="achievement-image">
+                    ${imageHtml}
+                </div>
+                <div class="achievement-info">
+                    <div class="achievement-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+                    <div class="achievement-date">${dateStr}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 打开成果链接
+function openAchievementLink(url) {
+    if (url) {
+        window.open(url, '_blank');
+    }
+}
+
+// 打开添加成果弹窗
+function openAchievementModal() {
+    editingAchievementId = null;
+    selectedImageFile = null;
+
+    document.getElementById('achievementModalTitle').textContent = '添加成果';
+    document.getElementById('editAchievementId').value = '';
+    document.getElementById('achievementUrl').value = '';
+    document.getElementById('achievementTitle').value = '';
+    document.getElementById('achievementDesc').value = '';
+
+    // 重置图片上传区域
+    document.getElementById('uploadPlaceholder').style.display = 'flex';
+    document.getElementById('imagePreview').style.display = 'none';
+    document.getElementById('btnRemoveImage').style.display = 'none';
+    document.getElementById('achievementImage').value = '';
+
+    document.getElementById('achievementModal').classList.add('active');
+}
+
+// 编辑成果
+function editAchievement(id) {
+    const item = achievementsData.find(a => a.id === id);
+    if (!item) return;
+
+    editingAchievementId = id;
+    selectedImageFile = null;
+
+    document.getElementById('achievementModalTitle').textContent = '编辑成果';
+    document.getElementById('editAchievementId').value = id;
+    document.getElementById('achievementUrl').value = item.url || '';
+    document.getElementById('achievementTitle').value = item.title || '';
+    document.getElementById('achievementDesc').value = item.description || '';
+
+    // 显示已有图片
+    if (item.image) {
+        document.getElementById('uploadPlaceholder').style.display = 'none';
+        const preview = document.getElementById('imagePreview');
+        preview.src = `/static/uploads/achievements/${item.image}`;
+        preview.style.display = 'block';
+        document.getElementById('btnRemoveImage').style.display = 'flex';
+    } else {
+        document.getElementById('uploadPlaceholder').style.display = 'flex';
+        document.getElementById('imagePreview').style.display = 'none';
+        document.getElementById('btnRemoveImage').style.display = 'none';
+    }
+
+    document.getElementById('achievementImage').value = '';
+    document.getElementById('achievementModal').classList.add('active');
+}
+
+// 关闭成果弹窗
+function closeAchievementModal() {
+    document.getElementById('achievementModal').classList.remove('active');
+    editingAchievementId = null;
+    selectedImageFile = null;
+}
+
+// 触发图片上传
+function triggerImageUpload() {
+    document.getElementById('achievementImage').click();
+}
+
+// 预览上传的图片
+function previewAchievementImage(input) {
+    if (input.files && input.files[0]) {
+        selectedImageFile = input.files[0];
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('uploadPlaceholder').style.display = 'none';
+            const preview = document.getElementById('imagePreview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            document.getElementById('btnRemoveImage').style.display = 'flex';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// 移除图片
+function removeAchievementImage(event) {
+    event.stopPropagation();
+
+    selectedImageFile = null;
+    document.getElementById('achievementImage').value = '';
+    document.getElementById('uploadPlaceholder').style.display = 'flex';
+    document.getElementById('imagePreview').style.display = 'none';
+    document.getElementById('btnRemoveImage').style.display = 'none';
+}
+
+// 抓取标题
+async function fetchAchievementTitle() {
+    const url = document.getElementById('achievementUrl').value.trim();
+    if (!url) {
+        showToast('请先输入链接', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnFetchTitle');
+    const btnText = btn.querySelector('.btn-text');
+    const btnLoading = btn.querySelector('.btn-loading');
+
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+
+    try {
+        const response = await fetch('/api/achievements/fetch-title', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('achievementTitle').value = data.data.title;
+            showToast('标题抓取成功', 'success');
+        } else {
+            showToast(data.error || '抓取失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    } finally {
+        btn.disabled = false;
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+    }
+}
+
+// 保存成果
+async function saveAchievement() {
+    const url = document.getElementById('achievementUrl').value.trim();
+    const title = document.getElementById('achievementTitle').value.trim();
+    const description = document.getElementById('achievementDesc').value.trim();
+
+    if (!url) {
+        showToast('请输入引用链接', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnSaveAchievement');
+    const btnText = btn.querySelector('.btn-text');
+    const btnLoading = btn.querySelector('.btn-loading');
+
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+
+    try {
+        const formData = new FormData();
+        formData.append('url', url);
+        if (title) formData.append('title', title);
+        if (description) formData.append('description', description);
+
+        // 添加图片
+        if (selectedImageFile) {
+            formData.append('image', selectedImageFile);
+        }
+
+        let apiUrl = '/api/achievements';
+        let method = 'POST';
+
+        if (editingAchievementId) {
+            apiUrl = `/api/achievements/${editingAchievementId}`;
+            method = 'PUT';
+        }
+
+        const response = await fetch(apiUrl, {
+            method: method,
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(editingAchievementId ? '更新成功' : '添加成功', 'success');
+            closeAchievementModal();
+            loadAchievements();
+        } else {
+            showToast(data.error || '保存失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    } finally {
+        btn.disabled = false;
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+    }
+}
+
+// 删除成果
+async function deleteAchievement(id) {
+    if (!confirm('确定要删除这个成果吗？')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/achievements/${id}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('删除成功', 'success');
+            loadAchievements();
+        } else {
+            showToast(data.error || '删除失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+
+// ==================== 今日值班功能 ====================
+
+// 值班人员临时数据
+let tempDutyLeaders = [];
+let tempDutyOfficers = [];
+
+// 加载值班人员信息
+async function loadDutyInfo() {
+    const data = await fetchAPI('/duty');
+
+    if (data) {
+        const leadersEl = document.getElementById('dutyLeaders');
+        const officersEl = document.getElementById('dutyOfficers');
+        const dateEl = document.getElementById('dutyDate');
+
+        // 显示值班领导
+        if (data.leaders && data.leaders.length > 0) {
+            leadersEl.innerHTML = data.leaders.map(name =>
+                `<span class="duty-name-tag">${escapeHtml(name)}</span>`
+            ).join('');
+        } else {
+            leadersEl.innerHTML = '<span class="duty-empty">未设置</span>';
+        }
+
+        // 显示值班员
+        if (data.officers && data.officers.length > 0) {
+            officersEl.innerHTML = data.officers.map(name =>
+                `<span class="duty-name-tag">${escapeHtml(name)}</span>`
+            ).join('');
+        } else {
+            officersEl.innerHTML = '<span class="duty-empty">未设置</span>';
+        }
+
+        // 显示今日日期
+        const today = new Date();
+        const dateStr = today.toLocaleDateString('zh-CN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long'
+        });
+        dateEl.textContent = dateStr;
+    }
+}
+
+// 打开值班设置弹窗
+async function openDutyModal() {
+    // 获取当前值班人员
+    const data = await fetchAPI('/duty');
+
+    if (data) {
+        tempDutyLeaders = data.leaders || [];
+        tempDutyOfficers = data.officers || [];
+    } else {
+        tempDutyLeaders = [];
+        tempDutyOfficers = [];
+    }
+
+    // 清空输入框
+    document.getElementById('leaderNameInput').value = '';
+    document.getElementById('officerNameInput').value = '';
+
+    // 渲染标签
+    renderDutyTags();
+
+    document.getElementById('dutyModal').classList.add('active');
+
+    // 绑定回车事件
+    document.getElementById('leaderNameInput').onkeypress = function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addDutyPerson('leader');
+        }
+    };
+    document.getElementById('officerNameInput').onkeypress = function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addDutyPerson('officer');
+        }
+    };
+}
+
+// 关闭值班设置弹窗
+function closeDutyModal() {
+    document.getElementById('dutyModal').classList.remove('active');
+}
+
+// 渲染值班人员标签
+function renderDutyTags() {
+    const leaderTagsEl = document.getElementById('leaderTags');
+    const officerTagsEl = document.getElementById('officerTags');
+
+    // 渲染值班领导标签
+    if (tempDutyLeaders.length > 0) {
+        leaderTagsEl.innerHTML = tempDutyLeaders.map((name, index) => `
+            <span class="duty-tag">
+                ${escapeHtml(name)}
+                <button class="remove-btn" onclick="removeDutyPerson('leader', ${index})" title="移除">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </span>
+        `).join('');
+    } else {
+        leaderTagsEl.innerHTML = '<span class="duty-tags-empty">暂无，请添加</span>';
+    }
+
+    // 渲染值班员标签
+    if (tempDutyOfficers.length > 0) {
+        officerTagsEl.innerHTML = tempDutyOfficers.map((name, index) => `
+            <span class="duty-tag">
+                ${escapeHtml(name)}
+                <button class="remove-btn" onclick="removeDutyPerson('officer', ${index})" title="移除">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </span>
+        `).join('');
+    } else {
+        officerTagsEl.innerHTML = '<span class="duty-tags-empty">暂无，请添加</span>';
+    }
+}
+
+// 添加值班人员
+function addDutyPerson(role) {
+    const inputId = role === 'leader' ? 'leaderNameInput' : 'officerNameInput';
+    const input = document.getElementById(inputId);
+    const name = input.value.trim();
+
+    if (!name) {
+        showToast('请输入姓名', 'error');
+        return;
+    }
+
+    if (role === 'leader') {
+        if (tempDutyLeaders.includes(name)) {
+            showToast('该人员已存在', 'error');
+            return;
+        }
+        tempDutyLeaders.push(name);
+    } else {
+        if (tempDutyOfficers.includes(name)) {
+            showToast('该人员已存在', 'error');
+            return;
+        }
+        tempDutyOfficers.push(name);
+    }
+
+    input.value = '';
+    renderDutyTags();
+    input.focus();
+}
+
+// 移除值班人员
+function removeDutyPerson(role, index) {
+    if (role === 'leader') {
+        tempDutyLeaders.splice(index, 1);
+    } else {
+        tempDutyOfficers.splice(index, 1);
+    }
+    renderDutyTags();
+}
+
+// 保存值班人员
+async function saveDutyPersons() {
+    try {
+        const response = await fetch('/api/duty', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                leaders: tempDutyLeaders,
+                officers: tempDutyOfficers
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('值班人员已更新', 'success');
+            closeDutyModal();
+            loadDutyInfo();
+        } else {
+            showToast(data.error || '保存失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
 }
