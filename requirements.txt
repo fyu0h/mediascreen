@@ -18,3 +18,6 @@ beautifulsoup4>=4.12.0
 
 # Crawl4AI（可选，用于动态页面爬取）
 # crawl4ai>=0.2.0
+
+# 生产环境 WSGI 服务器（Windows 使用 waitress）
+waitress>=2.1.0
