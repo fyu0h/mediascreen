@@ -7,7 +7,7 @@
 import re
 import requests
 from typing import Optional, List, Dict, Any
-from models.settings import get_llm_config
+from models.settings import get_translation_config, get_translation_prompt
 
 
 def is_chinese(text: str) -> bool:
@@ -45,8 +45,8 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
     if is_chinese(title):
         return title
 
-    # 获取 LLM 配置
-    config = get_llm_config()
+    # 获取翻译 LLM 配置
+    config = get_translation_config()
     api_key = config.get('api_key')
     api_url = config.get('api_url')
     model = config.get('model')
@@ -66,6 +66,10 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
         else:
             api_url = api_url.rstrip('/') + '/v1/chat/completions'
 
+    # 获取翻译提示词
+    prompt_template = get_translation_prompt()
+    prompt = prompt_template.replace('{text}', title)
+
     try:
         response = requests.post(
             api_url,
@@ -78,7 +82,7 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
                 'messages': [
                     {
                         'role': 'user',
-                        'content': f'翻译下面的内容为中文，不需要任何解释：\n{title}'
+                        'content': prompt
                     }
                 ],
                 'max_tokens': 200,

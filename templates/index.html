@@ -491,6 +491,70 @@
                     </div>
                 </div>
 
+                <!-- 翻译 LLM 设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <span class="section-title">翻译 LLM 配置</span>
+                        <span class="section-status" id="translationStatus"></span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API 提供商</label>
+                        <select id="translationProvider" class="form-select" onchange="onTranslationProviderChange()">
+                            <option value="siliconflow">SiliconFlow</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="gemini">Google Gemini</option>
+                            <option value="aimlapi">AIML API</option>
+                            <option value="poixe">Poixe</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API URL</label>
+                        <input type="text" id="translationApiUrl" class="form-input" placeholder="https://api.siliconflow.cn/v1/chat/completions">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <div class="input-with-btn">
+                            <input type="password" id="translationApiKey" class="form-input" placeholder="sk-...">
+                            <button class="btn-icon" onclick="togglePasswordVisibility('translationApiKey')" title="显示/隐藏">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="form-hint" id="translationKeyHint"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">模型</label>
+                        <select id="translationModel" class="form-select">
+                            <option value="Pro/Qwen/Qwen2.5-7B-Instruct">Qwen2.5-7B</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button class="btn btn-outline btn-sm" onclick="testTranslationConnection()" id="btnTestTranslation">
+                            <span class="btn-text">测试连接</span>
+                            <span class="btn-loading" style="display:none;">测试中...</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 翻译提示词设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <span class="section-title">翻译提示词</span>
+                        <button class="btn-link" onclick="resetTranslationPromptToDefault()">恢复默认</button>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">自定义提示词模板</label>
+                        <textarea id="translationPrompt" class="form-textarea" rows="4" placeholder="输入翻译提示词..."></textarea>
+                        <div class="form-hint">
+                            必须包含占位符：<code>{text}</code> 待翻译的内容
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 保存按钮 -->
                 <div class="form-actions">
                     <button class="btn btn-cancel" onclick="closeSettingsModal()">取消</button>

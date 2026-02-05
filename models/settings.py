@@ -35,6 +35,14 @@ DEFAULT_SETTINGS = {
                 'api_key': '',
                 'api_url': 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
             },
+            'aimlapi': {
+                'api_key': '',
+                'api_url': 'https://api.aimlapi.com/v1/chat/completions'
+            },
+            'poixe': {
+                'api_key': '',
+                'api_url': 'https://api.poixe.com/v1/chat/completions'
+            },
             'custom': {
                 'api_key': '',
                 'api_url': ''
@@ -52,6 +60,42 @@ DEFAULT_SETTINGS = {
     },
     'summary': {
         'custom_prompt': ''  # 自定义AI总结提示词，为空则使用默认
+    },
+    'translation': {
+        'provider': 'siliconflow',  # 翻译使用的提供商
+        'model': 'Pro/Qwen/Qwen2.5-7B-Instruct',  # 翻译使用的模型
+        'custom_prompt': '',  # 自定义翻译提示词
+        # 各提供商独立配置（翻译专用）
+        'providers': {
+            'siliconflow': {
+                'api_key': '',
+                'api_url': 'https://api.siliconflow.cn/v1/chat/completions'
+            },
+            'deepseek': {
+                'api_key': '',
+                'api_url': 'https://api.deepseek.com/v1/chat/completions'
+            },
+            'openai': {
+                'api_key': '',
+                'api_url': 'https://api.openai.com/v1/chat/completions'
+            },
+            'gemini': {
+                'api_key': '',
+                'api_url': 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+            },
+            'aimlapi': {
+                'api_key': '',
+                'api_url': 'https://api.aimlapi.com/v1/chat/completions'
+            },
+            'poixe': {
+                'api_key': '',
+                'api_url': 'https://api.poixe.com/v1/chat/completions'
+            },
+            'custom': {
+                'api_key': '',
+                'api_url': ''
+            }
+        }
     }
 }
 
@@ -171,10 +215,35 @@ API_PROVIDERS = {
         'name': 'Google Gemini',
         'api_url': 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
         'models': [
+            {'id': 'gemini-2.5-pro', 'name': 'Gemini 2.5 Pro'},
             {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash'},
             {'id': 'gemini-2.0-flash-lite', 'name': 'Gemini 2.0 Flash Lite'},
             {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro'},
             {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash'},
+        ]
+    },
+    'aimlapi': {
+        'name': 'AIML API',
+        'api_url': 'https://api.aimlapi.com/v1/chat/completions',
+        'models': [
+            {'id': 'google/gemini-3-flash-preview', 'name': 'Gemini 3 Flash Preview'},
+            {'id': 'gpt-4o', 'name': 'GPT-4o'},
+            {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini'},
+            {'id': 'claude-3-5-sonnet', 'name': 'Claude 3.5 Sonnet'},
+            {'id': 'deepseek-chat', 'name': 'DeepSeek Chat'},
+        ]
+    },
+    'poixe': {
+        'name': 'Poixe',
+        'api_url': 'https://api.poixe.com/v1/chat/completions',
+        'models': [
+            {'id': 'gpt-3.5-turbo-0125:free', 'name': 'GPT-3.5 Turbo (免费)'},
+            {'id': 'gpt-5.2', 'name': 'GPT-5.2'},
+            {'id': 'claude-opus-4-20250514', 'name': 'Claude Opus 4'},
+            {'id': 'gemini-2.5-pro', 'name': 'Gemini 2.5 Pro'},
+            {'id': 'deepseek-r1', 'name': 'DeepSeek R1'},
+            {'id': 'gpt-4o', 'name': 'GPT-4o'},
+            {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo'},
         ]
     },
     'custom': {
@@ -333,3 +402,68 @@ def set_summary_prompt(prompt: str) -> bool:
 def get_default_summary_prompt() -> str:
     """获取默认AI总结提示词"""
     return DEFAULT_SUMMARY_PROMPT
+
+
+# 默认翻译提示词
+DEFAULT_TRANSLATION_PROMPT = "翻译下面的内容为中文，不需要任何解释：\n{text}"
+
+
+def get_translation_config() -> Dict[str, str]:
+    """获取翻译 LLM 配置"""
+    settings = load_settings()
+    trans_config = settings.get('translation', {})
+
+    # 获取当前选择的提供商
+    provider = trans_config.get('provider', 'siliconflow')
+    model = trans_config.get('model', 'Pro/Qwen/Qwen2.5-7B-Instruct')
+
+    # 获取该提供商的配置
+    providers_config = trans_config.get('providers', {})
+    provider_config = providers_config.get(provider, {})
+
+    # 获取 API Key 和 URL
+    api_key = provider_config.get('api_key', '')
+    api_url = provider_config.get('api_url', '')
+
+    # 如果翻译没有配置，回退到LLM配置
+    if not api_key:
+        llm_config = get_llm_config()
+        api_key = llm_config.get('api_key', '')
+
+    if not api_url:
+        api_url = API_PROVIDERS.get(provider, {}).get('api_url', '')
+
+    return {
+        'provider': provider,
+        'api_key': api_key,
+        'api_url': api_url,
+        'model': model
+    }
+
+
+def get_translation_prompt() -> str:
+    """获取翻译提示词（自定义或默认）"""
+    settings = load_settings()
+    custom_prompt = settings.get('translation', {}).get('custom_prompt', '')
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+    return DEFAULT_TRANSLATION_PROMPT
+
+
+def set_translation_prompt(prompt: str) -> bool:
+    """设置自定义翻译提示词"""
+    return set_setting('translation.custom_prompt', prompt)
+
+
+def get_default_translation_prompt() -> str:
+    """获取默认翻译提示词"""
+    return DEFAULT_TRANSLATION_PROMPT
+
+
+def get_translation_provider_api_key(provider: str) -> str:
+    """获取指定提供商的翻译 API Key"""
+    settings = load_settings()
+    trans_config = settings.get('translation', {})
+    providers_config = trans_config.get('providers', {})
+    provider_config = providers_config.get(provider, {})
+    return provider_config.get('api_key', '')

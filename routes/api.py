@@ -761,7 +761,12 @@ from models.settings import (
     get_openai_config,
     get_api_providers,
     mask_api_key,
-    API_PROVIDERS
+    API_PROVIDERS,
+    get_translation_config,
+    get_translation_prompt,
+    set_translation_prompt,
+    get_default_translation_prompt,
+    get_translation_provider_api_key
 )
 
 
@@ -2492,3 +2497,221 @@ def summary_set_prompt():
         return success_response({'message': '提示词已保存'})
     except Exception as e:
         return error_response(f'保存提示词失败: {str(e)}', 500)
+
+
+# ==================== 翻译设置 API ====================
+
+@api_bp.route('/translation/settings', methods=['GET'])
+def get_translation_settings():
+    """获取翻译LLM设置"""
+    try:
+        settings = load_settings()
+        trans_config = settings.get('translation', {})
+
+        current_provider = trans_config.get('provider', 'siliconflow')
+        providers_config = trans_config.get('providers', {})
+
+        # 获取当前提供商的配置
+        current_provider_config = providers_config.get(current_provider, {})
+        current_api_key = current_provider_config.get('api_key', '')
+        current_api_url = current_provider_config.get('api_url', '')
+
+        # 构建返回的翻译配置
+        translation_response = {
+            'provider': current_provider,
+            'model': trans_config.get('model', 'Pro/Qwen/Qwen2.5-7B-Instruct'),
+            'api_url': current_api_url or API_PROVIDERS.get(current_provider, {}).get('api_url', ''),
+            'api_key_set': bool(current_api_key),
+            'api_key_masked': mask_api_key(current_api_key) if current_api_key else '',
+            'providers_status': {}
+        }
+
+        # 检查每个提供商的 API Key 配置状态
+        for provider_id in API_PROVIDERS.keys():
+            provider_cfg = providers_config.get(provider_id, {})
+            provider_key = provider_cfg.get('api_key', '')
+            translation_response['providers_status'][provider_id] = {
+                'api_key_set': bool(provider_key),
+                'api_key_masked': mask_api_key(provider_key) if provider_key else '',
+                'api_url': provider_cfg.get('api_url', API_PROVIDERS.get(provider_id, {}).get('api_url', ''))
+            }
+
+        return success_response({
+            'translation': translation_response,
+            'providers': API_PROVIDERS
+        })
+    except Exception as e:
+        return error_response(f'获取翻译设置失败: {str(e)}', 500)
+
+
+@api_bp.route('/translation/settings', methods=['PUT'])
+def update_translation_settings():
+    """更新翻译LLM设置"""
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('请求体不能为空', 400)
+
+        current_settings = load_settings()
+
+        # 确保 translation.providers 存在
+        if 'translation' not in current_settings:
+            current_settings['translation'] = {
+                'provider': 'siliconflow',
+                'model': 'Pro/Qwen/Qwen2.5-7B-Instruct',
+                'custom_prompt': '',
+                'providers': {}
+            }
+        if 'providers' not in current_settings['translation']:
+            current_settings['translation']['providers'] = {}
+
+        # 更新翻译设置
+        if 'translation' in data:
+            trans = data['translation']
+            provider = trans.get('provider', current_settings['translation'].get('provider', 'siliconflow')).strip()
+
+            # 更新当前提供商
+            current_settings['translation']['provider'] = provider
+
+            # 更新模型
+            if 'model' in trans:
+                current_settings['translation']['model'] = trans['model'].strip()
+
+            # 确保该提供商的配置存在
+            if provider not in current_settings['translation']['providers']:
+                current_settings['translation']['providers'][provider] = {
+                    'api_key': '',
+                    'api_url': API_PROVIDERS.get(provider, {}).get('api_url', '')
+                }
+
+            # 更新该提供商的 API URL
+            if 'api_url' in trans:
+                current_settings['translation']['providers'][provider]['api_url'] = trans['api_url'].strip()
+
+            # 更新该提供商的 API Key（只有提供了新的 key 才更新）
+            if 'api_key' in trans and trans['api_key']:
+                current_settings['translation']['providers'][provider]['api_key'] = trans['api_key'].strip()
+
+        if save_settings(current_settings):
+            log_operation(
+                action='更新翻译设置',
+                details={'provider': current_settings.get('translation', {}).get('provider')},
+                status='success'
+            )
+            return success_response({'message': '翻译设置已保存'})
+        else:
+            return error_response('保存翻译设置失败', 500)
+    except Exception as e:
+        return error_response(f'更新翻译设置失败: {str(e)}', 500)
+
+
+@api_bp.route('/translation/prompt', methods=['GET'])
+def translation_get_prompt():
+    """获取翻译提示词配置"""
+    try:
+        current_prompt = get_translation_prompt()
+        default_prompt = get_default_translation_prompt()
+        return success_response({
+            'prompt': current_prompt,
+            'default_prompt': default_prompt,
+            'is_custom': current_prompt != default_prompt
+        })
+    except Exception as e:
+        return error_response(f'获取翻译提示词失败: {str(e)}', 500)
+
+
+@api_bp.route('/translation/prompt', methods=['PUT'])
+def translation_set_prompt():
+    """设置翻译提示词"""
+    try:
+        data = request.get_json()
+        if data is None:
+            return error_response('请求体不能为空', 400)
+
+        prompt = data.get('prompt', '')
+
+        # 验证提示词包含必要的占位符
+        if prompt and prompt.strip():
+            if '{text}' not in prompt:
+                return error_response('提示词必须包含 {text} 占位符', 400)
+
+        set_translation_prompt(prompt)
+
+        log_operation(
+            action='修改翻译提示词',
+            details={'is_custom': bool(prompt and prompt.strip())},
+            status='success'
+        )
+
+        return success_response({'message': '翻译提示词已保存'})
+    except Exception as e:
+        return error_response(f'保存翻译提示词失败: {str(e)}', 500)
+
+
+@api_bp.route('/translation/test-api', methods=['POST'])
+def test_translation_api():
+    """测试翻译API连接"""
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('请求体不能为空', 400)
+
+        provider = data.get('provider', 'siliconflow').strip()
+        api_url = data.get('api_url', '').strip()
+        api_key = data.get('api_key', '').strip()
+        model = data.get('model', '').strip()
+        use_saved = data.get('use_saved', False)
+
+        # 如果使用已保存的配置
+        if use_saved or not api_key:
+            api_key = get_translation_provider_api_key(provider)
+
+        if not api_key:
+            return error_response('未配置 API Key', 400)
+
+        if not api_url:
+            api_url = API_PROVIDERS.get(provider, {}).get('api_url', '')
+
+        if not api_url:
+            return error_response('未配置 API URL', 400)
+
+        # 确保 URL 格式正确
+        if not api_url.endswith('/chat/completions'):
+            if '/v1' in api_url:
+                api_url = api_url.rstrip('/') + '/chat/completions'
+            else:
+                api_url = api_url.rstrip('/') + '/v1/chat/completions'
+
+        if not model:
+            model = 'Pro/Qwen/Qwen2.5-7B-Instruct'
+
+        import requests
+        response = requests.post(
+            api_url,
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': model,
+                'messages': [{'role': 'user', 'content': 'Translate to Chinese: Hello World'}],
+                'max_tokens': 100,
+                'temperature': 0.1
+            },
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            translated = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            return success_response({
+                'message': '连接成功',
+                'model': model,
+                'response': translated[:100] if translated else '(无响应)'
+            })
+        else:
+            return error_response(f'API 错误: {response.status_code} - {response.text[:200]}', 400)
+    except requests.exceptions.Timeout:
+        return error_response('连接超时', 408)
+    except Exception as e:
+        return error_response(f'测试失败: {str(e)}', 500)

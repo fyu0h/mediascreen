@@ -2210,6 +2210,9 @@ async function loadSettings() {
 
     // 加载 AI 总结提示词
     await loadSummaryPrompt();
+
+    // 加载翻译设置
+    await loadTranslationSettings();
 }
 
 // 加载 AI 总结提示词
@@ -2359,7 +2362,13 @@ async function saveSettings() {
         // 保存 AI 总结提示词
         const promptSaved = await saveSummaryPrompt();
 
-        if (promptSaved) {
+        // 保存翻译设置
+        const translationSaved = await saveTranslationSettings();
+
+        // 保存翻译提示词
+        const translationPromptSaved = await saveTranslationPrompt();
+
+        if (promptSaved && translationSaved && translationPromptSaved) {
             showToast('设置已保存', 'success');
             closeSettingsModal();
         }
@@ -2458,6 +2467,294 @@ function togglePasswordVisibility(inputId) {
 function toggleSettingsSection(header) {
     const section = header.closest('.settings-section');
     section.classList.toggle('collapsed');
+}
+
+
+// ==================== 翻译设置 ====================
+
+let translationProvidersData = {};
+let translationProvidersStatusData = {};
+
+// 加载翻译设置
+async function loadTranslationSettings() {
+    try {
+        const response = await fetch('/api/translation/settings');
+        const result = await response.json();
+
+        if (!result.success || !result.data) return;
+
+        const data = result.data;
+        translationProvidersData = data.providers || {};
+
+        if (data.translation) {
+            const provider = data.translation.provider || 'siliconflow';
+
+            // 保存各提供商的状态
+            translationProvidersStatusData = data.translation.providers_status || {};
+
+            document.getElementById('translationProvider').value = provider;
+
+            // 获取当前提供商的状态
+            const providerStatus = translationProvidersStatusData[provider] || {};
+            document.getElementById('translationApiUrl').value = providerStatus.api_url || data.translation.api_url || '';
+            document.getElementById('translationApiKey').value = '';
+            document.getElementById('translationApiKey').placeholder = providerStatus.api_key_set ? '已配置（输入新值覆盖）' : 'sk-...';
+
+            // 更新模型列表
+            updateTranslationModelOptions(provider, data.translation.model);
+
+            // 更新状态
+            const statusEl = document.getElementById('translationStatus');
+            if (providerStatus.api_key_set) {
+                statusEl.textContent = '已配置';
+                statusEl.className = 'section-status configured';
+            } else {
+                statusEl.textContent = '未配置';
+                statusEl.className = 'section-status not-configured';
+            }
+
+            // 显示遮蔽的 Key
+            const hintEl = document.getElementById('translationKeyHint');
+            if (providerStatus.api_key_masked) {
+                hintEl.textContent = `当前: ${providerStatus.api_key_masked}`;
+            } else {
+                hintEl.textContent = '';
+            }
+        }
+
+        // 加载翻译提示词
+        await loadTranslationPrompt();
+    } catch (error) {
+        console.error('加载翻译设置失败:', error);
+    }
+}
+
+// 加载翻译提示词
+async function loadTranslationPrompt() {
+    try {
+        const response = await fetch('/api/translation/prompt');
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            const textarea = document.getElementById('translationPrompt');
+            if (textarea) {
+                textarea.value = result.data.prompt || result.data.default_prompt || '';
+                textarea.dataset.defaultPrompt = result.data.default_prompt || '';
+            }
+        }
+    } catch (error) {
+        console.error('加载翻译提示词失败:', error);
+    }
+}
+
+// 翻译提供商切换
+function onTranslationProviderChange() {
+    const provider = document.getElementById('translationProvider').value;
+
+    // 获取该提供商已保存的配置
+    const savedStatus = translationProvidersStatusData[provider] || {};
+
+    // 更新 API URL
+    if (savedStatus.api_url) {
+        document.getElementById('translationApiUrl').value = savedStatus.api_url;
+    } else if (translationProvidersData[provider]) {
+        document.getElementById('translationApiUrl').value = translationProvidersData[provider].api_url || '';
+    }
+
+    // 更新 Key 提示
+    document.getElementById('translationApiKey').value = '';
+    document.getElementById('translationApiKey').placeholder = savedStatus.api_key_set ? '已配置（输入新值覆盖）' : 'sk-...';
+
+    const hintEl = document.getElementById('translationKeyHint');
+    if (savedStatus.api_key_masked) {
+        hintEl.textContent = `当前: ${savedStatus.api_key_masked}`;
+    } else {
+        hintEl.textContent = '';
+    }
+
+    // 更新模型列表
+    updateTranslationModelOptions(provider);
+
+    // 更新状态
+    const statusEl = document.getElementById('translationStatus');
+    if (savedStatus.api_key_set) {
+        statusEl.textContent = '已配置';
+        statusEl.className = 'section-status configured';
+    } else {
+        statusEl.textContent = '未配置';
+        statusEl.className = 'section-status not-configured';
+    }
+}
+
+// 更新翻译模型选项
+function updateTranslationModelOptions(provider, selectedModel = null) {
+    const modelSelect = document.getElementById('translationModel');
+    modelSelect.innerHTML = '';
+
+    const providerInfo = translationProvidersData[provider];
+    if (providerInfo && providerInfo.models && providerInfo.models.length > 0) {
+        providerInfo.models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            modelSelect.appendChild(option);
+        });
+    } else if (provider === 'custom') {
+        const option = document.createElement('option');
+        option.value = selectedModel || '';
+        option.textContent = selectedModel || '请输入模型名称';
+        modelSelect.appendChild(option);
+    }
+
+    if (selectedModel) {
+        modelSelect.value = selectedModel;
+    }
+}
+
+// 保存翻译设置
+async function saveTranslationSettings() {
+    const settings = {
+        translation: {
+            provider: document.getElementById('translationProvider').value,
+            api_url: document.getElementById('translationApiUrl').value.trim(),
+            model: document.getElementById('translationModel').value
+        }
+    };
+
+    const apiKey = document.getElementById('translationApiKey').value.trim();
+    if (apiKey) {
+        settings.translation.api_key = apiKey;
+    }
+
+    try {
+        const response = await fetch('/api/translation/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings)
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            showToast(data.error || '保存翻译设置失败', 'error');
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error('保存翻译设置失败:', error);
+        showToast('保存翻译设置失败', 'error');
+        return false;
+    }
+}
+
+// 保存翻译提示词
+async function saveTranslationPrompt() {
+    const textarea = document.getElementById('translationPrompt');
+    if (!textarea) return true;
+
+    const customPrompt = textarea.value.trim();
+    const defaultPrompt = textarea.dataset.defaultPrompt || '';
+
+    const promptToSave = customPrompt === defaultPrompt ? '' : customPrompt;
+
+    try {
+        const response = await fetch('/api/translation/prompt', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: promptToSave })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            showToast(data.error || '保存翻译提示词失败', 'error');
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error('保存翻译提示词失败:', error);
+        showToast('保存翻译提示词失败', 'error');
+        return false;
+    }
+}
+
+// 恢复默认翻译提示词
+async function resetTranslationPromptToDefault() {
+    const textarea = document.getElementById('translationPrompt');
+    if (!textarea) return;
+
+    if (textarea.dataset.defaultPrompt) {
+        textarea.value = textarea.dataset.defaultPrompt;
+        showToast('已恢复默认翻译提示词，请保存设置', 'info');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/translation/prompt');
+        const result = await response.json();
+
+        if (result.success && result.data && result.data.default_prompt) {
+            textarea.value = result.data.default_prompt;
+            textarea.dataset.defaultPrompt = result.data.default_prompt;
+            showToast('已恢复默认翻译提示词，请保存设置', 'info');
+        } else {
+            showToast('获取默认翻译提示词失败', 'error');
+        }
+    } catch (error) {
+        console.error('获取默认翻译提示词失败:', error);
+        showToast('获取默认翻译提示词失败', 'error');
+    }
+}
+
+// 测试翻译API连接
+async function testTranslationConnection() {
+    const btn = document.getElementById('btnTestTranslation');
+    const btnText = btn.querySelector('.btn-text');
+    const btnLoading = btn.querySelector('.btn-loading');
+
+    const provider = document.getElementById('translationProvider').value;
+    const apiUrl = document.getElementById('translationApiUrl').value.trim();
+    const apiKey = document.getElementById('translationApiKey').value.trim();
+    const model = document.getElementById('translationModel').value;
+
+    if (!apiUrl) {
+        showToast('请输入 API URL', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+
+    try {
+        const response = await fetch('/api/translation/test-api', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                provider: provider,
+                api_url: apiUrl,
+                api_key: apiKey,
+                model: model,
+                use_saved: !apiKey
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`翻译连接成功！响应: ${data.data.response || ''}`, 'success');
+        } else {
+            showToast(data.error || '连接失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    } finally {
+        btn.disabled = false;
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+    }
 }
 
 
