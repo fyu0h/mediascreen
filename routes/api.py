@@ -2125,22 +2125,71 @@ def summary_daily():
         # 解析文本报告部分
         # 移除JSON代码块后的内容用于文本解析
         text_content = re.sub(r'```json[\s\S]*?```', '', content).strip()
+        # 也移除普通代码块
+        text_content = re.sub(r'```[\s\S]*?```', '', text_content).strip()
 
-        sections = text_content.split('##')
         summary = ''
         hot_news_text = ''
         risk_analysis = ''
 
-        for section in sections:
-            section = section.strip()
-            if '今日舆情总结' in section or '舆情总结' in section:
-                summary = section.split('\n', 1)[1].strip() if '\n' in section else section
-            elif '热点新闻' in section or 'TOP5' in section:
-                hot_news_text = section.split('\n', 1)[1].strip() if '\n' in section else section
-            elif '风险分析' in section or '应对建议' in section:
-                risk_analysis = section.split('\n', 1)[1].strip() if '\n' in section else section
+        # 尝试多种分割方式
+        # 方式1: 使用 ## 分割（Markdown格式）
+        if '##' in text_content:
+            sections = text_content.split('##')
+            for section in sections:
+                section = section.strip()
+                if '今日舆情' in section or '舆情总结' in section or '态势总结' in section:
+                    summary = section.split('\n', 1)[1].strip() if '\n' in section else section
+                elif '热点' in section or 'TOP5' in section or 'TOP 5' in section:
+                    hot_news_text = section.split('\n', 1)[1].strip() if '\n' in section else section
+                elif '风险' in section or '应对建议' in section or '预警' in section:
+                    risk_analysis = section.split('\n', 1)[1].strip() if '\n' in section else section
 
-        # 如果解析失败，直接返回原文
+        # 方式2: 使用中文序号分割（一、二、三、）
+        if not summary and not hot_news_text:
+            # 使用正则匹配中文序号标题
+            pattern = r'[一二三四五六七八九十]+[、.．]\s*'
+            parts = re.split(pattern, text_content)
+            titles = re.findall(pattern + r'[^\n]+', text_content)
+
+            for i, title in enumerate(titles):
+                title_text = title.strip()
+                part_content = parts[i + 1].strip() if i + 1 < len(parts) else ''
+
+                if '舆情' in title_text or '总结' in title_text or '态势' in title_text:
+                    summary = part_content
+                elif '热点' in title_text or 'TOP' in title_text:
+                    hot_news_text = part_content
+                elif '风险' in title_text or '建议' in title_text or '预警' in title_text:
+                    risk_analysis = part_content
+
+        # 方式3: 使用 PART 分割
+        if not summary and not hot_news_text:
+            if 'PART 1' in text_content or 'PART 2' in text_content:
+                # 提取 PART 1 内容
+                part1_match = re.search(r'PART\s*1[:\s：]*([\s\S]*?)(?=PART\s*2|$)', text_content, re.IGNORECASE)
+                if part1_match:
+                    part1_content = part1_match.group(1).strip()
+                    # 在 PART 1 中再次尝试分割
+                    if '一、' in part1_content or '二、' in part1_content:
+                        # 递归使用中文序号分割
+                        sub_parts = re.split(r'[一二三四五六七八九十]+[、.．]\s*', part1_content)
+                        sub_titles = re.findall(r'[一二三四五六七八九十]+[、.．][^\n]+', part1_content)
+
+                        for i, title in enumerate(sub_titles):
+                            part_content = sub_parts[i + 1].strip() if i + 1 < len(sub_parts) else ''
+
+                            if '舆情' in title or '总结' in title or '态势' in title:
+                                summary = part_content
+                            elif '热点' in title or 'TOP' in title:
+                                hot_news_text = part_content
+                            elif '风险' in title or '建议' in title or '预警' in title:
+                                risk_analysis = part_content
+                    else:
+                        # 整个 PART 1 作为总结
+                        summary = part1_content
+
+        # 如果仍然解析失败，直接返回原文
         if not summary and not hot_news_text and not risk_analysis:
             summary = text_content
             hot_news_text = ''
