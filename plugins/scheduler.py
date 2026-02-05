@@ -69,6 +69,16 @@ class RSSScheduler:
                 'use_homepage': False,
                 'google_news_rss': True,  # 使用Google News RSS
             },
+            {
+                'id': 'hkfp',
+                'name': '香港自由新闻 (HKFP)',
+                'country_code': 'HK',
+                'coords': [114.1694, 22.3193],
+                'rss_urls': [
+                    'https://hongkongfp.com/feed/',
+                ],
+                'use_homepage': False,
+            },
         ]
 
         self.headers = {

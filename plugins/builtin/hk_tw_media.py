@@ -13,7 +13,7 @@ class HKTWMediaPlugin(BasePlugin):
 
     plugin_id = "hk_tw_media"
     plugin_name = "港澳台媒体"
-    plugin_description = "香港、台湾主要媒体：大公报、香港中通社、明报、南华早报"
+    plugin_description = "香港、台湾主要媒体：大公报、香港中通社、明报、南华早报、香港自由新闻"
     plugin_version = "1.0.0"
 
     def get_sites(self) -> List[Dict[str, Any]]:
@@ -68,6 +68,19 @@ class HKTWMediaPlugin(BasePlugin):
                 "parser": "scmp",
                 "sitemap_url": "https://www.scmp.com/sitemap.xml",
                 "description": "南华早报（使用专用解析器 + Sitemap）",
+                "enabled_by_default": True
+            },
+            {
+                "id": "hk_hkfp",
+                "name": "香港自由新闻 (HKFP)",
+                "url": "https://hongkongfp.com/",
+                "domain": "hongkongfp.com",
+                "country_code": "HK",
+                "coords": [114.1694, 22.3193],
+                "fetch_method": "scheduler",
+                "parser": None,
+                "sitemap_url": None,
+                "description": "Hong Kong Free Press（RSS定时更新）",
                 "enabled_by_default": True
             }
         ]
