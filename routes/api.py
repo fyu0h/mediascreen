@@ -2715,3 +2715,408 @@ def test_translation_api():
         return error_response('连接超时', 408)
     except Exception as e:
         return error_response(f'测试失败: {str(e)}', 500)
+
+
+# ==================== Telegram 监控接口 ====================
+
+# ---------- 账号管理 ----------
+
+@api_bp.route('/telegram/accounts', methods=['GET'])
+def telegram_accounts_list():
+    """获取 Telegram 账号列表"""
+    try:
+        from models.telegram import get_all_accounts
+        accounts = get_all_accounts()
+        return success_response(accounts)
+    except Exception as e:
+        return error_response(f'获取账号列表失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/accounts', methods=['POST'])
+def telegram_accounts_add():
+    """添加 Telegram 账号"""
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('请求数据为空')
+
+        name = data.get('name', '').strip()
+        api_id = data.get('api_id', '').strip()
+        api_hash = data.get('api_hash', '').strip()
+        phone = data.get('phone', '').strip()
+
+        if not all([name, api_id, api_hash, phone]):
+            return error_response('请填写完整的账号信息')
+
+        from models.telegram import add_account
+        account = add_account(name, api_id, api_hash, phone)
+        return success_response(account)
+    except ValueError as e:
+        return error_response(str(e))
+    except Exception as e:
+        return error_response(f'添加账号失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/accounts/<account_id>', methods=['DELETE'])
+def telegram_accounts_delete(account_id):
+    """删除 Telegram 账号"""
+    try:
+        from models.telegram import delete_account
+        if delete_account(account_id):
+            return success_response({'message': '账号已删除'})
+        return error_response('账号不存在', 404)
+    except Exception as e:
+        return error_response(f'删除账号失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/accounts/<account_id>/connect', methods=['POST'])
+def telegram_accounts_connect(account_id):
+    """发起 Telegram 账号连接"""
+    try:
+        from services.telegram_monitor import telegram_monitor
+        result = telegram_monitor.connect_account(account_id)
+        if result.get('success'):
+            return success_response(result)
+        return error_response(result.get('error', '连接失败'))
+    except Exception as e:
+        return error_response(f'连接失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/accounts/<account_id>/verify', methods=['POST'])
+def telegram_accounts_verify(account_id):
+    """验证 Telegram 登录码"""
+    try:
+        data = request.get_json()
+        code = data.get('code', '').strip()
+        password = data.get('password', '').strip() or None
+
+        if not code:
+            return error_response('请输入验证码')
+
+        from services.telegram_monitor import telegram_monitor
+        result = telegram_monitor.verify_code(account_id, code, password)
+        if result.get('success'):
+            return success_response(result)
+        return error_response(result.get('error', '验证失败'))
+    except Exception as e:
+        return error_response(f'验证失败: {str(e)}', 500)
+
+
+# ---------- 群组管理 ----------
+
+@api_bp.route('/telegram/groups', methods=['GET'])
+def telegram_groups_list():
+    """获取订阅群组列表"""
+    try:
+        account_id = request.args.get('account_id')
+        from models.telegram import get_all_groups
+        groups = get_all_groups(account_id)
+        return success_response(groups)
+    except Exception as e:
+        return error_response(f'获取群组列表失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/groups/search', methods=['POST'])
+def telegram_groups_search():
+    """搜索 Telegram 群组"""
+    try:
+        data = request.get_json()
+        account_id = data.get('account_id', '')
+        query = data.get('query', '').strip()
+
+        if not account_id:
+            return error_response('请指定账号')
+        if not query:
+            return error_response('请输入搜索关键词')
+
+        from services.telegram_monitor import telegram_monitor
+        result = telegram_monitor.search_groups(account_id, query)
+        if result.get('success'):
+            return success_response(result.get('groups', []))
+        return error_response(result.get('error', '搜索失败'))
+    except Exception as e:
+        return error_response(f'搜索失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/groups/subscribe', methods=['POST'])
+def telegram_groups_subscribe():
+    """订阅群组"""
+    try:
+        data = request.get_json()
+        account_id = data.get('account_id', '')
+        group_id = data.get('group_id')
+        group_title = data.get('group_title', '')
+        group_link = data.get('group_link', '')
+
+        if not all([account_id, group_id, group_title]):
+            return error_response('参数不完整')
+
+        from models.telegram import subscribe_group
+        group = subscribe_group(account_id, int(group_id), group_title, group_link)
+        return success_response(group)
+    except ValueError as e:
+        return error_response(str(e))
+    except Exception as e:
+        return error_response(f'订阅失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/groups/<group_db_id>', methods=['DELETE'])
+def telegram_groups_unsubscribe(group_db_id):
+    """取消订阅群组"""
+    try:
+        from models.telegram import unsubscribe_group
+        if unsubscribe_group(group_db_id):
+            return success_response({'message': '已取消订阅'})
+        return error_response('群组不存在', 404)
+    except Exception as e:
+        return error_response(f'取消订阅失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/groups/<group_db_id>/toggle', methods=['POST'])
+def telegram_groups_toggle(group_db_id):
+    """切换群组启用/禁用"""
+    try:
+        from models.telegram import toggle_group
+        new_state = toggle_group(group_db_id)
+        return success_response({'enabled': new_state})
+    except Exception as e:
+        return error_response(f'切换状态失败: {str(e)}', 500)
+
+
+# ---------- 关键词管理 ----------
+
+@api_bp.route('/telegram/keywords', methods=['GET'])
+def telegram_keywords_list():
+    """获取关键词列表"""
+    try:
+        from models.telegram import get_all_tg_keywords
+        keywords = get_all_tg_keywords()
+        return success_response(keywords)
+    except Exception as e:
+        return error_response(f'获取关键词失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/keywords', methods=['POST'])
+def telegram_keywords_add():
+    """添加关键词"""
+    try:
+        data = request.get_json()
+        keyword = data.get('keyword', '').strip()
+        level = data.get('level', 'low')
+
+        if not keyword:
+            return error_response('关键词不能为空')
+
+        from models.telegram import add_tg_keyword
+        kw = add_tg_keyword(keyword, level)
+        return success_response(kw)
+    except ValueError as e:
+        return error_response(str(e))
+    except Exception as e:
+        return error_response(f'添加关键词失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/keywords/<keyword_id>', methods=['PUT'])
+def telegram_keywords_update(keyword_id):
+    """更新关键词"""
+    try:
+        data = request.get_json()
+        keyword = data.get('keyword')
+        level = data.get('level')
+        enabled = data.get('enabled')
+
+        from models.telegram import update_tg_keyword
+        if update_tg_keyword(keyword_id, keyword, level, enabled):
+            return success_response({'message': '更新成功'})
+        return error_response('未做任何修改')
+    except ValueError as e:
+        return error_response(str(e))
+    except Exception as e:
+        return error_response(f'更新失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/keywords/<keyword_id>', methods=['DELETE'])
+def telegram_keywords_delete(keyword_id):
+    """删除关键词"""
+    try:
+        from models.telegram import delete_tg_keyword
+        if delete_tg_keyword(keyword_id):
+            return success_response({'message': '已删除'})
+        return error_response('关键词不存在', 404)
+    except Exception as e:
+        return error_response(f'删除失败: {str(e)}', 500)
+
+
+# ---------- 报警与消息 ----------
+
+@api_bp.route('/telegram/alerts', methods=['GET'])
+def telegram_alerts_list():
+    """获取报警列表"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 20, type=int)
+        unread_only = request.args.get('unread_only', 'false').lower() == 'true'
+        group_id = request.args.get('group_id', type=int)
+        level = request.args.get('level')
+
+        from models.telegram import get_alerts
+        data = get_alerts(page, page_size, unread_only, group_id, level)
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取报警列表失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/alerts/<alert_id>/read', methods=['POST'])
+def telegram_alerts_mark_read(alert_id):
+    """标记报警已读"""
+    try:
+        from models.telegram import mark_alert_read as tg_mark_read
+        if tg_mark_read(alert_id):
+            return success_response({'message': '已标记已读'})
+        return error_response('报警不存在', 404)
+    except Exception as e:
+        return error_response(f'标记失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/messages', methods=['GET'])
+def telegram_messages_list():
+    """获取消息历史"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 50, type=int)
+        group_id = request.args.get('group_id', type=int)
+
+        from models.telegram import get_messages
+        data = get_messages(group_id, page, page_size)
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取消息失败: {str(e)}', 500)
+
+
+# ---------- 统计分析 ----------
+
+@api_bp.route('/telegram/stats/overview', methods=['GET'])
+def telegram_stats_overview():
+    """Telegram 概览统计"""
+    try:
+        from models.telegram import get_overview_stats as tg_overview
+        data = tg_overview()
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取统计失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/stats/alert-trend', methods=['GET'])
+def telegram_stats_alert_trend():
+    """报警趋势"""
+    try:
+        days = request.args.get('days', 7, type=int)
+        from models.telegram import get_alert_trend
+        data = get_alert_trend(days)
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取趋势失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/stats/keyword-hotness', methods=['GET'])
+def telegram_stats_keyword_hotness():
+    """关键词热度"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        from models.telegram import get_keyword_hotness
+        data = get_keyword_hotness(limit)
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取热度失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/stats/group-activity', methods=['GET'])
+def telegram_stats_group_activity():
+    """群组活跃度"""
+    try:
+        days = request.args.get('days', 7, type=int)
+        from models.telegram import get_group_activity
+        data = get_group_activity(days)
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取活跃度失败: {str(e)}', 500)
+
+
+# ---------- 设置与控制 ----------
+
+@api_bp.route('/telegram/webhook/settings', methods=['GET'])
+def telegram_webhook_settings_get():
+    """获取 Webhook 配置"""
+    try:
+        from models.settings import get_setting
+        data = {
+            'webhook_url': get_setting('telegram.webhook_url', ''),
+            'webhook_enabled': get_setting('telegram.webhook_enabled', False),
+        }
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取配置失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/webhook/settings', methods=['PUT'])
+def telegram_webhook_settings_update():
+    """更新 Webhook 配置"""
+    try:
+        data = request.get_json()
+        from models.settings import set_setting
+        if 'webhook_url' in data:
+            set_setting('telegram.webhook_url', data['webhook_url'])
+        if 'webhook_enabled' in data:
+            set_setting('telegram.webhook_enabled', data['webhook_enabled'])
+        return success_response({'message': '配置已保存'})
+    except Exception as e:
+        return error_response(f'保存配置失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/webhook/test', methods=['POST'])
+def telegram_webhook_test():
+    """测试 Webhook 推送"""
+    try:
+        data = request.get_json() or {}
+        webhook_url = data.get('webhook_url')
+
+        from services.telegram_monitor import telegram_monitor
+        result = telegram_monitor.test_webhook(webhook_url)
+        if result.get('success'):
+            return success_response(result)
+        return error_response(result.get('error', '推送失败'))
+    except Exception as e:
+        return error_response(f'测试失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/monitor/status', methods=['GET'])
+def telegram_monitor_status():
+    """获取监控状态"""
+    try:
+        from services.telegram_monitor import telegram_monitor
+        data = telegram_monitor.get_status()
+        return success_response(data)
+    except Exception as e:
+        return error_response(f'获取状态失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/monitor/start', methods=['POST'])
+def telegram_monitor_start():
+    """启动监控服务"""
+    try:
+        from services.telegram_monitor import telegram_monitor
+        telegram_monitor.start()
+        return success_response({'message': '监控服务已启动'})
+    except Exception as e:
+        return error_response(f'启动失败: {str(e)}', 500)
+
+
+@api_bp.route('/telegram/monitor/stop', methods=['POST'])
+def telegram_monitor_stop():
+    """停止监控服务"""
+    try:
+        from services.telegram_monitor import telegram_monitor
+        telegram_monitor.stop()
+        return success_response({'message': '监控服务已停止'})
+    except Exception as e:
+        return error_response(f'停止失败: {str(e)}', 500)

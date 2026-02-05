@@ -104,7 +104,7 @@
             </div>
 
             <!-- 成果展示 -->
-            <div class="card achievements-card">
+            <div class="card achievements-card achievements-card-compact">
                 <div class="card-header">
                     <span class="card-title">成果展示</span>
                     <button class="btn-manage" onclick="openAchievementModal()" title="添加成果">
@@ -118,6 +118,63 @@
                 <div class="card-body achievements-body">
                     <div class="achievements-list" id="achievementsList">
                         <div class="loading-text">加载中...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Telegram 群组监控 -->
+            <div class="card telegram-card">
+                <div class="card-header">
+                    <span class="card-title">Telegram群组监控</span>
+                    <div class="telegram-header-actions">
+                        <span class="tg-status-badge" id="tgStatusBadge">未启动</span>
+                        <button class="btn-manage" onclick="openTelegramSettingsModal()" title="Telegram设置">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body telegram-body">
+                    <!-- 统计摘要 -->
+                    <div class="tg-stats-row">
+                        <div class="tg-stat-item">
+                            <div class="tg-stat-value tg-stat-alert" id="tgTodayAlerts">0</div>
+                            <div class="tg-stat-label">今日报警</div>
+                        </div>
+                        <div class="tg-stat-item">
+                            <div class="tg-stat-value tg-stat-unread" id="tgUnreadAlerts">0</div>
+                            <div class="tg-stat-label">未读</div>
+                        </div>
+                        <div class="tg-stat-item">
+                            <div class="tg-stat-value" id="tgGroupCount">0</div>
+                            <div class="tg-stat-label">监控群组</div>
+                        </div>
+                    </div>
+                    <!-- 报警列表 -->
+                    <div class="tg-alert-list" id="tgAlertList">
+                        <div class="tg-empty-hint">暂无报警记录</div>
+                    </div>
+                    <!-- 底部操作 -->
+                    <div class="tg-card-footer">
+                        <button class="btn-view-all" onclick="openTelegramAllAlertsModal()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
+                            查看全部报警
+                        </button>
+                        <button class="btn-view-all" onclick="openTelegramStatsModal()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="20" x2="18" y2="10"></line>
+                                <line x1="12" y1="20" x2="12" y2="4"></line>
+                                <line x1="6" y1="20" x2="6" y2="14"></line>
+                            </svg>
+                            统计分析
+                        </button>
                     </div>
                 </div>
             </div>
@@ -940,6 +997,234 @@
 
     <!-- 提示消息 -->
     <div class="toast" id="toast"></div>
+
+    <!-- Telegram 设置弹窗 -->
+    <div class="modal-overlay" id="telegramSettingsModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">Telegram 监控设置</h3>
+                <button class="modal-close" onclick="closeTelegramSettingsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 标签页导航 -->
+                <div class="tg-tabs">
+                    <button class="tg-tab active" data-tab="tg-accounts" onclick="switchTgTab('tg-accounts')">账号管理</button>
+                    <button class="tg-tab" data-tab="tg-groups" onclick="switchTgTab('tg-groups')">群组订阅</button>
+                    <button class="tg-tab" data-tab="tg-keywords" onclick="switchTgTab('tg-keywords')">关键词</button>
+                    <button class="tg-tab" data-tab="tg-webhook" onclick="switchTgTab('tg-webhook')">企业微信</button>
+                </div>
+
+                <!-- 账号管理 -->
+                <div class="tg-tab-content active" id="tg-accounts">
+                    <div class="tg-section-toolbar">
+                        <button class="btn btn-primary btn-sm" onclick="showAddAccountForm()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            添加账号
+                        </button>
+                        <div class="tg-monitor-control">
+                            <button class="btn btn-outline btn-sm" onclick="toggleTgMonitor()" id="btnToggleMonitor">
+                                <span class="btn-text">启动监控</span>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- 添加账号表单（隐藏） -->
+                    <div class="tg-add-form" id="tgAddAccountForm" style="display:none;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">备注名</label>
+                                <input type="text" id="tgAccountName" class="form-input" placeholder="例如：监控账号1">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">手机号</label>
+                                <input type="text" id="tgAccountPhone" class="form-input" placeholder="+8613800138000">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">API ID</label>
+                                <input type="text" id="tgAccountApiId" class="form-input" placeholder="从 my.telegram.org 获取">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">API Hash</label>
+                                <input type="text" id="tgAccountApiHash" class="form-input" placeholder="从 my.telegram.org 获取">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-cancel btn-sm" onclick="hideAddAccountForm()">取消</button>
+                            <button class="btn btn-save btn-sm" onclick="saveTgAccount()">保存</button>
+                        </div>
+                    </div>
+                    <!-- 账号列表 -->
+                    <div class="tg-account-list" id="tgAccountList">
+                        <div class="tg-empty-hint">暂无账号，请点击"添加账号"</div>
+                    </div>
+                </div>
+
+                <!-- 群组订阅 -->
+                <div class="tg-tab-content" id="tg-groups">
+                    <div class="tg-section-toolbar">
+                        <div class="tg-search-row">
+                            <select id="tgSearchAccount" class="form-select-sm">
+                                <option value="">选择账号</option>
+                            </select>
+                            <input type="text" id="tgSearchQuery" class="form-input-sm" placeholder="搜索群组名称或链接...">
+                            <button class="btn btn-primary btn-sm" onclick="searchTgGroups()">搜索</button>
+                        </div>
+                    </div>
+                    <!-- 搜索结果 -->
+                    <div class="tg-search-results" id="tgSearchResults" style="display:none;">
+                        <div class="tg-section-title">搜索结果</div>
+                        <div class="tg-group-search-list" id="tgGroupSearchList"></div>
+                    </div>
+                    <!-- 已订阅群组 -->
+                    <div class="tg-section-title">已订阅群组</div>
+                    <div class="tg-subscribed-list" id="tgSubscribedList">
+                        <div class="tg-empty-hint">暂无订阅群组</div>
+                    </div>
+                </div>
+
+                <!-- 关键词管理 -->
+                <div class="tg-tab-content" id="tg-keywords">
+                    <div class="tg-keyword-form">
+                        <input type="text" id="tgNewKeyword" class="form-input" placeholder="输入新关键词...">
+                        <select id="tgNewKeywordLevel" class="form-select-sm">
+                            <option value="high">高风险</option>
+                            <option value="medium">中风险</option>
+                            <option value="low">关注</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="addTgKeyword()">添加</button>
+                    </div>
+                    <div class="tg-keyword-tabs">
+                        <button class="tg-kw-tab active" data-level="high" onclick="switchTgKwTab('high')">
+                            高风险 <span class="tab-count" id="tgKwCountHigh">0</span>
+                        </button>
+                        <button class="tg-kw-tab" data-level="medium" onclick="switchTgKwTab('medium')">
+                            中风险 <span class="tab-count" id="tgKwCountMedium">0</span>
+                        </button>
+                        <button class="tg-kw-tab" data-level="low" onclick="switchTgKwTab('low')">
+                            关注 <span class="tab-count" id="tgKwCountLow">0</span>
+                        </button>
+                    </div>
+                    <div class="tg-keyword-list" id="tgKeywordList">
+                        <div class="tg-empty-hint">暂无关键词</div>
+                    </div>
+                </div>
+
+                <!-- 企业微信 Webhook -->
+                <div class="tg-tab-content" id="tg-webhook">
+                    <div class="settings-section">
+                        <div class="form-group">
+                            <label class="form-label">Webhook URL</label>
+                            <input type="text" id="tgWebhookUrl" class="form-input" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" id="tgWebhookEnabled"> 启用报警推送
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-outline btn-sm" onclick="testTgWebhook()">
+                                <span class="btn-text">测试推送</span>
+                                <span class="btn-loading" style="display:none;">推送中...</span>
+                            </button>
+                            <button class="btn btn-save btn-sm" onclick="saveTgWebhookSettings()">保存配置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Telegram 验证码弹窗 -->
+    <div class="modal-overlay" id="tgVerifyModal">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title">验证登录</h3>
+                <button class="modal-close" onclick="closeTgVerifyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="tgVerifyAccountId">
+                <div class="form-group">
+                    <label class="form-label">验证码</label>
+                    <input type="text" id="tgVerifyCode" class="form-input" placeholder="输入 Telegram 验证码">
+                </div>
+                <div class="form-group" id="tgPasswordGroup" style="display:none;">
+                    <label class="form-label">两步验证密码</label>
+                    <input type="password" id="tgVerifyPassword" class="form-input" placeholder="如有两步验证请输入密码">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-cancel" onclick="closeTgVerifyModal()">取消</button>
+                    <button class="btn btn-save" onclick="submitTgVerify()">验证</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Telegram 全部报警弹窗 -->
+    <div class="modal-overlay" id="tgAllAlertsModal">
+        <div class="modal modal-xl">
+            <div class="modal-header">
+                <h3 class="modal-title">Telegram 报警列表</h3>
+                <button class="modal-close" onclick="closeTelegramAllAlertsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alerts-toolbar">
+                    <div class="toolbar-left">
+                        <select id="tgAlertLevelFilter" class="form-select-sm" onchange="refreshTgAlerts()">
+                            <option value="">全部等级</option>
+                            <option value="high">高风险</option>
+                            <option value="medium">中风险</option>
+                            <option value="low">关注</option>
+                        </select>
+                        <label class="toolbar-label">
+                            <input type="checkbox" id="tgUnreadOnlyFilter" onchange="refreshTgAlerts()"> 仅未读
+                        </label>
+                    </div>
+                    <div class="toolbar-right">
+                        <span class="alerts-total">共 <span id="tgFullAlertCount">0</span> 条</span>
+                        <button class="btn btn-outline btn-sm" onclick="refreshTgAlerts()">刷新</button>
+                    </div>
+                </div>
+                <div class="full-alert-list tg-full-alert-list" id="tgFullAlertList">
+                    <div class="loading-text">加载中...</div>
+                </div>
+                <div class="tg-alerts-pagination" id="tgAlertsPagination">
+                    <button class="btn btn-sm" onclick="loadTgAlertsPage(tgAlertsCurrentPage - 1)" id="tgAlertsPrevBtn" disabled>上一页</button>
+                    <span class="page-info">第 <span id="tgAlertsPageNum">1</span> / <span id="tgAlertsTotalPages">1</span> 页</span>
+                    <button class="btn btn-sm" onclick="loadTgAlertsPage(tgAlertsCurrentPage + 1)" id="tgAlertsNextBtn">下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Telegram 统计分析弹窗 -->
+    <div class="modal-overlay" id="tgStatsModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">Telegram 统计分析</h3>
+                <button class="modal-close" onclick="closeTelegramStatsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="tg-stats-grid">
+                    <div class="tg-chart-box">
+                        <div class="tg-chart-title">报警趋势（近7天）</div>
+                        <div id="tgAlertTrendChart" class="tg-chart-container"></div>
+                    </div>
+                    <div class="tg-chart-box">
+                        <div class="tg-chart-title">关键词热度 TOP10</div>
+                        <div id="tgKeywordHotnessChart" class="tg-chart-container"></div>
+                    </div>
+                    <div class="tg-chart-box tg-chart-full">
+                        <div class="tg-chart-title">群组活跃度（近7天）</div>
+                        <div id="tgGroupActivityChart" class="tg-chart-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- AI舆情总结弹窗（全屏横屏） -->
     <div class="modal-overlay" id="summaryModal">

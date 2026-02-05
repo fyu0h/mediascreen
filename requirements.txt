@@ -21,3 +21,9 @@ beautifulsoup4>=4.12.0
 
 # 生产环境 WSGI 服务器（Windows 使用 waitress）
 waitress>=2.1.0
+
+# Telegram 客户端
+telethon>=1.34.0
+
+# 异步 HTTP（Webhook 推送）
+aiohttp>=3.9.0

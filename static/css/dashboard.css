@@ -3532,6 +3532,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     flex-direction: column;
 }
 
+.achievements-card-compact {
+    flex: 0 0 100px;
+    min-height: 80px;
+}
+
 .achievements-card .card-header {
     padding: 10px 16px;
     background: linear-gradient(90deg, rgba(0, 255, 136, 0.08) 0%, transparent 50%);
@@ -5602,6 +5607,624 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     border-top: 1px solid rgba(0, 240, 255, 0.08);
     background: rgba(0, 0, 0, 0.1);
 }
+
+/* ========== Telegram 监控模块 ========== */
+
+/* Telegram 卡片 */
+.telegram-card {
+    flex: 1;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+}
+
+.telegram-card .card-header {
+    padding: 10px 16px;
+    background: linear-gradient(90deg, rgba(0, 136, 255, 0.1) 0%, transparent 50%);
+}
+
+.telegram-card .card-title {
+    font-size: 13px;
+    color: #0088ff;
+}
+
+.telegram-card .card-title::before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: linear-gradient(180deg, #0088ff 0%, #00d4ff 100%);
+    border-radius: 2px;
+    margin-right: 8px;
+    display: inline-block;
+}
+
+.telegram-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tg-status-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+}
+
+.tg-status-badge.running {
+    background: rgba(0, 255, 136, 0.1);
+    color: var(--secondary);
+    border-color: rgba(0, 255, 136, 0.3);
+}
+
+.telegram-body {
+    padding: 10px !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 统计摘要行 */
+.tg-stats-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tg-stat-item {
+    flex: 1;
+    text-align: center;
+}
+
+.tg-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    color: var(--text-primary);
+}
+
+.tg-stat-value.tg-stat-alert {
+    color: #ff4757;
+}
+
+.tg-stat-value.tg-stat-unread {
+    color: #ffa502;
+}
+
+.tg-stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* 报警列表 */
+.tg-alert-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tg-alert-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.tg-alert-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
+}
+
+.tg-alert-item {
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tg-alert-item:hover {
+    border-color: var(--primary);
+    background: rgba(0, 240, 255, 0.03);
+}
+
+.tg-alert-item.unread {
+    border-left: 3px solid #ff4757;
+}
+
+.tg-alert-item.level-high {
+    border-left-color: #ff4757;
+}
+
+.tg-alert-item.level-medium {
+    border-left-color: #ffa502;
+}
+
+.tg-alert-item.level-low {
+    border-left-color: #3498db;
+}
+
+.tg-alert-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tg-alert-group {
+    font-size: 11px;
+    color: #0088ff;
+    font-weight: 600;
+}
+
+.tg-alert-time {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.tg-alert-content {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tg-alert-keywords {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.tg-alert-kw-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(255, 71, 87, 0.15);
+    color: #ff4757;
+}
+
+.tg-alert-kw-tag.level-medium {
+    background: rgba(255, 165, 2, 0.15);
+    color: #ffa502;
+}
+
+.tg-alert-kw-tag.level-low {
+    background: rgba(52, 152, 219, 0.15);
+    color: #3498db;
+}
+
+.tg-empty-hint {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.tg-card-footer {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding-top: 8px;
     border-top: 1px solid var(--border-color);
+    margin-top: auto;
+}
+
+/* ========== Telegram 设置弹窗 ========== */
+
+.tg-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 16px;
+}
+
+.tg-tab {
+    padding: 8px 16px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.tg-tab:hover {
+    color: var(--text-primary);
+}
+
+.tg-tab.active {
+    color: #0088ff;
+    border-bottom-color: #0088ff;
+}
+
+.tg-tab-content {
+    display: none;
+}
+
+.tg-tab-content.active {
+    display: block;
+}
+
+.tg-section-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.tg-monitor-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 添加账号表单 */
+.tg-add-form {
+    background: rgba(0, 136, 255, 0.05);
+    border: 1px solid rgba(0, 136, 255, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.form-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+/* 账号列表项 */
+.tg-account-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.tg-account-info {
+    flex: 1;
+}
+
+.tg-account-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.tg-account-phone {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.tg-account-status {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+.tg-account-status.active {
+    background: rgba(0, 255, 136, 0.1);
+    color: var(--secondary);
+}
+
+.tg-account-status.pending_auth {
+    background: rgba(255, 165, 2, 0.1);
+    color: #ffa502;
+}
+
+.tg-account-status.disconnected {
+    background: rgba(255, 71, 87, 0.1);
+    color: #ff4757;
+}
+
+.tg-account-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* 群组搜索 */
+.tg-search-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.tg-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tg-search-results {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* 群组列表项 */
+.tg-group-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 6px;
+}
+
+.tg-group-info {
+    flex: 1;
+}
+
+.tg-group-title {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.tg-group-link {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.tg-group-stats {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-right: 12px;
+}
+
+.tg-group-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+/* 关键词管理 */
+.tg-keyword-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.tg-keyword-form .form-input {
+    flex: 1;
+}
+
+.tg-keyword-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 10px;
+}
+
+.tg-kw-tab {
+    padding: 6px 12px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.tg-kw-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tg-keyword-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.tg-keyword-text {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.tg-keyword-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 8px;
+}
+
+.tg-keyword-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* ========== Telegram 全部报警弹窗 ========== */
+
+.tg-full-alert-list .tg-full-alert-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    transition: all 0.2s;
+}
+
+.tg-full-alert-item:hover {
+    border-color: var(--primary);
+}
+
+.tg-full-alert-item.unread {
+    border-left: 3px solid #ff4757;
+}
+
+.tg-full-alert-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tg-full-alert-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tg-full-alert-level {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.tg-full-alert-level.high {
+    background: rgba(255, 71, 87, 0.15);
+    color: #ff4757;
+}
+
+.tg-full-alert-level.medium {
+    background: rgba(255, 165, 2, 0.15);
+    color: #ffa502;
+}
+
+.tg-full-alert-level.low {
+    background: rgba(52, 152, 219, 0.15);
+    color: #3498db;
+}
+
+.tg-full-alert-group {
+    font-size: 12px;
+    color: #0088ff;
+    font-weight: 600;
+}
+
+.tg-full-alert-sender {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.tg-full-alert-time {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.tg-full-alert-content {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    word-break: break-all;
+}
+
+.tg-full-alert-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tg-full-alert-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.tg-alerts-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ========== Telegram 统计分析弹窗 ========== */
+
+.tg-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.tg-chart-box {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.tg-chart-box.tg-chart-full {
+    grid-column: 1 / -1;
+}
+
+.tg-chart-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.tg-chart-container {
+    width: 100%;
+    height: 250px;
+}
+
+/* 切换开关样式 */
+.tg-toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: 1px solid var(--border-color);
+}
+
+.tg-toggle.active {
+    background: rgba(0, 255, 136, 0.3);
+    border-color: var(--secondary);
+}
+
+.tg-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    transition: all 0.3s;
+}
+
+.tg-toggle.active::after {
+    left: 18px;
 }
 

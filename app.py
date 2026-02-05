@@ -173,6 +173,27 @@ def init_schedulers():
     print("[调度器] 定时任务已启动（AP News + 路透社: 每5分钟更新）")
 
 
+def init_telegram():
+    """初始化 Telegram 监控服务"""
+    try:
+        from models.telegram import ensure_telegram_indexes
+        from models.settings import get_setting
+
+        # 确保 Telegram 相关集合索引
+        ensure_telegram_indexes()
+
+        # 如果配置了自动启动，则启动监控
+        monitor_enabled = get_setting('telegram.monitor_enabled', False)
+        if monitor_enabled:
+            from services.telegram_monitor import telegram_monitor
+            telegram_monitor.start()
+            print("[Telegram] 监控服务已自动启动")
+        else:
+            print("[Telegram] 监控服务未启用（可在设置中启动）")
+    except Exception as e:
+        print(f"[Telegram] 初始化失败: {e}")
+
+
 # 创建应用实例
 app = create_app()
 
@@ -193,6 +214,9 @@ if __name__ == '__main__':
 
     # 初始化定时调度器
     init_schedulers()
+
+    # 初始化 Telegram 监控
+    init_telegram()
 
     print("按 Ctrl+C 停止服务器")
     print()

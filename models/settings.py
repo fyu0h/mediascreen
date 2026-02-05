@@ -61,6 +61,11 @@ DEFAULT_SETTINGS = {
     'summary': {
         'custom_prompt': ''  # 自定义AI总结提示词，为空则使用默认
     },
+    'telegram': {
+        'webhook_url': '',           # 企业微信 Webhook URL
+        'webhook_enabled': False,    # 是否启用 Webhook 推送
+        'monitor_enabled': False,    # 是否启用监控服务
+    },
     'translation': {
         'provider': 'siliconflow',  # 翻译使用的提供商
         'model': 'Pro/Qwen/Qwen2.5-7B-Instruct',  # 翻译使用的模型

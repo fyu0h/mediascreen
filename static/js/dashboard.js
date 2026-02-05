@@ -4772,4 +4772,853 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // 初始化 Telegram 模块
+    initTelegramModule();
 });
+
+
+// ==================== Telegram 群组监控模块 ====================
+
+// 状态变量
+let tgAlertsCurrentPage = 1;
+let tgCurrentKwLevel = 'high';
+let tgKeywordsData = { high: [], medium: [], low: [] };
+
+// 初始化
+function initTelegramModule() {
+    loadTgOverviewStats();
+    loadTgRecentAlerts();
+    loadTgMonitorStatus();
+    // 定时刷新
+    setInterval(() => {
+        loadTgOverviewStats();
+        loadTgRecentAlerts();
+        loadTgMonitorStatus();
+    }, 30000);
+}
+
+// ---------- 概览统计 ----------
+
+function loadTgOverviewStats() {
+    fetch('/api/telegram/stats/overview')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                const d = res.data;
+                document.getElementById('tgTodayAlerts').textContent = d.today_alerts || 0;
+                document.getElementById('tgUnreadAlerts').textContent = d.unread_alerts || 0;
+                document.getElementById('tgGroupCount').textContent = d.total_groups || 0;
+            }
+        })
+        .catch(() => {});
+}
+
+// ---------- 最新报警列表 ----------
+
+function loadTgRecentAlerts() {
+    fetch('/api/telegram/alerts?page=1&page_size=10')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                renderTgAlertList(res.data.items);
+            }
+        })
+        .catch(() => {});
+}
+
+function renderTgAlertList(items) {
+    const container = document.getElementById('tgAlertList');
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div class="tg-empty-hint">暂无报警记录</div>';
+        return;
+    }
+
+    container.innerHTML = items.map(item => {
+        const levelClass = `level-${item.highest_level}`;
+        const unreadClass = item.is_read ? '' : 'unread';
+        const time = item.timestamp ? item.timestamp.substring(11, 16) : '';
+        const kwTags = (item.matched_keywords || []).map(kw =>
+            `<span class="tg-alert-kw-tag ${levelClass}">${escapeHtml(kw)}</span>`
+        ).join('');
+
+        return `
+            <div class="tg-alert-item ${unreadClass} ${levelClass}" onclick="markTgAlertRead('${item.id}', this)">
+                <div class="tg-alert-top">
+                    <span class="tg-alert-group">${escapeHtml(item.group_title)}</span>
+                    <span class="tg-alert-time">${time}</span>
+                </div>
+                <div class="tg-alert-content">${escapeHtml(item.content)}</div>
+                <div class="tg-alert-keywords">${kwTags}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function markTgAlertRead(alertId, el) {
+    fetch(`/api/telegram/alerts/${alertId}/read`, { method: 'POST' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success && el) {
+                el.classList.remove('unread');
+                loadTgOverviewStats();
+            }
+        })
+        .catch(() => {});
+}
+
+// ---------- 监控状态 ----------
+
+function loadTgMonitorStatus() {
+    fetch('/api/telegram/monitor/status')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                const badge = document.getElementById('tgStatusBadge');
+                const btn = document.getElementById('btnToggleMonitor');
+                if (res.data.running) {
+                    badge.textContent = '运行中';
+                    badge.className = 'tg-status-badge running';
+                    if (btn) btn.querySelector('.btn-text').textContent = '停止监控';
+                } else {
+                    badge.textContent = '未启动';
+                    badge.className = 'tg-status-badge';
+                    if (btn) btn.querySelector('.btn-text').textContent = '启动监控';
+                }
+            }
+        })
+        .catch(() => {});
+}
+
+function toggleTgMonitor() {
+    const badge = document.getElementById('tgStatusBadge');
+    const isRunning = badge.classList.contains('running');
+    const action = isRunning ? 'stop' : 'start';
+
+    fetch(`/api/telegram/monitor/${action}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast(res.data.message, 'success');
+                loadTgMonitorStatus();
+            } else {
+                showToast(res.error || '操作失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
+}
+
+// ---------- 设置弹窗 ----------
+
+function openTelegramSettingsModal() {
+    document.getElementById('telegramSettingsModal').classList.add('active');
+    switchTgTab('tg-accounts');
+    loadTgAccounts();
+    loadTgSubscribedGroups();
+    loadTgKeywords();
+    loadTgWebhookSettings();
+}
+
+function closeTelegramSettingsModal() {
+    document.getElementById('telegramSettingsModal').classList.remove('active');
+}
+
+function switchTgTab(tabId) {
+    document.querySelectorAll('.tg-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tg-tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.tg-tab[data-tab="${tabId}"]`).classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+}
+
+// ---------- 账号管理 ----------
+
+function showAddAccountForm() {
+    document.getElementById('tgAddAccountForm').style.display = 'block';
+}
+
+function hideAddAccountForm() {
+    document.getElementById('tgAddAccountForm').style.display = 'none';
+    document.getElementById('tgAccountName').value = '';
+    document.getElementById('tgAccountPhone').value = '';
+    document.getElementById('tgAccountApiId').value = '';
+    document.getElementById('tgAccountApiHash').value = '';
+}
+
+function loadTgAccounts() {
+    fetch('/api/telegram/accounts')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                renderTgAccountList(res.data);
+                // 填充群组搜索账号下拉
+                const select = document.getElementById('tgSearchAccount');
+                if (select) {
+                    select.innerHTML = '<option value="">选择账号</option>' +
+                        res.data.map(a => `<option value="${a.id}">${escapeHtml(a.name)} (${escapeHtml(a.phone)})</option>`).join('');
+                }
+            }
+        })
+        .catch(() => {});
+}
+
+function renderTgAccountList(accounts) {
+    const container = document.getElementById('tgAccountList');
+    if (!accounts || accounts.length === 0) {
+        container.innerHTML = '<div class="tg-empty-hint">暂无账号，请点击"添加账号"</div>';
+        return;
+    }
+
+    const statusText = { active: '已连接', pending_auth: '待验证', disconnected: '已断开' };
+
+    container.innerHTML = accounts.map(acc => `
+        <div class="tg-account-item">
+            <div class="tg-account-info">
+                <div class="tg-account-name">
+                    ${escapeHtml(acc.name)}
+                    <span class="tg-account-status ${acc.status}">${statusText[acc.status] || acc.status}</span>
+                </div>
+                <div class="tg-account-phone">${escapeHtml(acc.phone)}</div>
+            </div>
+            <div class="tg-account-actions">
+                ${acc.status !== 'active' ? `<button class="btn btn-outline btn-sm" onclick="connectTgAccount('${acc.id}')">连接</button>` : ''}
+                <button class="btn btn-outline btn-sm btn-danger" onclick="deleteTgAccount('${acc.id}')">删除</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function saveTgAccount() {
+    const data = {
+        name: document.getElementById('tgAccountName').value.trim(),
+        api_id: document.getElementById('tgAccountApiId').value.trim(),
+        api_hash: document.getElementById('tgAccountApiHash').value.trim(),
+        phone: document.getElementById('tgAccountPhone').value.trim(),
+    };
+
+    if (!data.name || !data.api_id || !data.api_hash || !data.phone) {
+        showToast('请填写完整信息', 'error');
+        return;
+    }
+
+    fetch('/api/telegram/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showToast('账号已添加', 'success');
+            hideAddAccountForm();
+            loadTgAccounts();
+        } else {
+            showToast(res.error || '添加失败', 'error');
+        }
+    })
+    .catch(() => showToast('请求失败', 'error'));
+}
+
+function connectTgAccount(accountId) {
+    fetch(`/api/telegram/accounts/${accountId}/connect`, { method: 'POST' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                const data = res.data;
+                if (data.status === 'active') {
+                    showToast('已连接', 'success');
+                    loadTgAccounts();
+                } else if (data.status === 'pending_auth') {
+                    showToast('验证码已发送', 'success');
+                    openTgVerifyModal(accountId);
+                }
+            } else {
+                showToast(res.error || '连接失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
+}
+
+function deleteTgAccount(accountId) {
+    if (!confirm('确定删除此账号？相关群组订阅也将被删除。')) return;
+
+    fetch(`/api/telegram/accounts/${accountId}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('账号已删除', 'success');
+                loadTgAccounts();
+            } else {
+                showToast(res.error || '删除失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
+}
+
+// ---------- 验证码弹窗 ----------
+
+function openTgVerifyModal(accountId) {
+    document.getElementById('tgVerifyAccountId').value = accountId;
+    document.getElementById('tgVerifyCode').value = '';
+    document.getElementById('tgVerifyPassword').value = '';
+    document.getElementById('tgPasswordGroup').style.display = 'none';
+    document.getElementById('tgVerifyModal').classList.add('active');
+}
+
+function closeTgVerifyModal() {
+    document.getElementById('tgVerifyModal').classList.remove('active');
+}
+
+function submitTgVerify() {
+    const accountId = document.getElementById('tgVerifyAccountId').value;
+    const code = document.getElementById('tgVerifyCode').value.trim();
+    const password = document.getElementById('tgVerifyPassword').value.trim();
+
+    if (!code) {
+        showToast('请输入验证码', 'error');
+        return;
+    }
+
+    fetch(`/api/telegram/accounts/${accountId}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, password: password || undefined })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            if (res.data.status === 'need_password') {
+                document.getElementById('tgPasswordGroup').style.display = 'block';
+                showToast('需要两步验证密码', 'warning');
+            } else {
+                showToast('登录成功', 'success');
+                closeTgVerifyModal();
+                loadTgAccounts();
+            }
+        } else {
+            showToast(res.error || '验证失败', 'error');
+        }
+    })
+    .catch(() => showToast('请求失败', 'error'));
+}
+
+// ---------- 群组管理 ----------
+
+function loadTgSubscribedGroups() {
+    fetch('/api/telegram/groups')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                renderTgSubscribedList(res.data);
+            }
+        })
+        .catch(() => {});
+}
+
+function renderTgSubscribedList(groups) {
+    const container = document.getElementById('tgSubscribedList');
+    if (!groups || groups.length === 0) {
+        container.innerHTML = '<div class="tg-empty-hint">暂无订阅群组</div>';
+        return;
+    }
+
+    container.innerHTML = groups.map(g => {
+        const stats = g.stats || {};
+        return `
+            <div class="tg-group-item">
+                <div class="tg-group-info">
+                    <div class="tg-group-title">${escapeHtml(g.group_title)}</div>
+                    ${g.group_link ? `<div class="tg-group-link">${escapeHtml(g.group_link)}</div>` : ''}
+                </div>
+                <div class="tg-group-stats">
+                    消息: ${stats.total_messages || 0} | 报警: ${stats.alert_messages || 0}
+                </div>
+                <div class="tg-group-actions">
+                    <div class="tg-toggle ${g.enabled ? 'active' : ''}" onclick="toggleTgGroup('${g.id}', this)"></div>
+                    <button class="btn btn-outline btn-sm btn-danger" onclick="unsubscribeTgGroup('${g.id}')">删除</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function searchTgGroups() {
+    const accountId = document.getElementById('tgSearchAccount').value;
+    const query = document.getElementById('tgSearchQuery').value.trim();
+
+    if (!accountId) {
+        showToast('请选择账号', 'error');
+        return;
+    }
+    if (!query) {
+        showToast('请输入搜索关键词', 'error');
+        return;
+    }
+
+    fetch('/api/telegram/groups/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: accountId, query })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            const results = res.data;
+            const container = document.getElementById('tgGroupSearchList');
+            const section = document.getElementById('tgSearchResults');
+            section.style.display = 'block';
+
+            if (results.length === 0) {
+                container.innerHTML = '<div class="tg-empty-hint">未找到群组</div>';
+                return;
+            }
+
+            container.innerHTML = results.map(g => `
+                <div class="tg-group-item">
+                    <div class="tg-group-info">
+                        <div class="tg-group-title">${escapeHtml(g.group_title)}</div>
+                        ${g.group_link ? `<div class="tg-group-link">${escapeHtml(g.group_link)}</div>` : ''}
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="subscribeTgGroup('${document.getElementById('tgSearchAccount').value}', ${g.group_id}, '${escapeHtml(g.group_title)}', '${escapeHtml(g.group_link || '')}')">订阅</button>
+                </div>
+            `).join('');
+        } else {
+            showToast(res.error || '搜索失败', 'error');
+        }
+    })
+    .catch(() => showToast('请求失败', 'error'));
+}
+
+function subscribeTgGroup(accountId, groupId, title, link) {
+    fetch('/api/telegram/groups/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            account_id: accountId,
+            group_id: groupId,
+            group_title: title,
+            group_link: link,
+        })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showToast('订阅成功', 'success');
+            loadTgSubscribedGroups();
+        } else {
+            showToast(res.error || '订阅失败', 'error');
+        }
+    })
+    .catch(() => showToast('请求失败', 'error'));
+}
+
+function unsubscribeTgGroup(groupDbId) {
+    if (!confirm('确定取消订阅？')) return;
+
+    fetch(`/api/telegram/groups/${groupDbId}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('已取消订阅', 'success');
+                loadTgSubscribedGroups();
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
+}
+
+function toggleTgGroup(groupDbId, el) {
+    fetch(`/api/telegram/groups/${groupDbId}/toggle`, { method: 'POST' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                if (res.data.enabled) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            }
+        })
+        .catch(() => {});
+}
+
+// ---------- 关键词管理 ----------
+
+function loadTgKeywords() {
+    fetch('/api/telegram/keywords')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                tgKeywordsData = res.data;
+                document.getElementById('tgKwCountHigh').textContent = (res.data.high || []).length;
+                document.getElementById('tgKwCountMedium').textContent = (res.data.medium || []).length;
+                document.getElementById('tgKwCountLow').textContent = (res.data.low || []).length;
+                renderTgKeywordList();
+            }
+        })
+        .catch(() => {});
+}
+
+function switchTgKwTab(level) {
+    tgCurrentKwLevel = level;
+    document.querySelectorAll('.tg-kw-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.tg-kw-tab[data-level="${level}"]`).classList.add('active');
+    renderTgKeywordList();
+}
+
+function renderTgKeywordList() {
+    const container = document.getElementById('tgKeywordList');
+    const items = tgKeywordsData[tgCurrentKwLevel] || [];
+
+    if (items.length === 0) {
+        container.innerHTML = '<div class="tg-empty-hint">暂无关键词</div>';
+        return;
+    }
+
+    container.innerHTML = items.map(kw => `
+        <div class="tg-keyword-item">
+            <div>
+                <span class="tg-keyword-text">${escapeHtml(kw.keyword)}</span>
+                <span class="tg-keyword-count">匹配 ${kw.match_count || 0} 次</span>
+            </div>
+            <div class="tg-keyword-actions">
+                <button class="btn btn-outline btn-sm btn-danger" onclick="deleteTgKeyword('${kw.id}')">删除</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function addTgKeyword() {
+    const keyword = document.getElementById('tgNewKeyword').value.trim();
+    const level = document.getElementById('tgNewKeywordLevel').value;
+
+    if (!keyword) {
+        showToast('请输入关键词', 'error');
+        return;
+    }
+
+    fetch('/api/telegram/keywords', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword, level })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showToast('关键词已添加', 'success');
+            document.getElementById('tgNewKeyword').value = '';
+            loadTgKeywords();
+        } else {
+            showToast(res.error || '添加失败', 'error');
+        }
+    })
+    .catch(() => showToast('请求失败', 'error'));
+}
+
+function deleteTgKeyword(keywordId) {
+    fetch(`/api/telegram/keywords/${keywordId}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('关键词已删除', 'success');
+                loadTgKeywords();
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
+}
+
+// ---------- Webhook 设置 ----------
+
+function loadTgWebhookSettings() {
+    fetch('/api/telegram/webhook/settings')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                document.getElementById('tgWebhookUrl').value = res.data.webhook_url || '';
+                document.getElementById('tgWebhookEnabled').checked = res.data.webhook_enabled || false;
+            }
+        })
+        .catch(() => {});
+}
+
+function saveTgWebhookSettings() {
+    const data = {
+        webhook_url: document.getElementById('tgWebhookUrl').value.trim(),
+        webhook_enabled: document.getElementById('tgWebhookEnabled').checked,
+    };
+
+    fetch('/api/telegram/webhook/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showToast('配置已保存', 'success');
+        } else {
+            showToast(res.error || '保存失败', 'error');
+        }
+    })
+    .catch(() => showToast('请求失败', 'error'));
+}
+
+function testTgWebhook() {
+    const url = document.getElementById('tgWebhookUrl').value.trim();
+    if (!url) {
+        showToast('请先填写 Webhook URL', 'error');
+        return;
+    }
+
+    fetch('/api/telegram/webhook/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook_url: url })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            showToast('推送成功', 'success');
+        } else {
+            showToast(res.error || '推送失败', 'error');
+        }
+    })
+    .catch(() => showToast('请求失败', 'error'));
+}
+
+// ---------- 全部报警弹窗 ----------
+
+function openTelegramAllAlertsModal() {
+    document.getElementById('tgAllAlertsModal').classList.add('active');
+    tgAlertsCurrentPage = 1;
+    refreshTgAlerts();
+}
+
+function closeTelegramAllAlertsModal() {
+    document.getElementById('tgAllAlertsModal').classList.remove('active');
+}
+
+function refreshTgAlerts() {
+    tgAlertsCurrentPage = 1;
+    loadTgAlertsPage(1);
+}
+
+function loadTgAlertsPage(page) {
+    if (page < 1) return;
+    tgAlertsCurrentPage = page;
+
+    const level = document.getElementById('tgAlertLevelFilter').value;
+    const unreadOnly = document.getElementById('tgUnreadOnlyFilter').checked;
+
+    let url = `/api/telegram/alerts?page=${page}&page_size=20`;
+    if (level) url += `&level=${level}`;
+    if (unreadOnly) url += '&unread_only=true';
+
+    fetch(url)
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                const data = res.data;
+                document.getElementById('tgFullAlertCount').textContent = data.total;
+                document.getElementById('tgAlertsPageNum').textContent = data.page;
+                document.getElementById('tgAlertsTotalPages').textContent = data.total_pages;
+                document.getElementById('tgAlertsPrevBtn').disabled = data.page <= 1;
+                document.getElementById('tgAlertsNextBtn').disabled = data.page >= data.total_pages;
+
+                renderTgFullAlertList(data.items);
+            }
+        })
+        .catch(() => {});
+}
+
+function renderTgFullAlertList(items) {
+    const container = document.getElementById('tgFullAlertList');
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div class="tg-empty-hint">暂无报警记录</div>';
+        return;
+    }
+
+    container.innerHTML = items.map(item => {
+        const unreadClass = item.is_read ? '' : 'unread';
+        const kwTags = (item.matched_keywords || []).map(kw =>
+            `<span class="tg-alert-kw-tag level-${item.highest_level}">${escapeHtml(kw)}</span>`
+        ).join('');
+
+        return `
+            <div class="tg-full-alert-item ${unreadClass}">
+                <div class="tg-full-alert-header">
+                    <div class="tg-full-alert-meta">
+                        <span class="tg-full-alert-level ${item.highest_level}">
+                            ${{high:'高风险', medium:'中风险', low:'关注'}[item.highest_level] || ''}
+                        </span>
+                        <span class="tg-full-alert-group">${escapeHtml(item.group_title)}</span>
+                        <span class="tg-full-alert-sender">${escapeHtml(item.sender_name)}</span>
+                    </div>
+                    <span class="tg-full-alert-time">${item.timestamp || ''}</span>
+                </div>
+                <div class="tg-full-alert-content">${escapeHtml(item.content)}</div>
+                <div class="tg-full-alert-footer">
+                    <div class="tg-alert-keywords">${kwTags}</div>
+                    <div class="tg-full-alert-actions">
+                        ${!item.is_read ? `<button class="btn btn-outline btn-sm" onclick="markTgAlertReadFull('${item.id}', this)">标记已读</button>` : '<span style="font-size:11px;color:var(--text-muted)">已读</span>'}
+                        ${item.webhook_sent ? '<span style="font-size:11px;color:var(--secondary)">已推送</span>' : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function markTgAlertReadFull(alertId, btn) {
+    fetch(`/api/telegram/alerts/${alertId}/read`, { method: 'POST' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                btn.closest('.tg-full-alert-item').classList.remove('unread');
+                btn.outerHTML = '<span style="font-size:11px;color:var(--text-muted)">已读</span>';
+                loadTgOverviewStats();
+                loadTgRecentAlerts();
+            }
+        })
+        .catch(() => {});
+}
+
+// ---------- 统计分析弹窗 ----------
+
+function openTelegramStatsModal() {
+    document.getElementById('tgStatsModal').classList.add('active');
+    loadTgStatsCharts();
+}
+
+function closeTelegramStatsModal() {
+    document.getElementById('tgStatsModal').classList.remove('active');
+}
+
+function loadTgStatsCharts() {
+    // 报警趋势
+    fetch('/api/telegram/stats/alert-trend?days=7')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) renderTgAlertTrendChart(res.data);
+        })
+        .catch(() => {});
+
+    // 关键词热度
+    fetch('/api/telegram/stats/keyword-hotness?limit=10')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) renderTgKeywordHotnessChart(res.data);
+        })
+        .catch(() => {});
+
+    // 群组活跃度
+    fetch('/api/telegram/stats/group-activity?days=7')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) renderTgGroupActivityChart(res.data);
+        })
+        .catch(() => {});
+}
+
+function renderTgAlertTrendChart(data) {
+    const dom = document.getElementById('tgAlertTrendChart');
+    if (!dom) return;
+    const chart = echarts.init(dom);
+
+    const dates = data.map(d => d.date);
+    const highData = data.map(d => d.high || 0);
+    const mediumData = data.map(d => d.medium || 0);
+    const lowData = data.map(d => d.low || 0);
+
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: {
+            data: ['高风险', '中风险', '关注'],
+            textStyle: { color: '#8a94a6', fontSize: 11 },
+            top: 0,
+        },
+        grid: { top: 30, right: 15, bottom: 25, left: 40 },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            axisLabel: { color: '#8a94a6', fontSize: 10 },
+            axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#8a94a6', fontSize: 10 },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+        },
+        series: [
+            { name: '高风险', type: 'bar', stack: 'total', data: highData, itemStyle: { color: '#ff4757' } },
+            { name: '中风险', type: 'bar', stack: 'total', data: mediumData, itemStyle: { color: '#ffa502' } },
+            { name: '关注', type: 'bar', stack: 'total', data: lowData, itemStyle: { color: '#3498db' } },
+        ]
+    });
+}
+
+function renderTgKeywordHotnessChart(data) {
+    const dom = document.getElementById('tgKeywordHotnessChart');
+    if (!dom) return;
+    const chart = echarts.init(dom);
+
+    const keywords = data.map(d => d.keyword).reverse();
+    const counts = data.map(d => d.match_count).reverse();
+    const colors = data.map(d => {
+        return { high: '#ff4757', medium: '#ffa502', low: '#3498db' }[d.level] || '#3498db';
+    }).reverse();
+
+    chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { top: 10, right: 30, bottom: 25, left: 80 },
+        xAxis: {
+            type: 'value',
+            axisLabel: { color: '#8a94a6', fontSize: 10 },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+        },
+        yAxis: {
+            type: 'category',
+            data: keywords,
+            axisLabel: { color: '#8a94a6', fontSize: 11 },
+            axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+        },
+        series: [{
+            type: 'bar',
+            data: counts.map((v, i) => ({ value: v, itemStyle: { color: colors[i] } })),
+            barWidth: '60%',
+        }]
+    });
+}
+
+function renderTgGroupActivityChart(data) {
+    const dom = document.getElementById('tgGroupActivityChart');
+    if (!dom) return;
+    const chart = echarts.init(dom);
+
+    const groups = data.map(d => d.group_title);
+    const msgCounts = data.map(d => d.message_count);
+    const alertCounts = data.map(d => d.alert_count);
+
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: {
+            data: ['消息数', '报警数'],
+            textStyle: { color: '#8a94a6', fontSize: 11 },
+            top: 0,
+        },
+        grid: { top: 30, right: 15, bottom: 40, left: 40 },
+        xAxis: {
+            type: 'category',
+            data: groups,
+            axisLabel: { color: '#8a94a6', fontSize: 10, rotate: 20 },
+            axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#8a94a6', fontSize: 10 },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+        },
+        series: [
+            { name: '消息数', type: 'bar', data: msgCounts, itemStyle: { color: '#0088ff' } },
+            { name: '报警数', type: 'bar', data: alertCounts, itemStyle: { color: '#ff4757' } },
+        ]
+    });
+}
