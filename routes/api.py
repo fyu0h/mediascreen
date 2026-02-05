@@ -32,7 +32,6 @@ from models.mongo import (
     add_risk_keyword,
     update_risk_keyword,
     delete_risk_keyword,
-    init_default_risk_keywords,
     get_alerts_count_by_day,
     mark_alert_read,
     get_read_alerts
@@ -215,8 +214,6 @@ def risk_keywords_list():
     返回：{high: [{id, keyword, created_at}, ...], medium: [...], low: [...]}
     """
     try:
-        # 确保默认关键词已初始化
-        init_default_risk_keywords()
         data = get_all_risk_keywords()
         return success_response(data)
     except Exception as e:

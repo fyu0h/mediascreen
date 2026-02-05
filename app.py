@@ -140,8 +140,6 @@ def _filter_sensitive_headers(headers: dict) -> dict:
 def init_database():
     """初始化数据库（迁移和索引）"""
     from models.sites import migrate_from_json, ensure_indexes
-    from models.mongo import init_default_risk_keywords
-
     # 迁移 sites.json 到 MongoDB（兼容旧数据）
     migrated = migrate_from_json()
     if migrated > 0:
@@ -149,9 +147,6 @@ def init_database():
 
     # 确保索引存在
     ensure_indexes()
-
-    # 初始化默认风控关键词
-    init_default_risk_keywords()
 
 
 def init_plugins():
