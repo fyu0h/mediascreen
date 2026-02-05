@@ -394,8 +394,9 @@ html, body {
 /* ========== 地图区域 ========== */
 .map-card {
     flex: 0 0 auto;
-    height: 280px;
-    min-height: 240px;
+    /* 与左侧 "实时数据概览" + "新闻源文章分布" 高度对齐 */
+    height: calc(50% - 7.5px);
+    min-height: 260px;
 }
 
 .map-card .card-header {
@@ -3526,7 +3527,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 /* ========== 成果展示模块 ========== */
 .achievements-card {
     flex: 1;
-    min-height: 180px;
+    min-height: 150px;
     display: flex;
     flex-direction: column;
 }
