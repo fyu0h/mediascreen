@@ -6,6 +6,7 @@ MongoDB 连接与查询封装
 from typing import Optional, Dict, List, Any, Iterator
 from datetime import datetime, timedelta
 import re
+import threading
 
 from pymongo import MongoClient as PyMongoClient
 from pymongo.database import Database
@@ -13,27 +14,41 @@ from pymongo.collection import Collection
 
 from config import Config
 
-# 全局数据库连接
-_client: Optional[PyMongoClient] = None
-_db: Optional[Database] = None
+# 线程本地存储 - 每个线程维护独立的数据库连接
+_thread_local = threading.local()
+
+# 连接池配置
+_POOL_MAX_SIZE = 50  # 最大连接数
+_POOL_MIN_SIZE = 5   # 最小连接数
 
 
 def get_db() -> Database:
-    """获取数据库连接（单例模式）"""
-    global _client, _db
-    if _db is None:
-        _client = PyMongoClient(Config.get_mongo_uri())
-        _db = _client[Config.MONGO_DB]
-    return _db
+    """
+    获取数据库连接（线程安全版本）
+    每个线程使用独立的连接，避免爬虫线程和主线程竞争
+    """
+    if not hasattr(_thread_local, 'db') or _thread_local.db is None:
+        # 为当前线程创建新的连接
+        # 使用连接池配置，提升并发性能
+        client = PyMongoClient(
+            Config.get_mongo_uri(),
+            maxPoolSize=_POOL_MAX_SIZE,
+            minPoolSize=_POOL_MIN_SIZE,
+            serverSelectionTimeoutMS=5000,  # 服务器选择超时 5秒
+            connectTimeoutMS=5000,           # 连接超时 5秒
+            socketTimeoutMS=30000,           # Socket 超时 30秒
+        )
+        _thread_local.client = client
+        _thread_local.db = client[Config.MONGO_DB]
+    return _thread_local.db
 
 
 def close_db() -> None:
-    """关闭数据库连接"""
-    global _client, _db
-    if _client:
-        _client.close()
-        _client = None
-        _db = None
+    """关闭当前线程的数据库连接"""
+    if hasattr(_thread_local, 'client') and _thread_local.client:
+        _thread_local.client.close()
+        _thread_local.client = None
+        _thread_local.db = None
 
 
 def get_articles_collection() -> Collection:

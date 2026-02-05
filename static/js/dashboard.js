@@ -1318,32 +1318,34 @@ async function setUpdateInterval(pluginId, siteId, minutes) {
 }
 
 
-// ==================== 更新文章功能（后台执行 + 气泡进度） ====================
+// ==================== 更新文章功能（后台任务 + 轮询进度） ====================
 
-let crawlEventSource = null;
-let crawlSiteResults = [];
+let crawlTaskId = null;
+let crawlPollingTimer = null;
 let crawlIsRunning = false;
-let crawlStats = { success: 0, failed: 0, articles: 0, saved: 0 };
+let crawlStats = { success: 0, failed: 0, skipped: 0, articles: 0, saved: 0 };
 
-function startCrawlUpdate() {
+async function startCrawlUpdate() {
     if (crawlIsRunning) {
         showToast('更新正在进行中', 'warning');
-        // 显示气泡
         showCrawlBubble();
         return;
     }
 
     // 重置状态
-    crawlSiteResults = [];
     crawlIsRunning = true;
-    crawlStats = { success: 0, failed: 0, articles: 0, saved: 0 };
-    crawlPendingUpdates = [];  // 待处理的更新队列
+    crawlTaskId = null;
+    crawlStats = { success: 0, failed: 0, skipped: 0, articles: 0, saved: 0 };
 
     // 显示气泡
     showCrawlBubble();
     updateBubbleProgress(0, 0);
-    updateBubbleStatus('正在获取站点列表...');
+    updateBubbleStatus('正在启动任务...');
+    updateBubbleCurrentSite('');
     document.getElementById('bubbleDetails').innerHTML = '';
+
+    // 显示取消按钮
+    showCancelButton(true);
 
     // 禁用按钮
     const btn = document.getElementById('btnStartCrawl');
@@ -1353,126 +1355,202 @@ function startCrawlUpdate() {
         btn.disabled = true;
     }
 
-    // 建立 SSE 连接
-    crawlEventSource = new EventSource('/api/crawl/update/stream');
+    try {
+        // 启动后台任务
+        const response = await fetch('/api/crawl/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
 
-    crawlEventSource.onmessage = function(event) {
-        try {
-            const data = JSON.parse(event.data);
-            // 使用 requestAnimationFrame 避免阻塞主线程
-            crawlPendingUpdates.push(data);
-            scheduleCrawlUpdate();
-        } catch (e) {
-            console.error('解析事件数据失败:', e);
+        if (!result.success) {
+            throw new Error(result.error || '启动任务失败');
         }
-    };
 
-    crawlEventSource.onerror = function(error) {
-        console.error('SSE连接错误:', error);
-        crawlEventSource.close();
+        if (!result.data.task_id) {
+            // 没有站点
+            crawlIsRunning = false;
+            resetCrawlButton();
+            updateBubbleStatus(result.data.message || '没有启用的站点', 'warning');
+            showCancelButton(false);
+            setTimeout(() => hideCrawlBubble(), 3000);
+            return;
+        }
+
+        crawlTaskId = result.data.task_id;
+        updateBubbleStatus(`任务已启动，共 ${result.data.total_sites} 个站点`);
+        updateBubbleProgress(0, result.data.total_sites);
+
+        // 开始轮询状态
+        startPolling();
+
+    } catch (error) {
         crawlIsRunning = false;
         resetCrawlButton();
-        updateBubbleStatus('连接失败', 'error');
-    };
-}
-
-// 待处理的更新队列
-let crawlPendingUpdates = [];
-let crawlUpdateScheduled = false;
-
-// 调度批量更新
-function scheduleCrawlUpdate() {
-    if (crawlUpdateScheduled) return;
-    crawlUpdateScheduled = true;
-
-    requestAnimationFrame(() => {
-        processCrawlUpdates();
-        crawlUpdateScheduled = false;
-    });
-}
-
-// 批量处理更新
-function processCrawlUpdates() {
-    const updates = crawlPendingUpdates.splice(0);  // 取出所有待处理更新
-
-    for (const data of updates) {
-        handleCrawlBubbleEvent(data);
+        showCancelButton(false);
+        updateBubbleStatus(`启动失败: ${error.message}`, 'error');
+        showToast(error.message, 'error');
     }
 }
 
-function handleCrawlBubbleEvent(data) {
-    const type = data.type;
+function startPolling() {
+    // 每2秒轮询一次
+    crawlPollingTimer = setInterval(pollCrawlStatus, 2000);
+    // 立即执行一次
+    pollCrawlStatus();
+}
 
-    switch (type) {
-        case 'init':
-            updateBubbleProgress(0, data.total);
-            updateBubbleStatus(`正在并发获取 ${data.total} 个站点...`);
-            break;
+function stopPolling() {
+    if (crawlPollingTimer) {
+        clearInterval(crawlPollingTimer);
+        crawlPollingTimer = null;
+    }
+}
 
-        case 'progress':
-            if (data.message) {
-                updateBubbleStatus(data.message);
-            }
-            break;
+async function pollCrawlStatus() {
+    if (!crawlTaskId) return;
 
-        case 'site_done':
-            // 更新进度
-            updateBubbleProgress(data.completed, data.total);
+    try {
+        const response = await fetch(`/api/crawl/status?task_id=${crawlTaskId}`);
+        const result = await response.json();
 
-            // 更新统计
-            if (data.success) {
-                crawlStats.success++;
-                crawlStats.articles += data.article_count || 0;
-                crawlStats.saved += data.saved_count || 0;
-            } else {
-                crawlStats.failed++;
-            }
+        if (!result.success) {
+            throw new Error(result.error || '获取状态失败');
+        }
 
-            // 更新状态文字
-            updateBubbleStatus(`${data.site_name} ${data.success ? '完成' : '失败'}`);
+        const status = result.data;
+        handleStatusUpdate(status);
 
-            // 添加到详情列表（只显示最近5条）
-            addBubbleDetail(data.site_name, data.success,
-                data.success ? `${data.saved_count}篇` : (data.error || '失败'));
+    } catch (error) {
+        console.error('轮询状态失败:', error);
+        // 不停止轮询，可能是临时网络问题
+    }
+}
 
-            // 保存结果
-            crawlSiteResults.push({
-                site_id: data.site_id,
-                site_name: data.site_name,
-                success: data.success,
-                article_count: data.article_count || 0,
-                saved_count: data.saved_count || 0,
-                error: data.error
-            });
-            break;
+function handleStatusUpdate(status) {
+    // 更新进度
+    updateBubbleProgress(status.completed_sites, status.total_sites);
 
-        case 'complete':
-            crawlEventSource.close();
-            crawlIsRunning = false;
-            resetCrawlButton();
+    // 更新统计
+    crawlStats.success = status.success_count;
+    crawlStats.failed = status.failed_count;
+    crawlStats.skipped = status.skipped_count || 0;
+    crawlStats.articles = status.total_articles;
+    crawlStats.saved = status.total_saved;
 
-            updateBubbleProgress(data.success_count + data.failed_count, data.success_count + data.failed_count);
-            updateBubbleStatus(`完成: ${data.success_count}成功 ${data.failed_count}失败, 保存${data.total_saved}篇`, 'success');
+    // 显示当前正在爬取的站点
+    if (status.status === 'running' && status.current_site) {
+        updateBubbleCurrentSite(status.current_site);
+    } else {
+        updateBubbleCurrentSite('');
+    }
 
-            // 延迟刷新数据，避免阻塞主线程
-            setTimeout(() => {
-                loadAllData(true);
-            }, 500);
+    // 更新状态文本 - 显示详细统计
+    if (status.status === 'running') {
+        let parts = [`已完成 ${status.completed_sites}/${status.total_sites}`];
+        if (status.success_count > 0) parts.push(`${status.success_count}成功`);
+        if (status.skipped_count > 0) parts.push(`${status.skipped_count}跳过`);
+        if (status.failed_count > 0) parts.push(`${status.failed_count}失败`);
+        if (status.total_saved > 0) parts.push(`${status.total_saved}篇入库`);
+        updateBubbleStatus(parts.join('  '));
+    } else {
+        updateBubbleStatus(status.message || '处理中...');
+    }
 
-            // 5秒后自动隐藏气泡
-            setTimeout(() => {
-                if (!crawlIsRunning) {
-                    hideCrawlBubble();
-                }
-            }, 5000);
-            break;
+    // 检查任务是否结束
+    if (status.status === 'completed') {
+        onCrawlComplete(status);
+    } else if (status.status === 'failed') {
+        onCrawlFailed(status);
+    } else if (status.status === 'cancelled') {
+        onCrawlCancelled(status);
+    }
+}
 
-        case 'error':
-            crawlEventSource.close();
-            crawlIsRunning = false;
-            resetCrawlButton();
-            updateBubbleStatus(`错误: ${data.message}`, 'error');
-            break;
+function onCrawlComplete(status) {
+    stopPolling();
+    crawlIsRunning = false;
+    resetCrawlButton();
+    showCancelButton(false);
+    updateBubbleCurrentSite('');
+
+    updateBubbleProgress(status.total_sites, status.total_sites);
+
+    // 构建完成消息
+    let msgParts = [`${status.success_count}成功`];
+    if (status.skipped_count > 0) {
+        msgParts.push(`${status.skipped_count}跳过`);
+    }
+    if (status.failed_count > 0) {
+        msgParts.push(`${status.failed_count}失败`);
+    }
+    msgParts.push(`保存${status.total_saved}篇`);
+
+    updateBubbleStatus(
+        `完成: ${msgParts.join(' ')}`,
+        'success'
+    );
+
+    // 延迟刷新数据
+    setTimeout(() => loadAllData(true), 500);
+
+    // 5秒后自动隐藏气泡
+    setTimeout(() => {
+        if (!crawlIsRunning) {
+            hideCrawlBubble();
+        }
+    }, 5000);
+
+    showToast(`更新完成，保存了 ${status.total_saved} 篇文章`, 'success');
+}
+
+function onCrawlFailed(status) {
+    stopPolling();
+    crawlIsRunning = false;
+    resetCrawlButton();
+    showCancelButton(false);
+    updateBubbleCurrentSite('');
+
+    updateBubbleStatus(`任务失败: ${status.error || '未知错误'}`, 'error');
+    showToast('更新任务失败', 'error');
+}
+
+function onCrawlCancelled(status) {
+    stopPolling();
+    crawlIsRunning = false;
+    resetCrawlButton();
+    showCancelButton(false);
+    updateBubbleCurrentSite('');
+
+    updateBubbleStatus('任务已取消', 'warning');
+    showToast('更新任务已取消', 'info');
+
+    // 3秒后隐藏气泡
+    setTimeout(() => hideCrawlBubble(), 3000);
+}
+
+async function cancelCrawlTask() {
+    if (!crawlTaskId || !crawlIsRunning) {
+        return;
+    }
+
+    try {
+        updateBubbleStatus('正在取消...');
+
+        const response = await fetch('/api/crawl/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_id: crawlTaskId })
+        });
+        const result = await response.json();
+
+        if (!result.success) {
+            showToast(result.error || '取消失败', 'error');
+        }
+        // 状态更新会通过轮询自动处理
+
+    } catch (error) {
+        showToast('取消请求失败', 'error');
     }
 }
 
@@ -1492,6 +1570,20 @@ function closeCrawlBubble() {
         document.getElementById('crawlBubble').classList.add('minimized');
     } else {
         hideCrawlBubble();
+    }
+}
+
+function showCancelButton(show) {
+    const footer = document.getElementById('bubbleFooter');
+    if (footer) {
+        footer.style.display = show ? 'block' : 'none';
+    }
+}
+
+function updateBubbleCurrentSite(siteName) {
+    const el = document.getElementById('bubbleCurrentSite');
+    if (el) {
+        el.textContent = siteName ? `正在获取: ${siteName}` : '';
     }
 }
 
@@ -1537,12 +1629,10 @@ function resetCrawlButton() {
 
 // 保留旧的弹窗函数以兼容（但不再使用）
 function openCrawlProgressModal() {
-    // 现在使用气泡代替
     showCrawlBubble();
 }
 
 function closeCrawlProgressModal() {
-    // 兼容旧代码
     closeCrawlBubble();
 }
 
@@ -3266,11 +3356,27 @@ async function checkTodaySummary() {
 }
 
 // 点击AI总结按钮
-function startSummaryGenerate() {
+async function startSummaryGenerate() {
     if (summaryGenerating) {
         showToast('正在生成中，请稍候', 'warning');
         showSummaryBubble();
         return;
+    }
+
+    // 如果还没有加载过数据，先检查后端是否有今日总结
+    if (!summaryData) {
+        try {
+            const response = await fetch('/api/summary/today');
+            const result = await response.json();
+            if (result.success && result.data) {
+                summaryData = result.data;
+                summaryTitleUrlMap = result.data.title_url_map || {};
+                summaryStructuredRefs = result.data.structured_refs || {};
+                summaryGeneratedTime = new Date(result.data.created_at);
+            }
+        } catch (error) {
+            console.error('检查今日总结失败:', error);
+        }
     }
 
     // 检查是否有上次生成的结果

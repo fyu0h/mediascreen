@@ -9,6 +9,7 @@ import requests
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from urllib.parse import urljoin, urlparse
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from bs4 import BeautifulSoup
 
@@ -34,26 +35,69 @@ DEFAULT_HEADERS = {
 class PluginCrawler:
     """插件通用爬取器"""
 
+    # 默认超时时间（秒）
+    DEFAULT_TIMEOUT = 60
+    # 站点特定超时配置（某些站点可能需要更长/更短的超时）
+    SITE_TIMEOUTS = {
+        'thetimes.com': 30,  # The Times 需要VPN，设置较短超时快速跳过
+        'nytimes.com': 45,
+    }
+
     def __init__(self):
         if not CRAWL4AI_AVAILABLE:
             raise ImportError("crawl4ai 未安装，请运行: pip install crawl4ai")
         self.browser_config = BrowserConfig(headless=True, verbose=False)
 
-    async def fetch_page(self, url: str) -> str:
-        """异步获取页面内容（模拟正常浏览器）"""
+    def _get_timeout_for_url(self, url: str) -> int:
+        """根据URL获取对应的超时时间（秒）"""
+        try:
+            domain = urlparse(url).netloc.lower()
+            # 检查是否有站点特定配置
+            for site_domain, timeout in self.SITE_TIMEOUTS.items():
+                if site_domain in domain:
+                    return timeout
+        except:
+            pass
+        return self.DEFAULT_TIMEOUT
+
+    async def fetch_page(self, url: str, timeout: int = None) -> str:
+        """
+        异步获取页面内容（模拟正常浏览器）
+
+        Args:
+            url: 要抓取的URL
+            timeout: 超时时间（秒），None则使用默认配置
+
+        Returns:
+            页面HTML内容，失败或超时返回空字符串
+        """
+        if timeout is None:
+            timeout = self._get_timeout_for_url(url)
+
+        timeout_ms = timeout * 1000
+
         try:
             config = CrawlerRunConfig(
                 wait_until="domcontentloaded",
-                page_timeout=60000,
+                page_timeout=timeout_ms,
                 cache_mode=CacheMode.BYPASS
             )
             async with AsyncWebCrawler(config=self.browser_config) as crawler:
                 result = await crawler.arun(url, config=config)
                 if result.success:
                     return result.html
+                print(f"[PluginCrawler] 页面抓取未成功 {url}")
                 return ""
+        except asyncio.TimeoutError:
+            print(f"[PluginCrawler] ⏱️ 超时跳过 ({timeout}秒): {url}")
+            return ""
         except Exception as e:
-            print(f"[PluginCrawler] 获取页面失败 {url}: {e}")
+            error_msg = str(e)
+            # 检查是否是Playwright超时错误
+            if 'Timeout' in error_msg or 'timeout' in error_msg.lower():
+                print(f"[PluginCrawler] ⏱️ 超时跳过 ({timeout}秒): {url}")
+            else:
+                print(f"[PluginCrawler] 获取页面失败 {url}: {e}")
             return ""
 
     def fetch_url_simple(self, url: str, timeout: int = 30) -> str:
@@ -245,14 +289,14 @@ class PluginCrawler:
         """
         异步爬取单个站点
 
-        返回: {success: bool, articles: list, error: str}
+        返回: {success: bool, articles: list, error: str, skipped: bool}
         """
         url = site.get('url', '')
         name = site.get('name', '')
         parser_name = site.get('parser', '')
 
         if not url:
-            return {'success': False, 'articles': [], 'error': '站点 URL 为空'}
+            return {'success': False, 'articles': [], 'error': '站点 URL 为空', 'skipped': False}
 
         # 海外家园网使用专用 sitemap 爬取
         if parser_name == 'haiwaiwang':
@@ -263,7 +307,14 @@ class PluginCrawler:
             html = await self.fetch_page(url)
 
             if not html:
-                return {'success': False, 'articles': [], 'error': '无法获取页面内容'}
+                # 区分超时跳过和其他错误
+                timeout = self._get_timeout_for_url(url)
+                return {
+                    'success': False,
+                    'articles': [],
+                    'error': f'获取页面失败（超时 {timeout} 秒或网络问题）',
+                    'skipped': True  # 标记为跳过，不影响整体任务
+                }
 
             # 选择解析器
             if parser_name:
@@ -287,27 +338,68 @@ class PluginCrawler:
             return {
                 'success': True,
                 'articles': articles,
-                'error': None
+                'error': None,
+                'skipped': False
             }
 
+        except asyncio.TimeoutError:
+            print(f"[PluginCrawler] ⏱️ 站点超时跳过: {name}")
+            return {
+                'success': False,
+                'articles': [],
+                'error': f'站点超时，已跳过',
+                'skipped': True
+            }
         except Exception as e:
-            return {'success': False, 'articles': [], 'error': str(e)}
+            error_msg = str(e)
+            is_timeout = 'timeout' in error_msg.lower()
+            return {
+                'success': False,
+                'articles': [],
+                'error': f'超时跳过' if is_timeout else str(e),
+                'skipped': is_timeout  # 超时标记为跳过
+            }
 
     def crawl_site(self, site: Dict[str, Any], max_articles: int = 100) -> Dict[str, Any]:
         """
         同步爬取单个站点（封装异步方法）
+
+        如果站点超时，返回 skipped=True 标记，让调用方知道可以继续处理其他站点
         """
+        url = site.get('url', '')
+        name = site.get('name', '未知站点')
+        # 获取该站点的超时时间，同步方法额外加30秒作为缓冲
+        site_timeout = self._get_timeout_for_url(url) + 30
+
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(asyncio.run, self.crawl_site_async(site, max_articles))
-                    return future.result(timeout=120)
+                    return future.result(timeout=site_timeout)
             else:
                 return loop.run_until_complete(self.crawl_site_async(site, max_articles))
+        except (FuturesTimeoutError, asyncio.TimeoutError, TimeoutError):
+            print(f"[PluginCrawler] ⏱️ 同步超时跳过: {name}")
+            return {
+                'success': False,
+                'articles': [],
+                'error': f'站点超时（{site_timeout}秒），已跳过',
+                'skipped': True
+            }
         except RuntimeError:
-            return asyncio.run(self.crawl_site_async(site, max_articles))
+            try:
+                return asyncio.run(self.crawl_site_async(site, max_articles))
+            except Exception as e:
+                error_msg = str(e)
+                is_timeout = 'timeout' in error_msg.lower()
+                return {
+                    'success': False,
+                    'articles': [],
+                    'error': f'超时跳过' if is_timeout else str(e),
+                    'skipped': is_timeout
+                }
 
 
 # 全局爬取器实例

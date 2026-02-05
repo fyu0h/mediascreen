@@ -5,13 +5,14 @@ Flask 应用入口
 访问地址: http://localhost:5000
 """
 
-from flask import Flask
+import time
+from flask import Flask, request, g
 from flask_cors import CORS
 
 from config import Config
 from routes import api_bp, views_bp
 from models import close_db
-from models.logger import log_system
+from models.logger import log_system, log_request
 
 
 def create_app() -> Flask:
@@ -28,12 +29,112 @@ def create_app() -> Flask:
     app.register_blueprint(api_bp)
     app.register_blueprint(views_bp)
 
+    # ========== 请求日志中间件 ==========
+    @app.before_request
+    def before_request_logging():
+        """请求开始前记录"""
+        g.request_start_time = time.time()
+        # 保存原始请求数据
+        g.request_data = {
+            'method': request.method,
+            'url': request.url,
+            'path': request.path,
+            'query_string': request.query_string.decode('utf-8', errors='ignore'),
+            'headers': dict(request.headers),
+            'remote_addr': request.remote_addr
+        }
+        # 保存请求体（仅对 POST/PUT/PATCH）
+        if request.method in ['POST', 'PUT', 'PATCH']:
+            try:
+                if request.is_json:
+                    g.request_data['body'] = request.get_json(silent=True)
+                elif request.form:
+                    g.request_data['body'] = dict(request.form)
+                else:
+                    # 尝试获取原始数据（限制大小）
+                    raw_data = request.get_data(as_text=True)
+                    if len(raw_data) > 10000:
+                        g.request_data['body'] = raw_data[:10000] + '... [截断]'
+                    else:
+                        g.request_data['body'] = raw_data
+            except Exception:
+                g.request_data['body'] = '<无法解析请求体>'
+
+    @app.after_request
+    def after_request_logging(response):
+        """请求完成后记录日志"""
+        # 跳过静态资源和健康检查
+        if request.path.startswith('/static') or request.path == '/favicon.ico':
+            return response
+
+        # 计算耗时
+        duration_ms = None
+        if hasattr(g, 'request_start_time'):
+            duration_ms = (time.time() - g.request_start_time) * 1000
+
+        # 获取响应体
+        response_body = None
+        try:
+            if response.content_type and 'application/json' in response.content_type:
+                response_body = response.get_json(silent=True)
+            elif response.content_type and 'text/' in response.content_type:
+                data = response.get_data(as_text=True)
+                if len(data) > 5000:
+                    response_body = data[:5000] + '... [截断]'
+                else:
+                    response_body = data
+        except Exception:
+            response_body = '<无法解析响应体>'
+
+        # 确定日志状态
+        if response.status_code >= 500:
+            status = 'error'
+        elif response.status_code >= 400:
+            status = 'warning'
+        else:
+            status = 'info'
+
+        # 构建请求信息
+        req_data = getattr(g, 'request_data', {})
+
+        # 过滤敏感信息（如 API Key）
+        filtered_headers = _filter_sensitive_headers(req_data.get('headers', {}))
+        req_data['headers'] = filtered_headers
+
+        # 记录日志
+        log_request(
+            action=f'{request.method} {request.path}',
+            url=request.url,
+            method=request.method,
+            request_headers=filtered_headers,
+            request_body=req_data.get('body'),
+            response_status=response.status_code,
+            response_headers=dict(response.headers),
+            response_body=response_body,
+            duration_ms=round(duration_ms, 2) if duration_ms else None,
+            status=status
+        )
+
+        return response
+
     # 应用关闭时关闭数据库连接
     @app.teardown_appcontext
     def shutdown_db(exception=None):
         pass  # 使用单例模式，不需要每次请求都关闭
 
     return app
+
+
+def _filter_sensitive_headers(headers: dict) -> dict:
+    """过滤敏感头信息"""
+    sensitive_keys = ['authorization', 'cookie', 'x-api-key', 'api-key', 'token']
+    filtered = {}
+    for key, value in headers.items():
+        if key.lower() in sensitive_keys:
+            filtered[key] = '***已隐藏***'
+        else:
+            filtered[key] = value
+    return filtered
 
 
 def init_database():
@@ -114,8 +215,12 @@ if __name__ == '__main__':
     )
 
     # 启动 Flask 开发服务器
+    # 启用多线程模式，确保爬虫任务不会阻塞前端请求
+    # 注意：Windows 上 debug+threaded 模式下热重载可能报 socket 错误，不影响功能
     app.run(
         host='0.0.0.0',
         port=5000,
-        debug=Config.DEBUG
+        debug=Config.DEBUG,
+        threaded=True,           # 启用多线程处理请求
+        use_reloader=False       # Windows 下禁用热重载，避免 socket 错误
     )

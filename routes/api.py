@@ -5,6 +5,7 @@ REST API 路由
 """
 
 import time
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from typing import Any
 
@@ -1067,7 +1068,7 @@ def crawl_update():
                 }
 
         # 使用线程池并发爬取
-        max_workers = min(10, len(sites))
+        max_workers = min(5, len(sites))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(crawl_single_site, site) for site in sites]
 
@@ -1160,7 +1161,7 @@ def crawl_update_stream():
             yield f"data: {json.dumps({'type': 'progress', 'message': '开始并发爬取...', 'total': total})}\n\n"
 
             # 使用线程池并发爬取
-            max_workers = min(10, total)  # 最多10个并发线程
+            max_workers = min(5, total)  # 限制并发数避免阻塞其他请求
             success_count = 0
             failed_count = 0
             total_articles = 0
@@ -1237,6 +1238,284 @@ def crawl_update_stream():
             'X-Accel-Buffering': 'no'
         }
     )
+
+
+# ==================== 后台任务爬虫接口（推荐使用） ====================
+
+@api_bp.route('/crawl/start', methods=['POST'])
+def crawl_start():
+    """
+    启动后台爬虫任务
+    立即返回 task_id，爬虫在后台线程执行
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from models.tasks import (
+        create_task, update_task, register_running_task,
+        unregister_task, is_cancelled
+    )
+    from models.plugins import get_enabled_sites
+    from plugins.crawler import get_crawler
+
+    try:
+        sites = get_enabled_sites()
+
+        if not sites:
+            return success_response({
+                'task_id': None,
+                'message': '没有启用的站点'
+            })
+
+        # 创建任务记录
+        task_id = create_task(task_type='crawl', sites=sites)
+
+        def run_crawl_task():
+            """后台执行爬虫任务"""
+            try:
+                update_task(task_id, {
+                    'status': 'running',
+                    'started_at': datetime.now(),
+                    'message': '正在初始化...'
+                })
+
+                total = len(sites)
+                completed = 0
+                success_count = 0
+                failed_count = 0
+                skipped_count = 0  # 超时跳过的站点数
+                total_articles = 0
+                total_saved = 0
+                sites_status = {}
+
+                def crawl_single_site(site, index):
+                    """爬取单个站点"""
+                    # 检查是否被取消
+                    if is_cancelled(task_id):
+                        return None
+
+                    site_id = site.get('id')
+                    site_name = site.get('name', '')
+
+                    # 更新当前正在爬取的站点
+                    update_task(task_id, {
+                        'current_site': site_name,
+                        'message': f'正在获取: {site_name} ({index + 1}/{total})'
+                    })
+
+                    try:
+                        crawler = get_crawler()
+                        result = crawler.crawl_site(site, max_articles=100)
+
+                        if result['success']:
+                            articles = result.get('articles', [])
+                            saved_count = save_articles(articles) if articles else 0
+                            return {
+                                'site_id': site_id,
+                                'site_name': site_name,
+                                'success': True,
+                                'skipped': False,
+                                'articles': len(articles),
+                                'saved': saved_count,
+                                'error': None
+                            }
+                        else:
+                            # 区分超时跳过和真正失败
+                            is_skipped = result.get('skipped', False)
+                            return {
+                                'site_id': site_id,
+                                'site_name': site_name,
+                                'success': False,
+                                'skipped': is_skipped,
+                                'articles': 0,
+                                'saved': 0,
+                                'error': result.get('error', '爬取失败')[:100]
+                            }
+                    except Exception as e:
+                        error_msg = str(e)
+                        is_timeout = 'timeout' in error_msg.lower()
+                        return {
+                            'site_id': site_id,
+                            'site_name': site_name,
+                            'success': False,
+                            'skipped': is_timeout,  # 超时视为跳过
+                            'articles': 0,
+                            'saved': 0,
+                            'error': ('超时跳过' if is_timeout else error_msg)[:100]
+                        }
+
+                # 并发爬取（限制并发数避免阻塞其他请求）
+                max_workers = min(5, total)
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_to_site = {
+                        executor.submit(crawl_single_site, site, i): site
+                        for i, site in enumerate(sites)
+                    }
+
+                    for future in as_completed(future_to_site):
+                        # 检查取消
+                        if is_cancelled(task_id):
+                            executor.shutdown(wait=False, cancel_futures=True)
+                            break
+
+                        result = future.result()
+                        if result is None:  # 被取消
+                            continue
+
+                        completed += 1
+                        site_id = result['site_id']
+                        sites_status[site_id] = result
+
+                        if result['success']:
+                            success_count += 1
+                            total_articles += result['articles']
+                            total_saved += result['saved']
+                        elif result.get('skipped', False):
+                            skipped_count += 1  # 超时跳过单独计数
+                        else:
+                            failed_count += 1
+
+                        # 更新进度
+                        progress = int((completed / total) * 100)
+                        update_task(task_id, {
+                            'progress': progress,
+                            'completed_sites': completed,
+                            'success_count': success_count,
+                            'failed_count': failed_count,
+                            'skipped_count': skipped_count,
+                            'total_articles': total_articles,
+                            'total_saved': total_saved,
+                            'current_site': result['site_name'],
+                            'sites_status': sites_status,
+                            'message': f'已完成 {completed}/{total}'
+                        })
+
+                # 最终状态
+                if is_cancelled(task_id):
+                    # 已经在 cancel_task 中更新了状态
+                    pass
+                else:
+                    # 构建完成消息
+                    msg_parts = [f'{success_count}成功']
+                    if skipped_count > 0:
+                        msg_parts.append(f'{skipped_count}跳过')
+                    if failed_count > 0:
+                        msg_parts.append(f'{failed_count}失败')
+                    msg_parts.append(f'保存{total_saved}篇')
+
+                    update_task(task_id, {
+                        'status': 'completed',
+                        'progress': 100,
+                        'skipped_count': skipped_count,
+                        'finished_at': datetime.now(),
+                        'message': f'完成: {", ".join(msg_parts)}'
+                    })
+
+                    # 记录日志
+                    log_operation(
+                        action='文章更新完成',
+                        details={
+                            'task_id': task_id,
+                            'success_count': success_count,
+                            'failed_count': failed_count,
+                            'total_articles': total_articles,
+                            'total_saved': total_saved
+                        },
+                        status='success' if failed_count == 0 else 'warning'
+                    )
+
+            except Exception as e:
+                update_task(task_id, {
+                    'status': 'failed',
+                    'finished_at': datetime.now(),
+                    'error': str(e)[:200],
+                    'message': f'任务失败: {str(e)[:50]}'
+                })
+                log_operation(
+                    action='文章更新失败',
+                    details={'task_id': task_id, 'error': str(e)},
+                    status='error'
+                )
+            finally:
+                unregister_task(task_id)
+
+        # 启动后台线程
+        thread = threading.Thread(target=run_crawl_task, daemon=True)
+        register_running_task(task_id, thread)
+        thread.start()
+
+        return success_response({
+            'task_id': task_id,
+            'total_sites': len(sites),
+            'message': '任务已启动'
+        })
+
+    except Exception as e:
+        return error_response(f'启动任务失败: {str(e)}', 500)
+
+
+@api_bp.route('/crawl/status', methods=['GET'])
+def crawl_status():
+    """
+    查询爬虫任务状态
+    参数: task_id
+    """
+    from models.tasks import get_task_status
+
+    task_id = request.args.get('task_id')
+    if not task_id:
+        return error_response('缺少 task_id 参数', 400)
+
+    status = get_task_status(task_id)
+    if not status:
+        return error_response('任务不存在', 404)
+
+    return success_response(status)
+
+
+@api_bp.route('/crawl/cancel', methods=['POST'])
+def crawl_cancel():
+    """
+    取消爬虫任务
+    请求体: { task_id: "xxx" }
+    """
+    from models.tasks import cancel_task
+
+    data = request.get_json() or {}
+    task_id = data.get('task_id')
+
+    if not task_id:
+        return error_response('缺少 task_id 参数', 400)
+
+    success = cancel_task(task_id)
+    if success:
+        log_operation(
+            action='取消爬虫任务',
+            details={'task_id': task_id},
+            status='info'
+        )
+        return success_response({'message': '任务已取消'})
+    else:
+        return error_response('无法取消任务（可能已完成或不存在）', 400)
+
+
+@api_bp.route('/crawl/history', methods=['GET'])
+def crawl_history():
+    """获取最近的爬虫任务历史"""
+    from models.tasks import get_recent_tasks
+
+    limit = int(request.args.get('limit', 10))
+    tasks = get_recent_tasks(limit=min(limit, 50))
+
+    # 格式化时间
+    for task in tasks:
+        if task.get('created_at'):
+            task['created_at'] = task['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+        if task.get('started_at'):
+            task['started_at'] = task['started_at'].strftime('%Y-%m-%d %H:%M:%S')
+        if task.get('finished_at'):
+            task['finished_at'] = task['finished_at'].strftime('%Y-%m-%d %H:%M:%S')
+
+    return success_response(tasks)
 
 
 # ==================== 调度器接口 ====================
@@ -1521,28 +1800,167 @@ def get_summaries_collection():
 
 def extract_json_from_content(content: str) -> dict:
     """从AI返回内容中提取JSON数据块"""
-    # 尝试匹配 ```json ... ``` 代码块
-    json_pattern = r'```json\s*([\s\S]*?)\s*```'
-    match = re.search(json_pattern, content)
+    def clean_json_string(s: str) -> str:
+        """清理JSON字符串中的特殊字符"""
+        # 替换中文引号为英文引号
+        s = s.replace('"', '"').replace('"', '"')
+        s = s.replace(''', "'").replace(''', "'")
+        # 移除可能的BOM
+        s = s.strip('\ufeff')
+        return s
 
-    if match:
-        json_str = match.group(1).strip()
-        try:
-            return json_module.loads(json_str)
-        except json_module.JSONDecodeError as e:
-            print(f"JSON解析失败: {e}")
-            return {}
+    try:
+        # 尝试匹配 ```json ... ``` 代码块
+        json_pattern = r'```json\s*([\s\S]*?)\s*```'
+        match = re.search(json_pattern, content)
 
-    # 如果没有代码块，尝试直接查找 JSON 对象
-    json_obj_pattern = r'\{\s*"news_data"\s*:\s*\{[\s\S]*?\}\s*\}'
-    match = re.search(json_obj_pattern, content)
-    if match:
-        try:
-            return json_module.loads(match.group(0))
-        except json_module.JSONDecodeError:
-            pass
+        if match:
+            json_str = clean_json_string(match.group(1).strip())
+            try:
+                return json_module.loads(json_str)
+            except json_module.JSONDecodeError as e:
+                print(f"JSON代码块解析失败: {e}")
+                # 尝试修复常见问题后重试
+                try:
+                    # 移除注释
+                    json_str = re.sub(r'//.*$', '', json_str, flags=re.MULTILINE)
+                    # 移除尾随逗号
+                    json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+                    return json_module.loads(json_str)
+                except json_module.JSONDecodeError:
+                    pass
 
-    return {}
+        # 如果没有代码块或解析失败，尝试直接查找 JSON 对象
+        # 先清理内容中的中文引号
+        cleaned_content = clean_json_string(content)
+
+        # 寻找包含 news_data 的 JSON
+        json_start = cleaned_content.find('"news_data"')
+
+        if json_start != -1:
+            # 向前找到 { 开始
+            brace_start = cleaned_content.rfind('{', 0, json_start)
+            if brace_start != -1:
+                # 从这个位置开始，找到匹配的 }
+                depth = 0
+                end_idx = brace_start
+                for i in range(brace_start, len(cleaned_content)):
+                    c = cleaned_content[i]
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end_idx = i + 1
+                            break
+
+                if end_idx > brace_start:
+                    json_str = cleaned_content[brace_start:end_idx]
+                    try:
+                        return json_module.loads(json_str)
+                    except json_module.JSONDecodeError as e:
+                        print(f"JSON对象解析失败: {e}")
+                        # 尝试修复后重试
+                        try:
+                            json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+                            return json_module.loads(json_str)
+                        except json_module.JSONDecodeError:
+                            pass
+
+        return {}
+    except Exception as e:
+        print(f"extract_json_from_content 异常: {e}")
+        return {}
+
+
+def _lookup_url_by_title(title: str, title_url_map: dict) -> str:
+    """
+    根据标题查找对应的URL
+    支持模糊匹配（标题可能被AI略微修改）
+    """
+    if not title or not title_url_map:
+        return ''
+
+    # 清理标题（与存储时的处理一致）
+    safe_title = title.replace('.', '。').replace('$', '＄')
+
+    # 1. 精确匹配
+    if safe_title in title_url_map:
+        return title_url_map[safe_title].get('url', '')
+
+    # 2. 原始标题匹配
+    for key, value in title_url_map.items():
+        if value.get('original_title') == title:
+            return value.get('url', '')
+
+    # 3. 模糊匹配（标题包含关系）
+    title_lower = title.lower().strip()
+    for key, value in title_url_map.items():
+        original = value.get('original_title', key).lower().strip()
+        # 检查是否有足够的重叠（80%以上的字符匹配）
+        if title_lower in original or original in title_lower:
+            return value.get('url', '')
+        # 检查前50个字符是否相同（处理标题被截断的情况）
+        if len(title_lower) > 20 and len(original) > 20:
+            if title_lower[:50] == original[:50]:
+                return value.get('url', '')
+
+    return ''
+
+
+def _correct_structured_refs(structured_refs: dict, title_url_map: dict) -> dict:
+    """
+    使用 title_url_map 校正 structured_refs 中的URL
+    解决AI返回无效URL的问题
+    """
+    if not structured_refs or not title_url_map:
+        return structured_refs
+
+    corrected = {}
+
+    # 处理分类新闻
+    category_news = structured_refs.get('category_news', {})
+    if isinstance(category_news, dict):
+        corrected_categories = {}
+        for cat_key, items in category_news.items():
+            if isinstance(items, list):
+                corrected_items = []
+                for item in items:
+                    if isinstance(item, dict):
+                        title = item.get('title', '')
+                        # 使用 title_url_map 校正 URL
+                        url = _lookup_url_by_title(title, title_url_map)
+                        if url:
+                            corrected_items.append({
+                                'title': title,
+                                'url': url
+                            })
+                        elif item.get('url') and item['url'] not in ['#', '', '链接']:
+                            # 保留原有的有效URL
+                            corrected_items.append(item)
+                corrected_categories[cat_key] = corrected_items
+        corrected['category_news'] = corrected_categories
+
+    # 处理 TOP5 新闻
+    top_5 = structured_refs.get('top_5_news', [])
+    if isinstance(top_5, list):
+        corrected_top5 = []
+        for item in top_5:
+            if isinstance(item, dict):
+                title = item.get('title', '')
+                rank = item.get('rank', 0)
+                url = _lookup_url_by_title(title, title_url_map)
+                if url:
+                    corrected_top5.append({
+                        'rank': rank,
+                        'title': title,
+                        'url': url
+                    })
+                elif item.get('url') and item['url'] not in ['#', '', '链接']:
+                    corrected_top5.append(item)
+        corrected['top_5_news'] = corrected_top5
+
+    return corrected
 
 
 @api_bp.route('/summary/daily', methods=['POST'])
@@ -1590,10 +2008,13 @@ def summary_daily():
                 # 新格式：包含标题和链接
                 news_items.append(f"{i}. [{source}] {title}\n   链接: {url}")
                 # 保存标题到URL的映射
-                title_url_map[title] = {
+                # 清理标题中的特殊字符（MongoDB键不能包含.或以$开头）
+                safe_title = title.replace('.', '。').replace('$', '＄')
+                title_url_map[safe_title] = {
                     'url': url,
                     'source': source,
-                    'article_id': str(article.get('_id', ''))
+                    'article_id': str(article.get('_id', '')),
+                    'original_title': title  # 保存原始标题用于显示
                 }
 
         news_list_text = '\n'.join(news_items)
@@ -1609,11 +2030,10 @@ def summary_daily():
 
         # 获取提示词模板并填充变量
         prompt_template = get_summary_prompt()
-        prompt = prompt_template.format(
-            date=today.strftime('%Y年%m月%d日'),
-            count=article_count,
-            news_list=news_list_text
-        )
+        # 使用安全的字符串替换，避免花括号冲突
+        prompt = prompt_template.replace('{date}', today.strftime('%Y年%m月%d日'))
+        prompt = prompt.replace('{count}', str(article_count))
+        prompt = prompt.replace('{news_list}', news_list_text)
 
         # 调用 LLM API
         headers = {
@@ -1646,8 +2066,12 @@ def summary_daily():
         if not content:
             return error_response('LLM 返回内容为空', 500)
 
-        # 提取JSON结构化数据
-        news_data = extract_json_from_content(content)
+        # 提取JSON结构化数据（在try块内以防解析失败）
+        try:
+            news_data = extract_json_from_content(content)
+        except Exception as json_err:
+            print(f"JSON提取异常: {json_err}")
+            news_data = {}
 
         # 解析文本报告部分
         # 移除JSON代码块后的内容用于文本解析
@@ -1673,14 +2097,16 @@ def summary_daily():
             hot_news_text = ''
             risk_analysis = ''
 
-        # 从news_data中提取结构化引用
+        # 从news_data中提取结构化引用，并用title_url_map校正URL
         structured_refs = {}
-        if news_data and 'news_data' in news_data:
-            nd = news_data['news_data']
-            structured_refs = {
-                'category_news': nd.get('category_news', {}),
-                'top_5_news': nd.get('top_5_news', [])
-            }
+        if isinstance(news_data, dict) and 'news_data' in news_data:
+            nd = news_data.get('news_data', {})
+            if isinstance(nd, dict):
+                raw_refs = {
+                    'category_news': nd.get('category_news', {}),
+                    'top_5_news': nd.get('top_5_news', [])
+                }
+                structured_refs = _correct_structured_refs(raw_refs, title_url_map)
 
         # 保存到数据库
         summary_doc = {
@@ -1734,7 +2160,10 @@ def summary_daily():
         log_operation(action='舆情总结生成超时', status='error')
         return error_response('LLM API 请求超时，请稍后重试', 504)
     except Exception as e:
-        log_operation(action='舆情总结生成异常', details={'error': str(e)}, status='error')
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"舆情总结生成异常详情:\n{error_detail}")
+        log_operation(action='舆情总结生成异常', details={'error': str(e), 'traceback': error_detail[:1000]}, status='error')
         return error_response(f'生成舆情总结失败: {str(e)}', 500)
 
 
@@ -1795,6 +2224,11 @@ def summary_get_by_date(date_str):
         if not doc:
             return success_response(None)
 
+        # 校正 structured_refs 中的URL
+        title_url_map = doc.get('title_url_map', {})
+        structured_refs = doc.get('structured_refs', {})
+        corrected_refs = _correct_structured_refs(structured_refs, title_url_map)
+
         return success_response({
             'id': str(doc['_id']),
             'date': doc['date'].strftime('%Y-%m-%d'),
@@ -1805,8 +2239,8 @@ def summary_get_by_date(date_str):
             'full_content': doc.get('full_content', ''),
             'article_count': doc.get('article_count', 0),
             'model': doc.get('model', ''),
-            'title_url_map': doc.get('title_url_map', {}),
-            'structured_refs': doc.get('structured_refs', {}),
+            'title_url_map': title_url_map,
+            'structured_refs': corrected_refs,
             'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S')
         })
     except Exception as e:
@@ -1825,6 +2259,11 @@ def summary_get_today():
         if not doc:
             return success_response(None)
 
+        # 校正 structured_refs 中的URL
+        title_url_map = doc.get('title_url_map', {})
+        structured_refs = doc.get('structured_refs', {})
+        corrected_refs = _correct_structured_refs(structured_refs, title_url_map)
+
         return success_response({
             'id': str(doc['_id']),
             'date': doc['date'].strftime('%Y-%m-%d'),
@@ -1835,8 +2274,8 @@ def summary_get_today():
             'full_content': doc.get('full_content', ''),
             'article_count': doc.get('article_count', 0),
             'model': doc.get('model', ''),
-            'title_url_map': doc.get('title_url_map', {}),
-            'structured_refs': doc.get('structured_refs', {}),
+            'title_url_map': title_url_map,
+            'structured_refs': corrected_refs,
             'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S')
         })
     except Exception as e:
