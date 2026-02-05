@@ -1870,37 +1870,89 @@ def extract_json_from_content(content: str) -> dict:
         return {}
 
 
+def _lookup_url_from_db(title: str) -> str:
+    """
+    从数据库中根据标题查找对应的URL
+    """
+    if not title:
+        return ''
+
+    try:
+        from models.mongo import get_articles_collection
+        collection = get_articles_collection()
+
+        # 1. 精确匹配
+        doc = collection.find_one({'title': title}, {'loc': 1})
+        if doc and doc.get('loc'):
+            return doc['loc']
+
+        # 2. 正则模糊匹配（处理标题略有差异的情况）
+        import re
+        # 转义正则特殊字符
+        escaped_title = re.escape(title)
+        doc = collection.find_one(
+            {'title': {'$regex': escaped_title, '$options': 'i'}},
+            {'loc': 1}
+        )
+        if doc and doc.get('loc'):
+            return doc['loc']
+
+        # 3. 部分匹配（取标题前30个字符）
+        if len(title) > 15:
+            prefix = title[:30]
+            escaped_prefix = re.escape(prefix)
+            doc = collection.find_one(
+                {'title': {'$regex': f'^{escaped_prefix}', '$options': 'i'}},
+                {'loc': 1}
+            )
+            if doc and doc.get('loc'):
+                return doc['loc']
+
+        return ''
+    except Exception as e:
+        print(f"数据库查询URL失败: {e}")
+        return ''
+
+
 def _lookup_url_by_title(title: str, title_url_map: dict) -> str:
     """
     根据标题查找对应的URL
     支持模糊匹配（标题可能被AI略微修改）
+    如果在 title_url_map 中找不到，会回退到数据库查询
     """
-    if not title or not title_url_map:
+    if not title:
         return ''
 
     # 清理标题（与存储时的处理一致）
     safe_title = title.replace('.', '。').replace('$', '＄')
 
-    # 1. 精确匹配
-    if safe_title in title_url_map:
+    # 1. 精确匹配 title_url_map
+    if title_url_map and safe_title in title_url_map:
         return title_url_map[safe_title].get('url', '')
 
     # 2. 原始标题匹配
-    for key, value in title_url_map.items():
-        if value.get('original_title') == title:
-            return value.get('url', '')
+    if title_url_map:
+        for key, value in title_url_map.items():
+            if value.get('original_title') == title:
+                return value.get('url', '')
 
     # 3. 模糊匹配（标题包含关系）
-    title_lower = title.lower().strip()
-    for key, value in title_url_map.items():
-        original = value.get('original_title', key).lower().strip()
-        # 检查是否有足够的重叠（80%以上的字符匹配）
-        if title_lower in original or original in title_lower:
-            return value.get('url', '')
-        # 检查前50个字符是否相同（处理标题被截断的情况）
-        if len(title_lower) > 20 and len(original) > 20:
-            if title_lower[:50] == original[:50]:
+    if title_url_map:
+        title_lower = title.lower().strip()
+        for key, value in title_url_map.items():
+            original = value.get('original_title', key).lower().strip()
+            # 检查是否有足够的重叠
+            if title_lower in original or original in title_lower:
                 return value.get('url', '')
+            # 检查前50个字符是否相同（处理标题被截断的情况）
+            if len(title_lower) > 20 and len(original) > 20:
+                if title_lower[:50] == original[:50]:
+                    return value.get('url', '')
+
+    # 4. 回退：从数据库中根据标题查询
+    url = _lookup_url_from_db(title)
+    if url:
+        return url
 
     return ''
 
