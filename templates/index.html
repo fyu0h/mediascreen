@@ -931,6 +931,14 @@
             <div class="modal-footer">
                 <span class="summary-meta" id="summaryMeta"></span>
                 <div class="footer-buttons">
+                    <button class="btn btn-outline btn-sm" onclick="showRawContent()" title="查看AI原始返回内容">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+                            <line x1="9" y1="20" x2="15" y2="20"></line>
+                            <line x1="12" y1="4" x2="12" y2="20"></line>
+                        </svg>
+                        原始内容
+                    </button>
                     <button class="btn btn-outline" onclick="closeSummaryModal(); openSummaryHistory();">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
@@ -990,6 +998,35 @@
                 <div class="refs-list" id="refsList">
                     <div class="empty-hint">暂无引用数据</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI原始内容弹窗 -->
+    <div class="modal-overlay" id="rawContentModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <button class="btn-back" onclick="closeRawContentModal()" title="返回">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+                <h3 class="modal-title">AI原始返回内容</h3>
+                <button class="modal-close" onclick="closeRawContentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="raw-content-wrapper">
+                    <pre class="raw-content" id="rawContentText"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="copyRawContent()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    复制内容
+                </button>
             </div>
         </div>
     </div>

@@ -3728,6 +3728,43 @@ function closeSummaryModal() {
     document.getElementById('summaryModal').classList.remove('active');
 }
 
+// ==================== AI原始内容功能 ====================
+
+function showRawContent() {
+    if (!summaryData || !summaryData.full_content) {
+        showToast('暂无原始内容', 'warning');
+        return;
+    }
+
+    document.getElementById('rawContentText').textContent = summaryData.full_content;
+    document.getElementById('rawContentModal').classList.add('active');
+}
+
+function closeRawContentModal() {
+    document.getElementById('rawContentModal').classList.remove('active');
+}
+
+function copyRawContent() {
+    const content = summaryData?.full_content || '';
+    if (!content) {
+        showToast('无内容可复制', 'warning');
+        return;
+    }
+
+    navigator.clipboard.writeText(content).then(() => {
+        showToast('已复制到剪贴板', 'success');
+    }).catch(() => {
+        // 降级方案
+        const textarea = document.createElement('textarea');
+        textarea.value = content;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('已复制到剪贴板', 'success');
+    });
+}
+
 // ==================== 引用来源功能 ====================
 
 let summaryStructuredRefs = {};  // 结构化引用数据

@@ -4734,6 +4734,51 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
 }
 
+/* AI原始内容弹窗 */
+.raw-content-wrapper {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.raw-content {
+    margin: 0;
+    padding: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.raw-content-wrapper::-webkit-scrollbar {
+    width: 6px;
+}
+
+.raw-content-wrapper::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.raw-content-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(0, 240, 255, 0.3);
+    border-radius: 3px;
+}
+
+.raw-content-wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 240, 255, 0.5);
+}
+
+/* 小号按钮 */
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
 /* 确认对话框 */
 .confirm-modal {
     position: fixed;
