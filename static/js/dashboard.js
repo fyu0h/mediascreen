@@ -2472,7 +2472,6 @@ function toggleSettingsSection(header) {
 
 // ==================== 翻译设置 ====================
 
-let translationProvidersData = {};
 let translationProvidersStatusData = {};
 
 // 加载翻译设置
@@ -2484,7 +2483,6 @@ async function loadTranslationSettings() {
         if (!result.success || !result.data) return;
 
         const data = result.data;
-        translationProvidersData = data.providers || {};
 
         if (data.translation) {
             const provider = data.translation.provider || 'siliconflow';
@@ -2496,11 +2494,18 @@ async function loadTranslationSettings() {
 
             // 获取当前提供商的状态
             const providerStatus = translationProvidersStatusData[provider] || {};
-            document.getElementById('translationApiUrl').value = providerStatus.api_url || data.translation.api_url || '';
+
+            // 如果翻译没有配置URL，从LLM配置同步
+            let apiUrl = providerStatus.api_url || data.translation.api_url || '';
+            if (!apiUrl && providersData[provider]) {
+                apiUrl = providersData[provider].api_url || '';
+            }
+            document.getElementById('translationApiUrl').value = apiUrl;
+
             document.getElementById('translationApiKey').value = '';
             document.getElementById('translationApiKey').placeholder = providerStatus.api_key_set ? '已配置（输入新值覆盖）' : 'sk-...';
 
-            // 更新模型列表
+            // 更新模型列表（使用全局的 providersData）
             updateTranslationModelOptions(provider, data.translation.model);
 
             // 更新状态
@@ -2554,11 +2559,11 @@ function onTranslationProviderChange() {
     // 获取该提供商已保存的配置
     const savedStatus = translationProvidersStatusData[provider] || {};
 
-    // 更新 API URL
+    // 更新 API URL（优先使用翻译配置，否则从LLM配置同步）
     if (savedStatus.api_url) {
         document.getElementById('translationApiUrl').value = savedStatus.api_url;
-    } else if (translationProvidersData[provider]) {
-        document.getElementById('translationApiUrl').value = translationProvidersData[provider].api_url || '';
+    } else if (providersData[provider]) {
+        document.getElementById('translationApiUrl').value = providersData[provider].api_url || '';
     }
 
     // 更新 Key 提示
@@ -2572,7 +2577,7 @@ function onTranslationProviderChange() {
         hintEl.textContent = '';
     }
 
-    // 更新模型列表
+    // 更新模型列表（使用全局的 providersData）
     updateTranslationModelOptions(provider);
 
     // 更新状态
@@ -2586,12 +2591,13 @@ function onTranslationProviderChange() {
     }
 }
 
-// 更新翻译模型选项
+// 更新翻译模型选项（使用全局 providersData）
 function updateTranslationModelOptions(provider, selectedModel = null) {
     const modelSelect = document.getElementById('translationModel');
     modelSelect.innerHTML = '';
 
-    const providerInfo = translationProvidersData[provider];
+    // 使用全局的 providersData（与LLM配置共享）
+    const providerInfo = providersData[provider];
     if (providerInfo && providerInfo.models && providerInfo.models.length > 0) {
         providerInfo.models.forEach(model => {
             const option = document.createElement('option');
