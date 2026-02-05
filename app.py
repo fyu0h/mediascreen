@@ -169,8 +169,15 @@ def init_plugins():
 def init_schedulers():
     """初始化定时任务调度器"""
     from plugins.scheduler import start_all_schedulers
+    from plugins.crawl_scheduler import init_crawl_scheduler
+
+    # 启动RSS调度器
     start_all_schedulers()
-    print("[调度器] 定时任务已启动（AP News + 路透社: 每5分钟更新）")
+    print("[调度器] RSS定时任务已启动（每5分钟更新）")
+
+    # 启动全量爬取调度器（根据设置决定是否激活）
+    init_crawl_scheduler()
+    print("[调度器] 全量爬取调度器已初始化")
 
 
 def init_telegram():

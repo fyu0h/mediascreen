@@ -1284,21 +1284,19 @@ def crawl_start():
                 completed = 0
                 success_count = 0
                 failed_count = 0
-                skipped_count = 0  # 超时跳过的站点数
+                skipped_count = 0
                 total_articles = 0
                 total_saved = 0
                 sites_status = {}
 
                 def crawl_single_site(site, index):
                     """爬取单个站点"""
-                    # 检查是否被取消
                     if is_cancelled(task_id):
                         return None
 
                     site_id = site.get('id')
                     site_name = site.get('name', '')
 
-                    # 更新当前正在爬取的站点
                     update_task(task_id, {
                         'current_site': site_name,
                         'message': f'正在获取: {site_name} ({index + 1}/{total})'
@@ -1321,7 +1319,6 @@ def crawl_start():
                                 'error': None
                             }
                         else:
-                            # 区分超时跳过和真正失败
                             is_skipped = result.get('skipped', False)
                             return {
                                 'site_id': site_id,
@@ -1339,13 +1336,12 @@ def crawl_start():
                             'site_id': site_id,
                             'site_name': site_name,
                             'success': False,
-                            'skipped': is_timeout,  # 超时视为跳过
+                            'skipped': is_timeout,
                             'articles': 0,
                             'saved': 0,
                             'error': ('超时跳过' if is_timeout else error_msg)[:100]
                         }
 
-                # 并发爬取（限制并发数避免阻塞其他请求）
                 max_workers = min(5, total)
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     future_to_site = {
@@ -1354,13 +1350,12 @@ def crawl_start():
                     }
 
                     for future in as_completed(future_to_site):
-                        # 检查取消
                         if is_cancelled(task_id):
                             executor.shutdown(wait=False, cancel_futures=True)
                             break
 
                         result = future.result()
-                        if result is None:  # 被取消
+                        if result is None:
                             continue
 
                         completed += 1
@@ -1372,11 +1367,10 @@ def crawl_start():
                             total_articles += result['articles']
                             total_saved += result['saved']
                         elif result.get('skipped', False):
-                            skipped_count += 1  # 超时跳过单独计数
+                            skipped_count += 1
                         else:
                             failed_count += 1
 
-                        # 更新进度
                         progress = int((completed / total) * 100)
                         update_task(task_id, {
                             'progress': progress,
@@ -1391,12 +1385,9 @@ def crawl_start():
                             'message': f'已完成 {completed}/{total}'
                         })
 
-                # 最终状态
                 if is_cancelled(task_id):
-                    # 已经在 cancel_task 中更新了状态
                     pass
                 else:
-                    # 构建完成消息
                     msg_parts = [f'{success_count}成功']
                     if skipped_count > 0:
                         msg_parts.append(f'{skipped_count}跳过')
@@ -1412,7 +1403,6 @@ def crawl_start():
                         'message': f'完成: {", ".join(msg_parts)}'
                     })
 
-                    # 记录日志
                     log_operation(
                         action='文章更新完成',
                         details={
@@ -1543,6 +1533,69 @@ def scheduler_trigger():
         return success_response({'message': '已触发更新'})
     except Exception as e:
         return error_response(f'触发更新失败: {str(e)}', 500)
+
+
+# ==================== 定时全量爬取接口 ====================
+
+@api_bp.route('/crawl/schedule', methods=['GET'])
+def crawl_schedule_get():
+    """获取定时全量爬取配置"""
+    try:
+        from plugins.crawl_scheduler import get_crawl_scheduler
+        scheduler = get_crawl_scheduler()
+        status = scheduler.get_status()
+
+        # 同时返回settings中的配置
+        from models.settings import get_setting
+        status['config'] = {
+            'enabled': get_setting('crawler.auto_crawl_enabled', False),
+            'interval_minutes': get_setting('crawler.auto_crawl_interval', 30),
+        }
+
+        return success_response(status)
+    except Exception as e:
+        return error_response(f'获取定时爬取配置失败: {str(e)}', 500)
+
+
+@api_bp.route('/crawl/schedule', methods=['PUT'])
+def crawl_schedule_set():
+    """
+    更新定时全量爬取配置
+    请求体: { enabled: bool, interval_minutes: int }
+    """
+    try:
+        from plugins.crawl_scheduler import get_crawl_scheduler
+
+        data = request.get_json() or {}
+        enabled = data.get('enabled', False)
+        interval_minutes = data.get('interval_minutes', 30)
+
+        # 验证间隔范围
+        if interval_minutes < 5:
+            interval_minutes = 5
+        elif interval_minutes > 1440:  # 最多24小时
+            interval_minutes = 1440
+
+        scheduler = get_crawl_scheduler()
+        scheduler.update_settings(enabled, interval_minutes)
+
+        log_operation(
+            action='更新定时爬取配置',
+            details={
+                'enabled': enabled,
+                'interval_minutes': interval_minutes
+            },
+            status='success'
+        )
+
+        return success_response({
+            'enabled': enabled,
+            'interval_minutes': interval_minutes,
+            'message': f'定时爬取已{"启用" if enabled else "禁用"}' +
+                       (f'，间隔{interval_minutes}分钟' if enabled else '')
+        })
+    except Exception as e:
+        return error_response(f'更新定时爬取配置失败: {str(e)}', 500)
 
 
 # ==================== 日志接口 ====================

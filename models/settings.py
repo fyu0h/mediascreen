@@ -52,7 +52,9 @@ DEFAULT_SETTINGS = {
     'crawler': {
         'timeout': 30,
         'max_articles': 500,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'auto_crawl_enabled': False,   # 是否启用定时全量爬取
+        'auto_crawl_interval': 30,     # 爬取间隔（分钟），默认30分钟
     },
     'duty': {
         'leaders': [],   # 值班领导列表

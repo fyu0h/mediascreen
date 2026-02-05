@@ -14,6 +14,8 @@ let sourceChart = null;
 let keywordChart = null;
 let worldMap = null;
 let refreshTimer = null;
+let articleRefreshTimer = null;  // 文章独立快速刷新定时器
+let articleRefreshing = false;   // 文章刷新防并发标记
 
 // 风控告警筛选相关
 let allAlertsData = [];           // 存储所有告警数据
@@ -840,6 +842,19 @@ function startAutoRefresh() {
     refreshTimer = setInterval(() => loadAllData(true), CONFIG.refreshInterval);
 }
 
+// 文章独立快速刷新（10秒间隔，比全量刷新更频繁）
+function startArticleAutoRefresh() {
+    if (articleRefreshTimer) clearInterval(articleRefreshTimer);
+    articleRefreshTimer = setInterval(() => {
+        if (!articleRefreshing) {
+            articleRefreshing = true;
+            loadLatestArticles(false, true).finally(() => {
+                articleRefreshing = false;
+            });
+        }
+    }, 10000);  // 10秒
+}
+
 function handleResize() {
     if (sourceChart) sourceChart.resize();
     if (keywordChart) keywordChart.resize();
@@ -869,6 +884,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 启动自动刷新
     startAutoRefresh();
+
+    // 启动文章快速刷新（10秒独立刷新最新文章）
+    startArticleAutoRefresh();
 
     // 窗口大小变化
     window.addEventListener('resize', handleResize);
@@ -1113,6 +1131,7 @@ let pluginsData = [];
 function openSitesModal() {
     document.getElementById('sitesModal').classList.add('active');
     loadPlugins();
+    loadCrawlSchedule();  // 加载定时爬取配置
 }
 
 function closeSitesModal() {
@@ -1690,6 +1709,108 @@ function resetCrawlButton() {
         btn.querySelector('.btn-text').style.display = 'inline';
         btn.querySelector('.btn-loading').style.display = 'none';
         btn.disabled = false;
+    }
+}
+
+// ==================== 定时全量爬取设置 ====================
+
+async function loadCrawlSchedule() {
+    /**
+     * 加载定时全量爬取配置并更新UI
+     */
+    try {
+        const response = await fetch('/api/crawl/schedule');
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            const config = result.data.config || {};
+            const enabled = config.enabled || false;
+            const interval = config.interval_minutes || 30;
+
+            // 更新开关状态
+            const checkbox = document.getElementById('autoCrawlEnabled');
+            if (checkbox) {
+                checkbox.checked = enabled;
+            }
+
+            // 更新间隔选择
+            const select = document.getElementById('autoCrawlInterval');
+            if (select) {
+                select.value = interval.toString();
+                select.disabled = !enabled;
+            }
+        }
+    } catch (error) {
+        console.error('加载定时爬取配置失败:', error);
+    }
+}
+
+async function toggleAutoCrawl() {
+    /**
+     * 切换定时爬取开关
+     */
+    const checkbox = document.getElementById('autoCrawlEnabled');
+    const select = document.getElementById('autoCrawlInterval');
+    const enabled = checkbox.checked;
+    const interval = parseInt(select.value) || 30;
+
+    // 更新间隔选择框状态
+    select.disabled = !enabled;
+
+    try {
+        const response = await fetch('/api/crawl/schedule', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                enabled: enabled,
+                interval_minutes: interval
+            })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            showToast(result.data.message || (enabled ? '定时爬取已启用' : '定时爬取已禁用'), 'success');
+        } else {
+            throw new Error(result.error || '保存失败');
+        }
+    } catch (error) {
+        // 回滚UI状态
+        checkbox.checked = !enabled;
+        select.disabled = enabled;
+        showToast('保存定时设置失败: ' + error.message, 'error');
+    }
+}
+
+async function saveAutoCrawlInterval() {
+    /**
+     * 保存定时爬取间隔
+     */
+    const checkbox = document.getElementById('autoCrawlEnabled');
+    const select = document.getElementById('autoCrawlInterval');
+
+    // 如果未启用，不需要保存
+    if (!checkbox.checked) return;
+
+    const interval = parseInt(select.value) || 30;
+
+    try {
+        const response = await fetch('/api/crawl/schedule', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                enabled: true,
+                interval_minutes: interval
+            })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            showToast(`定时爬取间隔已设为 ${interval} 分钟`, 'success');
+        } else {
+            throw new Error(result.error || '保存失败');
+        }
+    } catch (error) {
+        showToast('保存间隔设置失败: ' + error.message, 'error');
     }
 }
 

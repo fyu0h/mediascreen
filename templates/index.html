@@ -453,6 +453,21 @@
                             <span class="btn-text">更新文章</span>
                             <span class="btn-loading" style="display:none;">更新中...</span>
                         </button>
+                        <!-- 定时更新设置 -->
+                        <div class="schedule-settings">
+                            <label class="schedule-toggle">
+                                <span class="schedule-label">定时更新</span>
+                                <input type="checkbox" id="autoCrawlEnabled" onchange="toggleAutoCrawl()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <select id="autoCrawlInterval" class="schedule-select" onchange="saveAutoCrawlInterval()">
+                                <option value="15">15分钟</option>
+                                <option value="30" selected>30分钟</option>
+                                <option value="60">1小时</option>
+                                <option value="120">2小时</option>
+                                <option value="360">6小时</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
