@@ -133,5 +133,18 @@ class InternationalMediaPlugin(BasePlugin):
                 "sitemap_url": None,
                 "description": "China Digital Times（RSS定时更新）",
                 "enabled_by_default": True
+            },
+            {
+                "id": "us_diplomat",
+                "name": "外交官杂志 (The Diplomat)",
+                "url": "https://thediplomat.com/",
+                "domain": "thediplomat.com",
+                "country_code": "US",
+                "coords": [-77.0369, 38.9072],
+                "fetch_method": "scheduler",
+                "parser": None,
+                "sitemap_url": None,
+                "description": "The Diplomat 亚太时政杂志（RSS定时更新）",
+                "enabled_by_default": True
             }
         ]

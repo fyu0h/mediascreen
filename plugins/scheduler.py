@@ -89,6 +89,16 @@ class RSSScheduler:
                 ],
                 'use_homepage': False,
             },
+            {
+                'id': 'diplomat',
+                'name': '外交官杂志 (The Diplomat)',
+                'country_code': 'US',
+                'coords': [-77.0369, 38.9072],
+                'rss_urls': [
+                    'https://thediplomat.com/feed/',
+                ],
+                'use_homepage': False,
+            },
         ]
 
         self.headers = {
