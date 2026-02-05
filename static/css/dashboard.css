@@ -394,9 +394,9 @@ html, body {
 /* ========== 地图区域 ========== */
 .map-card {
     flex: 0 0 auto;
-    /* 与左侧 "实时数据概览" + "新闻源文章分布" 高度对齐 */
-    height: calc(50% - 7.5px);
-    min-height: 260px;
+    /* 等于左侧 "实时数据概览" + "新闻源文章分布" + 中间gap的高度 */
+    height: calc(62% + 7.5px);
+    min-height: 320px;
 }
 
 .map-card .card-header {
