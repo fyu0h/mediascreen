@@ -994,40 +994,43 @@
         </div>
     </div>
 
-    <!-- AI总结进度气泡 -->
-    <div class="summary-bubble" id="summaryBubble">
-        <div class="bubble-header">
-            <span class="bubble-title">AI舆情分析</span>
-            <button class="bubble-close" onclick="closeSummaryBubble()" title="关闭">&times;</button>
-        </div>
-        <div class="bubble-progress">
-            <div class="bubble-progress-bar">
-                <div class="bubble-progress-fill summary-progress-fill" id="summaryProgressFill"></div>
+    <!-- 气泡容器 - 统一管理所有进度气泡 -->
+    <div class="bubble-container" id="bubbleContainer">
+        <!-- AI总结进度气泡 -->
+        <div class="progress-bubble summary-bubble" id="summaryBubble" data-bubble-id="summary">
+            <div class="bubble-header">
+                <span class="bubble-title">AI舆情分析</span>
+                <button class="bubble-close" onclick="BubbleManager.close('summary')" title="关闭">&times;</button>
             </div>
+            <div class="bubble-progress">
+                <div class="bubble-progress-bar">
+                    <div class="bubble-progress-fill summary-progress-fill" id="summaryProgressFill"></div>
+                </div>
+            </div>
+            <div class="bubble-status" id="summaryBubbleStatus">准备中...</div>
+            <button class="bubble-view-btn" id="summaryViewBtn" onclick="viewSummaryResult()" style="display: none;">
+                查看分析结果
+            </button>
         </div>
-        <div class="bubble-status" id="summaryBubbleStatus">准备中...</div>
-        <button class="bubble-view-btn" id="summaryViewBtn" onclick="viewSummaryResult()" style="display: none;">
-            查看分析结果
-        </button>
-    </div>
 
-    <!-- 更新文章进度气泡 -->
-    <div class="crawl-bubble" id="crawlBubble">
-        <div class="bubble-header">
-            <span class="bubble-title">更新文章</span>
-            <button class="bubble-close" onclick="closeCrawlBubble()" title="关闭">&times;</button>
-        </div>
-        <div class="bubble-progress">
-            <div class="bubble-progress-bar">
-                <div class="bubble-progress-fill" id="bubbleProgressFill"></div>
+        <!-- 更新文章进度气泡 -->
+        <div class="progress-bubble crawl-bubble" id="crawlBubble" data-bubble-id="crawl">
+            <div class="bubble-header">
+                <span class="bubble-title">更新文章</span>
+                <button class="bubble-close" onclick="BubbleManager.close('crawl')" title="关闭">&times;</button>
             </div>
-            <span class="bubble-progress-text" id="bubbleProgressText">0/0</span>
-        </div>
-        <div class="bubble-current-site" id="bubbleCurrentSite"></div>
-        <div class="bubble-status" id="bubbleStatus">准备中...</div>
-        <div class="bubble-details" id="bubbleDetails"></div>
-        <div class="bubble-footer" id="bubbleFooter" style="display: none;">
-            <button class="bubble-cancel" id="bubbleCancelBtn" onclick="cancelCrawlTask()">取消任务</button>
+            <div class="bubble-progress">
+                <div class="bubble-progress-bar">
+                    <div class="bubble-progress-fill" id="bubbleProgressFill"></div>
+                </div>
+                <span class="bubble-progress-text" id="bubbleProgressText">0/0</span>
+            </div>
+            <div class="bubble-current-site" id="bubbleCurrentSite"></div>
+            <div class="bubble-status" id="bubbleStatus">准备中...</div>
+            <div class="bubble-details" id="bubbleDetails"></div>
+            <div class="bubble-footer" id="bubbleFooter" style="display: none;">
+                <button class="bubble-cancel" id="bubbleCancelBtn" onclick="cancelCrawlTask()">取消任务</button>
+            </div>
         </div>
     </div>
 

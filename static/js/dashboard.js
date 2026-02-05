@@ -36,6 +36,71 @@ const CHART_THEME = {
     splitLine: { lineStyle: { color: 'rgba(0,240,255,0.1)' } }
 };
 
+// ==================== 统一气泡管理器 ====================
+const BubbleManager = {
+    // 已注册的气泡配置
+    bubbles: {
+        'summary': {
+            element: null,
+            isRunning: false,  // 是否正在运行中（不能完全关闭）
+        },
+        'crawl': {
+            element: null,
+            isRunning: false,
+        }
+    },
+
+    // 初始化
+    init() {
+        this.bubbles.summary.element = document.getElementById('summaryBubble');
+        this.bubbles.crawl.element = document.getElementById('crawlBubble');
+    },
+
+    // 显示气泡
+    show(bubbleId) {
+        const bubble = this.bubbles[bubbleId];
+        if (!bubble || !bubble.element) return;
+
+        bubble.element.classList.add('show');
+        bubble.element.classList.remove('minimized');
+    },
+
+    // 隐藏气泡
+    hide(bubbleId) {
+        const bubble = this.bubbles[bubbleId];
+        if (!bubble || !bubble.element) return;
+
+        bubble.element.classList.remove('show');
+    },
+
+    // 关闭气泡（运行中则最小化）
+    close(bubbleId) {
+        const bubble = this.bubbles[bubbleId];
+        if (!bubble || !bubble.element) return;
+
+        if (bubble.isRunning) {
+            // 运行中只最小化
+            bubble.element.classList.add('minimized');
+        } else {
+            this.hide(bubbleId);
+        }
+    },
+
+    // 设置运行状态
+    setRunning(bubbleId, isRunning) {
+        const bubble = this.bubbles[bubbleId];
+        if (bubble) {
+            bubble.isRunning = isRunning;
+        }
+    },
+
+    // 检查是否正在运行
+    isRunning(bubbleId) {
+        const bubble = this.bubbles[bubbleId];
+        return bubble ? bubble.isRunning : false;
+    }
+};
+
 // ==================== 工具函数 ====================
 
 async function fetchAPI(endpoint) {
@@ -783,6 +848,9 @@ function handleResize() {
 
 // 页面初始化
 document.addEventListener('DOMContentLoaded', async () => {
+    // 初始化气泡管理器
+    BubbleManager.init();
+
     // 更新顶部时间
     updateDateTime();
     setInterval(updateDateTime, 1000);
@@ -1322,18 +1390,23 @@ async function setUpdateInterval(pluginId, siteId, minutes) {
 
 let crawlTaskId = null;
 let crawlPollingTimer = null;
-let crawlIsRunning = false;
 let crawlStats = { success: 0, failed: 0, skipped: 0, articles: 0, saved: 0 };
 
+// 兼容旧代码的 crawlIsRunning 访问
+Object.defineProperty(window, 'crawlIsRunning', {
+    get: () => BubbleManager.isRunning('crawl'),
+    set: (val) => BubbleManager.setRunning('crawl', val)
+});
+
 async function startCrawlUpdate() {
-    if (crawlIsRunning) {
+    if (BubbleManager.isRunning('crawl')) {
         showToast('更新正在进行中', 'warning');
         showCrawlBubble();
         return;
     }
 
     // 重置状态
-    crawlIsRunning = true;
+    BubbleManager.setRunning('crawl', true);
     crawlTaskId = null;
     crawlStats = { success: 0, failed: 0, skipped: 0, articles: 0, saved: 0 };
 
@@ -1369,7 +1442,7 @@ async function startCrawlUpdate() {
 
         if (!result.data.task_id) {
             // 没有站点
-            crawlIsRunning = false;
+            BubbleManager.setRunning('crawl', false);
             resetCrawlButton();
             updateBubbleStatus(result.data.message || '没有启用的站点', 'warning');
             showCancelButton(false);
@@ -1385,7 +1458,7 @@ async function startCrawlUpdate() {
         startPolling();
 
     } catch (error) {
-        crawlIsRunning = false;
+        BubbleManager.setRunning('crawl', false);
         resetCrawlButton();
         showCancelButton(false);
         updateBubbleStatus(`启动失败: ${error.message}`, 'error');
@@ -1469,7 +1542,7 @@ function handleStatusUpdate(status) {
 
 function onCrawlComplete(status) {
     stopPolling();
-    crawlIsRunning = false;
+    BubbleManager.setRunning('crawl', false);
     resetCrawlButton();
     showCancelButton(false);
     updateBubbleCurrentSite('');
@@ -1496,7 +1569,7 @@ function onCrawlComplete(status) {
 
     // 5秒后自动隐藏气泡
     setTimeout(() => {
-        if (!crawlIsRunning) {
+        if (!BubbleManager.isRunning('crawl')) {
             hideCrawlBubble();
         }
     }, 5000);
@@ -1506,7 +1579,7 @@ function onCrawlComplete(status) {
 
 function onCrawlFailed(status) {
     stopPolling();
-    crawlIsRunning = false;
+    BubbleManager.setRunning('crawl', false);
     resetCrawlButton();
     showCancelButton(false);
     updateBubbleCurrentSite('');
@@ -1517,7 +1590,7 @@ function onCrawlFailed(status) {
 
 function onCrawlCancelled(status) {
     stopPolling();
-    crawlIsRunning = false;
+    BubbleManager.setRunning('crawl', false);
     resetCrawlButton();
     showCancelButton(false);
     updateBubbleCurrentSite('');
@@ -1530,7 +1603,7 @@ function onCrawlCancelled(status) {
 }
 
 async function cancelCrawlTask() {
-    if (!crawlTaskId || !crawlIsRunning) {
+    if (!crawlTaskId || !BubbleManager.isRunning('crawl')) {
         return;
     }
 
@@ -1555,22 +1628,15 @@ async function cancelCrawlTask() {
 }
 
 function showCrawlBubble() {
-    const bubble = document.getElementById('crawlBubble');
-    bubble.classList.add('show');
-    bubble.classList.remove('minimized');
+    BubbleManager.show('crawl');
 }
 
 function hideCrawlBubble() {
-    document.getElementById('crawlBubble').classList.remove('show');
+    BubbleManager.hide('crawl');
 }
 
 function closeCrawlBubble() {
-    if (crawlIsRunning) {
-        // 最小化而不是关闭
-        document.getElementById('crawlBubble').classList.add('minimized');
-    } else {
-        hideCrawlBubble();
-    }
+    BubbleManager.close('crawl');
 }
 
 function showCancelButton(show) {
@@ -3334,10 +3400,15 @@ async function deleteAchievement(id) {
 // ==================== AI舆情总结功能 ====================
 
 let summaryData = null;
-let summaryGenerating = false;
 let summaryProgressTimer = null;
 let summaryGeneratedTime = null;  // 上次生成时间
 let summaryTitleUrlMap = {};  // 标题->URL映射
+
+// 兼容旧代码的 summaryGenerating 访问
+Object.defineProperty(window, 'summaryGenerating', {
+    get: () => BubbleManager.isRunning('summary'),
+    set: (val) => BubbleManager.setRunning('summary', val)
+});
 
 // 页面加载时检查今天是否有已生成的总结
 async function checkTodaySummary() {
@@ -3357,7 +3428,7 @@ async function checkTodaySummary() {
 
 // 点击AI总结按钮
 async function startSummaryGenerate() {
-    if (summaryGenerating) {
+    if (BubbleManager.isRunning('summary')) {
         showToast('正在生成中，请稍候', 'warning');
         showSummaryBubble();
         return;
@@ -3424,7 +3495,7 @@ function doGenerateSummary() {
     updateSummaryBubbleStatus('正在获取今日新闻...');
     updateSummaryProgress(10);
 
-    summaryGenerating = true;
+    BubbleManager.setRunning('summary', true);
     summaryData = null;
     summaryTitleUrlMap = {};
 
@@ -3507,28 +3578,22 @@ async function generateSummaryAsync() {
         updateSummaryBubbleStatus(`失败: ${error.message}`, false, true);
         showToast(error.message || '生成失败', 'error');
     } finally {
-        summaryGenerating = false;
+        BubbleManager.setRunning('summary', false);
     }
 }
 
 function showSummaryBubble() {
-    const bubble = document.getElementById('summaryBubble');
-    bubble.classList.add('show');
-    bubble.classList.remove('complete');
+    BubbleManager.show('summary');
+    document.getElementById('summaryBubble').classList.remove('complete');
     document.getElementById('summaryViewBtn').style.display = 'none';
 }
 
 function hideSummaryBubble() {
-    document.getElementById('summaryBubble').classList.remove('show');
+    BubbleManager.hide('summary');
 }
 
 function closeSummaryBubble() {
-    if (summaryGenerating) {
-        // 生成中只是隐藏，不取消
-        hideSummaryBubble();
-    } else {
-        hideSummaryBubble();
-    }
+    BubbleManager.close('summary');
 }
 
 function updateSummaryProgress(percent) {

@@ -1277,35 +1277,60 @@ select option {
 }
 
 /* ========== 更新文章气泡 ========== */
-.crawl-bubble {
+/* ==================== 统一气泡管理容器 ==================== */
+.bubble-container {
     position: fixed;
-    bottom: 80px;
+    bottom: 60px; /* footer高度 + 间距 */
     right: 20px;
+    z-index: 1500;
+    display: flex;
+    flex-direction: column-reverse; /* 从底部向上堆叠 */
+    gap: 12px;
+    max-height: calc(100vh - 120px); /* 确保不会超出视口 */
+    pointer-events: none; /* 容器本身不阻挡点击 */
+}
+
+.bubble-container .progress-bubble {
+    pointer-events: auto; /* 气泡可以点击 */
+}
+
+/* 通用气泡样式 */
+.progress-bubble {
     width: 320px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 16px;
-    z-index: 1500;
     box-shadow: var(--shadow-card), 0 0 30px rgba(0, 240, 255, 0.2);
     transform: translateX(400px);
     opacity: 0;
     transition: all 0.3s ease;
+    display: none; /* 默认隐藏 */
 }
 
-.crawl-bubble.show {
+.progress-bubble.show {
     transform: translateX(0);
     opacity: 1;
+    display: block;
 }
 
-.crawl-bubble.minimized {
+.progress-bubble.minimized {
     width: 200px;
     padding: 10px 14px;
 }
 
-.crawl-bubble.minimized .bubble-details,
-.crawl-bubble.minimized .bubble-status {
+.progress-bubble.minimized .bubble-details,
+.progress-bubble.minimized .bubble-status {
     display: none;
+}
+
+/* 爬虫气泡特殊样式 */
+.crawl-bubble {
+    border-color: var(--border-color);
+}
+
+.crawl-bubble.show {
+    display: block;
 }
 
 .bubble-header {
@@ -4659,26 +4684,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     gap: 6px;
 }
 
-/* AI总结进度气泡 */
+/* AI总结进度气泡 - 继承通用气泡样式 */
 .summary-bubble {
-    position: fixed;
-    bottom: 80px;
-    right: 20px;
     width: 280px;
-    background: var(--bg-card);
-    border: 1px solid var(--primary);
-    border-radius: 12px;
+    border-color: var(--primary);
     padding: 14px;
-    z-index: 1500;
     box-shadow: var(--shadow-card), 0 0 30px rgba(0, 240, 255, 0.3);
-    transform: translateX(350px);
-    opacity: 0;
-    transition: all 0.3s ease;
-}
-
-.summary-bubble.show {
-    transform: translateX(0);
-    opacity: 1;
 }
 
 .summary-bubble .bubble-title {
