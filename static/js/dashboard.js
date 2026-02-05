@@ -4310,7 +4310,7 @@ async function performGlobalSearch(append = false) {
     globalSearchLoading = true;
 
     try {
-        const url = `/articles?keyword=${encodeURIComponent(globalSearchKeyword)}&page=${globalSearchPage}&page_size=${GLOBAL_SEARCH_PAGE_SIZE}`;
+        const url = `/api/articles?keyword=${encodeURIComponent(globalSearchKeyword)}&page=${globalSearchPage}&page_size=${GLOBAL_SEARCH_PAGE_SIZE}`;
         const response = await fetch(url);
         const result = await response.json();
 
