@@ -263,6 +263,13 @@
             <span class="footer-stat">监控 <span id="totalSources">--</span> 个新闻源</span>
         </div>
         <div class="footer-right">
+            <button class="footer-btn" onclick="openGlobalSearch()" title="全局搜索 (Ctrl+F)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                搜索
+            </button>
             <button class="footer-btn footer-btn-primary" onclick="startSummaryGenerate()" title="AI舆情总结">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
@@ -433,6 +440,8 @@
                             <option value="deepseek">DeepSeek</option>
                             <option value="openai">OpenAI</option>
                             <option value="gemini">Google Gemini</option>
+                            <option value="aimlapi">AIML API</option>
+                            <option value="poixe">Poixe</option>
                             <option value="custom">自定义</option>
                         </select>
                     </div>
@@ -1031,6 +1040,40 @@
         </div>
     </div>
 
+    <!-- 全局搜索弹窗 -->
+    <div class="modal-overlay global-search-overlay" id="globalSearchModal">
+        <div class="modal modal-lg global-search-modal">
+            <div class="modal-header">
+                <div class="global-search-input-wrapper">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="globalSearchInput" class="global-search-input"
+                           placeholder="搜索新闻标题..." autocomplete="off" autofocus>
+                    <button class="search-clear-btn" id="searchClearBtn" onclick="clearGlobalSearch()" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                    <span class="search-shortcut">ESC 关闭</span>
+                </div>
+            </div>
+            <div class="modal-body global-search-body">
+                <div class="search-results-info" id="searchResultsInfo">
+                    <span class="search-hint">输入关键词开始搜索</span>
+                </div>
+                <div class="search-results-list" id="globalSearchResults">
+                    <!-- 搜索结果将动态填充 -->
+                </div>
+                <div class="search-load-more" id="searchLoadMore" style="display: none;">
+                    <button class="btn btn-outline btn-sm" onclick="loadMoreSearchResults()">加载更多</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 气泡容器 - 统一管理所有进度气泡 -->
     <div class="bubble-container" id="bubbleContainer">
         <!-- AI总结进度气泡 -->
@@ -1043,6 +1086,7 @@
                 <div class="bubble-progress-bar">
                     <div class="bubble-progress-fill summary-progress-fill" id="summaryProgressFill"></div>
                 </div>
+                <span class="bubble-progress-text" id="summaryProgressText">0%</span>
             </div>
             <div class="bubble-status" id="summaryBubbleStatus">准备中...</div>
             <button class="bubble-view-btn" id="summaryViewBtn" onclick="viewSummaryResult()" style="display: none;">

@@ -3586,6 +3586,8 @@ function showSummaryBubble() {
     BubbleManager.show('summary');
     document.getElementById('summaryBubble').classList.remove('complete');
     document.getElementById('summaryViewBtn').style.display = 'none';
+    // 重置进度
+    updateSummaryProgress(0);
 }
 
 function hideSummaryBubble() {
@@ -3598,6 +3600,7 @@ function closeSummaryBubble() {
 
 function updateSummaryProgress(percent) {
     document.getElementById('summaryProgressFill').style.width = `${percent}%`;
+    document.getElementById('summaryProgressText').textContent = `${Math.round(percent)}%`;
 }
 
 function updateSummaryBubbleStatus(text, isComplete = false, isError = false) {
@@ -3973,7 +3976,7 @@ async function loadSummaryHistory() {
                     <span>生成时间: ${item.created_at}</span>
                 </div>
             `;
-            itemEl.onclick = () => viewHistorySummary(item.date);
+            itemEl.onclick = () => viewHistorySummary(item.id);
             listEl.appendChild(itemEl);
         });
 
@@ -4000,9 +4003,9 @@ function loadMoreSummaryHistory() {
     loadSummaryHistory();
 }
 
-async function viewHistorySummary(dateStr) {
+async function viewHistorySummary(summaryId) {
     try {
-        const response = await fetch(`/api/summary/${dateStr}`);
+        const response = await fetch(`/api/summary/detail/${summaryId}`);
         const result = await response.json();
 
         if (!result.success || !result.data) {
@@ -4208,3 +4211,262 @@ async function saveDutyPersons() {
         showToast('网络错误', 'error');
     }
 }
+
+// ==================== 全局搜索功能 ====================
+
+let globalSearchDebounceTimer = null;
+let globalSearchKeyword = '';
+let globalSearchPage = 1;
+let globalSearchTotal = 0;
+let globalSearchLoading = false;
+const GLOBAL_SEARCH_PAGE_SIZE = 20;
+
+// 打开全局搜索
+function openGlobalSearch() {
+    const modal = document.getElementById('globalSearchModal');
+    modal.classList.add('active');
+
+    // 聚焦输入框
+    setTimeout(() => {
+        const input = document.getElementById('globalSearchInput');
+        input.focus();
+        input.select();
+    }, 100);
+}
+
+// 关闭全局搜索
+function closeGlobalSearch() {
+    const modal = document.getElementById('globalSearchModal');
+    modal.classList.remove('active');
+
+    // 清理状态
+    document.getElementById('globalSearchInput').value = '';
+    document.getElementById('searchClearBtn').style.display = 'none';
+    globalSearchKeyword = '';
+    globalSearchPage = 1;
+    globalSearchTotal = 0;
+
+    // 重置显示
+    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索</span>';
+    document.getElementById('globalSearchResults').innerHTML = '';
+    document.getElementById('searchLoadMore').style.display = 'none';
+}
+
+// 清除搜索内容
+function clearGlobalSearch() {
+    document.getElementById('globalSearchInput').value = '';
+    document.getElementById('searchClearBtn').style.display = 'none';
+    globalSearchKeyword = '';
+    globalSearchPage = 1;
+
+    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索</span>';
+    document.getElementById('globalSearchResults').innerHTML = '';
+    document.getElementById('searchLoadMore').style.display = 'none';
+
+    document.getElementById('globalSearchInput').focus();
+}
+
+// 搜索输入处理（防抖）
+function handleGlobalSearchInput(e) {
+    const keyword = e.target.value.trim();
+
+    // 显示/隐藏清除按钮
+    document.getElementById('searchClearBtn').style.display = keyword ? 'block' : 'none';
+
+    // 防抖处理
+    if (globalSearchDebounceTimer) {
+        clearTimeout(globalSearchDebounceTimer);
+    }
+
+    if (!keyword) {
+        document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索</span>';
+        document.getElementById('globalSearchResults').innerHTML = '';
+        document.getElementById('searchLoadMore').style.display = 'none';
+        globalSearchKeyword = '';
+        return;
+    }
+
+    // 显示加载状态
+    if (keyword !== globalSearchKeyword) {
+        document.getElementById('globalSearchResults').innerHTML = `
+            <div class="search-loading">
+                <div class="spinner"></div>
+                <span>搜索中...</span>
+            </div>
+        `;
+    }
+
+    globalSearchDebounceTimer = setTimeout(() => {
+        globalSearchKeyword = keyword;
+        globalSearchPage = 1;
+        performGlobalSearch(false);
+    }, 200);  // 200ms 防抖，快速响应
+}
+
+// 执行搜索
+async function performGlobalSearch(append = false) {
+    if (globalSearchLoading || !globalSearchKeyword) return;
+
+    globalSearchLoading = true;
+
+    try {
+        const url = `/articles?keyword=${encodeURIComponent(globalSearchKeyword)}&page=${globalSearchPage}&page_size=${GLOBAL_SEARCH_PAGE_SIZE}`;
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || '搜索失败');
+        }
+
+        const data = result.data;
+        globalSearchTotal = data.total;
+
+        // 更新结果信息
+        if (data.total > 0) {
+            document.getElementById('searchResultsInfo').innerHTML =
+                `找到 <span class="search-results-count">${data.total}</span> 条相关结果`;
+        } else {
+            document.getElementById('searchResultsInfo').innerHTML =
+                `<span class="search-hint">未找到相关结果</span>`;
+        }
+
+        // 渲染结果
+        const resultsContainer = document.getElementById('globalSearchResults');
+
+        if (!append) {
+            resultsContainer.innerHTML = '';
+        }
+
+        if (data.items.length === 0 && !append) {
+            resultsContainer.innerHTML = `
+                <div class="search-empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span>没有找到 "${escapeHtml(globalSearchKeyword)}" 相关的新闻</span>
+                </div>
+            `;
+        } else {
+            data.items.forEach(item => {
+                resultsContainer.innerHTML += renderSearchResultItem(item);
+            });
+        }
+
+        // 显示/隐藏"加载更多"按钮
+        const hasMore = globalSearchPage * GLOBAL_SEARCH_PAGE_SIZE < data.total;
+        document.getElementById('searchLoadMore').style.display = hasMore ? 'block' : 'none';
+
+    } catch (error) {
+        console.error('搜索出错:', error);
+        document.getElementById('globalSearchResults').innerHTML = `
+            <div class="search-empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+                <span>搜索出错，请重试</span>
+            </div>
+        `;
+    } finally {
+        globalSearchLoading = false;
+    }
+}
+
+// 渲染单个搜索结果
+function renderSearchResultItem(item) {
+    const title = item.title || '无标题';
+    const url = item.url || '#';
+    const source = item.source || '未知来源';
+    const pubDate = item.pub_date || '';
+
+    // 高亮关键词
+    const highlightedTitle = highlightKeyword(title, globalSearchKeyword);
+
+    return `
+        <a href="${escapeHtml(url)}" target="_blank" class="search-result-item">
+            <div class="search-result-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+            </div>
+            <div class="search-result-content">
+                <div class="search-result-title">${highlightedTitle}</div>
+                <div class="search-result-meta">
+                    <span class="search-result-source">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                        ${escapeHtml(source)}
+                    </span>
+                    ${pubDate ? `<span class="search-result-date">${escapeHtml(pubDate)}</span>` : ''}
+                </div>
+            </div>
+            <svg class="search-result-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+        </a>
+    `;
+}
+
+// 高亮关键词
+function highlightKeyword(text, keyword) {
+    if (!keyword) return escapeHtml(text);
+
+    // 转义特殊字符用于正则
+    const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+
+    // 先转义HTML，再添加高亮标记
+    const escaped = escapeHtml(text);
+    return escaped.replace(regex, '<mark>$1</mark>');
+}
+
+// 加载更多搜索结果
+function loadMoreSearchResults() {
+    if (globalSearchLoading) return;
+
+    globalSearchPage++;
+    performGlobalSearch(true);
+}
+
+// 全局键盘事件监听
+document.addEventListener('keydown', function(e) {
+    // Ctrl+F 或 Cmd+F 打开全局搜索
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();  // 阻止浏览器默认搜索
+        openGlobalSearch();
+    }
+
+    // ESC 关闭全局搜索
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('globalSearchModal');
+        if (modal && modal.classList.contains('active')) {
+            closeGlobalSearch();
+        }
+    }
+});
+
+// 搜索输入框事件绑定
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('globalSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', handleGlobalSearchInput);
+
+        // 回车键打开第一个结果
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const firstResult = document.querySelector('.search-result-item');
+                if (firstResult) {
+                    firstResult.click();
+                }
+            }
+        });
+    }
+});

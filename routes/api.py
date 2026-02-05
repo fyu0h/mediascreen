@@ -1961,8 +1961,9 @@ def _correct_structured_refs(structured_refs: dict, title_url_map: dict) -> dict
     """
     使用 title_url_map 校正 structured_refs 中的URL
     解决AI返回无效URL的问题
+    注意：即使没有找到URL，也要保留title
     """
-    if not structured_refs or not title_url_map:
+    if not structured_refs:
         return structured_refs
 
     corrected = {}
@@ -1977,16 +1978,20 @@ def _correct_structured_refs(structured_refs: dict, title_url_map: dict) -> dict
                 for item in items:
                     if isinstance(item, dict):
                         title = item.get('title', '')
+                        if not title:
+                            continue  # 没有标题的跳过
                         # 使用 title_url_map 校正 URL
-                        url = _lookup_url_by_title(title, title_url_map)
-                        if url:
-                            corrected_items.append({
-                                'title': title,
-                                'url': url
-                            })
-                        elif item.get('url') and item['url'] not in ['#', '', '链接']:
-                            # 保留原有的有效URL
-                            corrected_items.append(item)
+                        url = _lookup_url_by_title(title, title_url_map) if title_url_map else ''
+                        if not url:
+                            # 尝试保留原有的有效URL
+                            original_url = item.get('url', '')
+                            if original_url and original_url not in ['#', '', '链接']:
+                                url = original_url
+                        # 无论是否有URL，只要有title就保留
+                        corrected_items.append({
+                            'title': title,
+                            'url': url or ''
+                        })
                 corrected_categories[cat_key] = corrected_items
         corrected['category_news'] = corrected_categories
 
@@ -1997,16 +2002,21 @@ def _correct_structured_refs(structured_refs: dict, title_url_map: dict) -> dict
         for item in top_5:
             if isinstance(item, dict):
                 title = item.get('title', '')
+                if not title:
+                    continue  # 没有标题的跳过
                 rank = item.get('rank', 0)
-                url = _lookup_url_by_title(title, title_url_map)
-                if url:
-                    corrected_top5.append({
-                        'rank': rank,
-                        'title': title,
-                        'url': url
-                    })
-                elif item.get('url') and item['url'] not in ['#', '', '链接']:
-                    corrected_top5.append(item)
+                url = _lookup_url_by_title(title, title_url_map) if title_url_map else ''
+                if not url:
+                    # 尝试保留原有的有效URL
+                    original_url = item.get('url', '')
+                    if original_url and original_url not in ['#', '', '链接']:
+                        url = original_url
+                # 无论是否有URL，只要有title就保留
+                corrected_top5.append({
+                    'rank': rank,
+                    'title': title,
+                    'url': url or ''
+                })
         corrected['top_5_news'] = corrected_top5
 
     return corrected
@@ -2051,7 +2061,7 @@ def summary_daily():
         for i, article in enumerate(articles[:200], 1):  # 最多取200条
             source = article.get('source_name', '未知来源')
             title = article.get('title', '')
-            url = article.get('url', '')
+            url = article.get('loc', '') or article.get('url', '')  # 优先使用loc字段
 
             if title:
                 # 新格式：包含标题和链接
@@ -2222,12 +2232,14 @@ def summary_daily():
         }
 
         summaries_collection = get_summaries_collection()
-        # 更新或插入当天的记录
-        summaries_collection.update_one(
-            {'date': today},
-            {'$set': summary_doc},
-            upsert=True
-        )
+
+        # 获取当天已有记录数，生成序号
+        today_count = summaries_collection.count_documents({'date': today})
+        summary_doc['seq'] = today_count + 1  # 序号从1开始
+
+        # 新增记录而不是覆盖
+        result = summaries_collection.insert_one(summary_doc)
+        summary_id = str(result.inserted_id)
 
         # 记录日志
         log_operation(
@@ -2242,6 +2254,8 @@ def summary_daily():
         )
 
         return success_response({
+            'id': summary_id,
+            'seq': summary_doc['seq'],
             'summary': summary,
             'hot_news': hot_news_text,
             'risk_analysis': risk_analysis,
@@ -2277,18 +2291,24 @@ def summary_history():
         # 查询总数
         total = summaries_collection.count_documents({})
 
-        # 分页查询，按日期倒序
+        # 分页查询，按创建时间倒序（同一天的多条记录按时间排序）
         cursor = summaries_collection.find(
             {},
             {'title_url_map': 0}  # 不返回映射表（数据太大）
-        ).sort('date', -1).skip((page - 1) * page_size).limit(page_size)
+        ).sort([('date', -1), ('created_at', -1)]).skip((page - 1) * page_size).limit(page_size)
 
         items = []
         for doc in cursor:
+            seq = doc.get('seq', 1)
+            date_str_display = doc.get('date_str', doc['date'].strftime('%Y年%m月%d日'))
+            # 如果同一天有多条记录，显示序号
+            if seq > 1:
+                date_str_display += f' (第{seq}次)'
             items.append({
                 'id': str(doc['_id']),
+                'seq': seq,
                 'date': doc['date'].strftime('%Y-%m-%d'),
-                'date_str': doc.get('date_str', doc['date'].strftime('%Y年%m月%d日')),
+                'date_str': date_str_display,
                 'article_count': doc.get('article_count', 0),
                 'model': doc.get('model', ''),
                 'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S'),
@@ -2306,18 +2326,17 @@ def summary_history():
         return error_response(f'获取历史记录失败: {str(e)}', 500)
 
 
-@api_bp.route('/summary/<date_str>', methods=['GET'])
-def summary_get_by_date(date_str):
-    """获取指定日期的AI总结"""
+@api_bp.route('/summary/detail/<summary_id>', methods=['GET'])
+def summary_get_by_id(summary_id):
+    """根据ID获取AI总结详情"""
     try:
-        # 解析日期
-        try:
-            target_date = datetime.strptime(date_str, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
-        except ValueError:
-            return error_response('日期格式错误，请使用 YYYY-MM-DD 格式', 400)
-
+        from bson import ObjectId
         summaries_collection = get_summaries_collection()
-        doc = summaries_collection.find_one({'date': target_date})
+
+        try:
+            doc = summaries_collection.find_one({'_id': ObjectId(summary_id)})
+        except Exception:
+            return error_response('无效的ID格式', 400)
 
         if not doc:
             return success_response(None)
@@ -2329,6 +2348,51 @@ def summary_get_by_date(date_str):
 
         return success_response({
             'id': str(doc['_id']),
+            'seq': doc.get('seq', 1),
+            'date': doc['date'].strftime('%Y-%m-%d'),
+            'date_str': doc.get('date_str', doc['date'].strftime('%Y年%m月%d日')),
+            'summary': doc.get('summary', ''),
+            'hot_news': doc.get('hot_news', ''),
+            'risk_analysis': doc.get('risk_analysis', ''),
+            'full_content': doc.get('full_content', ''),
+            'article_count': doc.get('article_count', 0),
+            'model': doc.get('model', ''),
+            'title_url_map': title_url_map,
+            'structured_refs': corrected_refs,
+            'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S')
+        })
+    except Exception as e:
+        return error_response(f'获取总结失败: {str(e)}', 500)
+
+
+@api_bp.route('/summary/<date_str>', methods=['GET'])
+def summary_get_by_date(date_str):
+    """获取指定日期的最新AI总结"""
+    try:
+        # 解析日期
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
+        except ValueError:
+            return error_response('日期格式错误，请使用 YYYY-MM-DD 格式', 400)
+
+        summaries_collection = get_summaries_collection()
+        # 获取该日期最新的记录
+        doc = summaries_collection.find_one(
+            {'date': target_date},
+            sort=[('created_at', -1)]
+        )
+
+        if not doc:
+            return success_response(None)
+
+        # 校正 structured_refs 中的URL
+        title_url_map = doc.get('title_url_map', {})
+        structured_refs = doc.get('structured_refs', {})
+        corrected_refs = _correct_structured_refs(structured_refs, title_url_map)
+
+        return success_response({
+            'id': str(doc['_id']),
+            'seq': doc.get('seq', 1),
             'date': doc['date'].strftime('%Y-%m-%d'),
             'date_str': doc.get('date_str', doc['date'].strftime('%Y年%m月%d日')),
             'summary': doc.get('summary', ''),
@@ -2347,12 +2411,16 @@ def summary_get_by_date(date_str):
 
 @api_bp.route('/summary/today', methods=['GET'])
 def summary_get_today():
-    """获取今天的AI总结（如果有）"""
+    """获取今天最新的AI总结（如果有）"""
     try:
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
         summaries_collection = get_summaries_collection()
-        doc = summaries_collection.find_one({'date': today})
+        # 获取当天最新的记录（按created_at倒序）
+        doc = summaries_collection.find_one(
+            {'date': today},
+            sort=[('created_at', -1)]
+        )
 
         if not doc:
             return success_response(None)
@@ -2364,6 +2432,7 @@ def summary_get_today():
 
         return success_response({
             'id': str(doc['_id']),
+            'seq': doc.get('seq', 1),
             'date': doc['date'].strftime('%Y-%m-%d'),
             'date_str': doc.get('date_str', doc['date'].strftime('%Y年%m月%d日')),
             'summary': doc.get('summary', ''),
