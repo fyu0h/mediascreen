@@ -120,5 +120,18 @@ class InternationalMediaPlugin(BasePlugin):
                 "sitemap_url": None,
                 "description": "阿根廷Infobae美洲新闻（使用专用解析器）",
                 "enabled_by_default": True
+            },
+            {
+                "id": "us_cdt",
+                "name": "中国数字时代 (CDT)",
+                "url": "https://chinadigitaltimes.net/",
+                "domain": "chinadigitaltimes.net",
+                "country_code": "US",
+                "coords": [-122.2585, 37.8719],
+                "fetch_method": "scheduler",
+                "parser": None,
+                "sitemap_url": None,
+                "description": "China Digital Times（RSS定时更新）",
+                "enabled_by_default": True
             }
         ]

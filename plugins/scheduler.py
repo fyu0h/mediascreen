@@ -79,6 +79,16 @@ class RSSScheduler:
                 ],
                 'use_homepage': False,
             },
+            {
+                'id': 'cdt',
+                'name': '中国数字时代 (CDT)',
+                'country_code': 'US',
+                'coords': [-122.2585, 37.8719],
+                'rss_urls': [
+                    'https://chinadigitaltimes.net/feed/',
+                ],
+                'use_homepage': False,
+            },
         ]
 
         self.headers = {
