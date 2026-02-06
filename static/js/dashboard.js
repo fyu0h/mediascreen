@@ -1035,6 +1035,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 初始化底部刷新时间
     updateRefreshTime();
 
+    // 加载保存的布局配置
+    await loadSavedLayout();
+
     // 加载数据（首次加载显示加载指示器）
     await loadAllData(false);
 
@@ -5904,4 +5907,422 @@ function renderTgGroupActivityChart(data) {
             { name: '报警数', type: 'bar', data: alertCounts, itemStyle: { color: '#ff4757' } },
         ]
     });
+}
+
+
+// ==================== 布局编辑模式 ====================
+
+// 编辑模式状态变量
+let isEditMode = false;
+let layoutModified = false;
+let resizeHandles = [];
+
+// 默认布局配置
+const LAYOUT_DEFAULTS = {
+    panels: {
+        'panel-left': { width: '22%' },
+        'panel-right': { width: '25%' }
+    },
+    cards: {
+        'stats-overview': { flex: null, height: null },
+        'source-chart': { flex: '1', height: null },
+        'latest-articles': { flex: '1', height: null },
+        'world-map': { flex: null, height: 'calc(62% + 7.5px)' },
+        'achievements': { flex: '0 0 100px', height: null },
+        'telegram': { flex: '1', height: null },
+        'duty': { flex: null, height: null },
+        'risk-monitor': { flex: null, height: null },
+        'keyword-chart': { flex: null, height: null },
+        'risk-alerts': { flex: '2', height: null }
+    }
+};
+
+// ---------- 页面加载时读取并应用保存的布局 ----------
+
+async function loadSavedLayout() {
+    try {
+        const res = await fetch('/api/layout');
+        const data = await res.json();
+        if (data.success && data.data && Object.keys(data.data).length > 0) {
+            applyLayout(data.data);
+        }
+    } catch (e) {
+        // 加载失败使用默认布局，不影响页面
+    }
+}
+
+/**
+ * 将布局配置应用到 DOM
+ */
+function applyLayout(layout) {
+    // 应用面板宽度
+    if (layout.panels) {
+        const mainContent = document.querySelector('.main-content');
+        if (layout.panels['panel-left']) {
+            const pl = mainContent.querySelector('.panel-left');
+            if (pl) pl.style.width = layout.panels['panel-left'].width;
+        }
+        if (layout.panels['panel-right']) {
+            const pr = mainContent.querySelector('.panel-right');
+            if (pr) pr.style.width = layout.panels['panel-right'].width;
+        }
+    }
+
+    // 应用卡片 flex/height
+    if (layout.cards) {
+        Object.entries(layout.cards).forEach(([id, cfg]) => {
+            const card = document.querySelector(`[data-layout-id="${id}"]`);
+            if (!card) return;
+            if (cfg.flex) {
+                card.style.flex = cfg.flex;
+            }
+            if (cfg.height) {
+                card.style.height = cfg.height;
+            }
+        });
+    }
+
+    // 触发图表重绘
+    setTimeout(() => handleResize(), 100);
+}
+
+// ---------- 进入/退出编辑模式 ----------
+
+function toggleEditMode() {
+    if (isEditMode) {
+        exitEditMode();
+    } else {
+        enterEditMode();
+    }
+}
+
+function enterEditMode() {
+    isEditMode = true;
+    layoutModified = false;
+    document.body.classList.add('edit-mode');
+
+    // 暂停自动刷新
+    if (refreshTimer) clearInterval(refreshTimer);
+    if (articleRefreshTimer) clearInterval(articleRefreshTimer);
+    refreshTimer = null;
+    articleRefreshTimer = null;
+
+    // 更新底部刷新状态提示
+    const statusEl = document.getElementById('autoRefreshStatus');
+    if (statusEl) {
+        statusEl.innerHTML = '<span class="refresh-dot" style="background:#ffa502;box-shadow:0 0 6px #ffa502;"></span>编辑模式（刷新已暂停）';
+    }
+
+    // 创建浮动工具栏
+    createEditToolbar();
+
+    // 创建所有 resize handle
+    createResizeHandles();
+
+    // 更新底部按钮状态
+    const btn = document.getElementById('btnEditLayout');
+    if (btn) btn.classList.add('edit-active');
+
+    showToast('已进入布局编辑模式，拖拽分隔条调整大小', 'success');
+}
+
+function exitEditMode() {
+    if (layoutModified) {
+        if (confirm('布局已修改但未保存，是否保存？')) {
+            saveLayout();
+        }
+    }
+    isEditMode = false;
+    document.body.classList.remove('edit-mode');
+
+    // 移除所有 handle 和工具栏
+    removeResizeHandles();
+    removeEditToolbar();
+
+    // 恢复自动刷新
+    startAutoRefresh();
+    startArticleAutoRefresh();
+
+    // 恢复底部刷新状态
+    const statusEl = document.getElementById('autoRefreshStatus');
+    if (statusEl) {
+        statusEl.innerHTML = '<span class="refresh-dot"></span>自动刷新中';
+    }
+
+    // 更新按钮状态
+    const btn = document.getElementById('btnEditLayout');
+    if (btn) btn.classList.remove('edit-active');
+}
+
+// ---------- 浮动编辑工具栏 ----------
+
+function createEditToolbar() {
+    const toolbar = document.createElement('div');
+    toolbar.className = 'edit-toolbar';
+    toolbar.id = 'editToolbar';
+    toolbar.innerHTML = `
+        <span class="toolbar-label">编辑模式</span>
+        <span class="toolbar-divider"></span>
+        <button class="toolbar-btn btn-save-layout" onclick="saveLayout()">保存布局</button>
+        <button class="toolbar-btn" onclick="resetLayout()">重置默认</button>
+        <button class="toolbar-btn btn-exit-edit" onclick="exitEditMode()">退出编辑</button>
+    `;
+    document.body.appendChild(toolbar);
+}
+
+function removeEditToolbar() {
+    const el = document.getElementById('editToolbar');
+    if (el) el.remove();
+}
+
+// ---------- 创建/移除 resize handle ----------
+
+function createResizeHandles() {
+    const mainContent = document.querySelector('.main-content');
+    const panels = mainContent.querySelectorAll('.panel');
+
+    // 在面板之间插入垂直 handle
+    // 面板排列：panel-left, panel-center, panel-right
+    const panelLeft = mainContent.querySelector('.panel-left');
+    const panelCenter = mainContent.querySelector('.panel-center');
+    const panelRight = mainContent.querySelector('.panel-right');
+
+    if (panelLeft && panelCenter) {
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle resize-handle-v';
+        handle.dataset.leftPanel = 'panel-left';
+        handle.dataset.rightPanel = 'panel-center';
+        panelLeft.after(handle);
+        resizeHandles.push(handle);
+        handle.addEventListener('mousedown', (e) => onPanelResizeStart(e, handle, panelLeft, panelCenter, 'left'));
+    }
+
+    if (panelCenter && panelRight) {
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle resize-handle-v';
+        handle.dataset.leftPanel = 'panel-center';
+        handle.dataset.rightPanel = 'panel-right';
+        panelRight.before(handle);
+        resizeHandles.push(handle);
+        handle.addEventListener('mousedown', (e) => onPanelResizeStart(e, handle, panelCenter, panelRight, 'right'));
+    }
+
+    // 在每个面板内的卡片之间插入水平 handle
+    panels.forEach(panel => {
+        const cards = Array.from(panel.children).filter(el => el.classList.contains('card'));
+        for (let i = 0; i < cards.length - 1; i++) {
+            const handle = document.createElement('div');
+            handle.className = 'resize-handle resize-handle-h';
+            handle.dataset.aboveCard = cards[i].dataset.layoutId;
+            handle.dataset.belowCard = cards[i + 1].dataset.layoutId;
+            cards[i].after(handle);
+            resizeHandles.push(handle);
+            handle.addEventListener('mousedown', (e) => onCardResizeStart(e, handle, cards[i], cards[i + 1], panel));
+        }
+    });
+}
+
+function removeResizeHandles() {
+    resizeHandles.forEach(h => h.remove());
+    resizeHandles = [];
+}
+
+// ---------- 面板宽度拖拽 ----------
+
+function onPanelResizeStart(e, handle, leftPanel, rightPanel, side) {
+    e.preventDefault();
+    handle.classList.add('active');
+    document.body.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+
+    const mainContent = document.querySelector('.main-content');
+    const mainWidth = mainContent.clientWidth;
+    const startX = e.clientX;
+    const startLeftW = leftPanel.getBoundingClientRect().width;
+    const startRightW = rightPanel.getBoundingClientRect().width;
+
+    function onMouseMove(e) {
+        const deltaX = e.clientX - startX;
+
+        if (side === 'left') {
+            // 拖拽 panel-left 和 panel-center 之间的分隔条
+            let newLeftW = startLeftW + deltaX;
+            // 最小宽度约束
+            const minW = mainWidth * 0.12;
+            const maxW = mainWidth * 0.40;
+            newLeftW = Math.max(minW, Math.min(maxW, newLeftW));
+            leftPanel.style.width = (newLeftW / mainWidth * 100) + '%';
+        } else {
+            // 拖拽 panel-center 和 panel-right 之间的分隔条
+            let newRightW = startRightW - deltaX;
+            const minW = mainWidth * 0.12;
+            const maxW = mainWidth * 0.40;
+            newRightW = Math.max(minW, Math.min(maxW, newRightW));
+            rightPanel.style.width = (newRightW / mainWidth * 100) + '%';
+        }
+
+        layoutModified = true;
+        // 实时触发图表重绘
+        requestAnimationFrame(() => handleResize());
+    }
+
+    function onMouseUp() {
+        handle.classList.remove('active');
+        document.body.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        handleResize();
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+}
+
+// ---------- 卡片高度拖拽 ----------
+
+function onCardResizeStart(e, handle, aboveCard, belowCard, panel) {
+    e.preventDefault();
+    handle.classList.add('active');
+    document.body.classList.add('resizing');
+    document.body.style.cursor = 'row-resize';
+
+    const startY = e.clientY;
+    const aboveRect = aboveCard.getBoundingClientRect();
+    const belowRect = belowCard.getBoundingClientRect();
+    const startAboveH = aboveRect.height;
+    const startBelowH = belowRect.height;
+    const totalH = startAboveH + startBelowH;
+    const minH = 60; // 最小卡片高度
+
+    function onMouseMove(e) {
+        const deltaY = e.clientY - startY;
+        let newAboveH = startAboveH + deltaY;
+        let newBelowH = startBelowH - deltaY;
+
+        // 施加最小高度约束
+        if (newAboveH < minH) {
+            newAboveH = minH;
+            newBelowH = totalH - minH;
+        }
+        if (newBelowH < minH) {
+            newBelowH = minH;
+            newAboveH = totalH - minH;
+        }
+
+        // 转换为 flex 比例
+        const aboveRatio = newAboveH / totalH;
+        const belowRatio = newBelowH / totalH;
+
+        aboveCard.style.flex = aboveRatio.toFixed(4);
+        belowCard.style.flex = belowRatio.toFixed(4);
+
+        // 清除可能的固定高度
+        aboveCard.style.height = '';
+        belowCard.style.height = '';
+
+        layoutModified = true;
+        requestAnimationFrame(() => handleResize());
+    }
+
+    function onMouseUp() {
+        handle.classList.remove('active');
+        document.body.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        handleResize();
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+}
+
+// ---------- 保存/加载/重置布局 ----------
+
+/**
+ * 收集当前布局数据并保存到后端
+ */
+async function saveLayout() {
+    const mainContent = document.querySelector('.main-content');
+    const mainWidth = mainContent.clientWidth;
+    const layout = { panels: {}, cards: {} };
+
+    // 收集面板宽度
+    const panelLeft = mainContent.querySelector('.panel-left');
+    const panelRight = mainContent.querySelector('.panel-right');
+    if (panelLeft) {
+        const w = panelLeft.getBoundingClientRect().width;
+        layout.panels['panel-left'] = { width: (w / mainWidth * 100).toFixed(2) + '%' };
+    }
+    if (panelRight) {
+        const w = panelRight.getBoundingClientRect().width;
+        layout.panels['panel-right'] = { width: (w / mainWidth * 100).toFixed(2) + '%' };
+    }
+
+    // 收集卡片 flex 值
+    document.querySelectorAll('[data-layout-id]').forEach(card => {
+        const id = card.dataset.layoutId;
+        const computedStyle = window.getComputedStyle(card);
+        const flexGrow = computedStyle.flexGrow;
+        const flexShrink = computedStyle.flexShrink;
+        const flexBasis = computedStyle.flexBasis;
+
+        // 检查是否有内联 flex 样式
+        const inlineFlex = card.style.flex;
+        const inlineHeight = card.style.height;
+
+        if (inlineFlex) {
+            layout.cards[id] = { flex: inlineFlex, height: null };
+        } else if (inlineHeight) {
+            layout.cards[id] = { flex: null, height: inlineHeight };
+        }
+        // 无内联样式的卡片不保存（使用CSS默认值）
+    });
+
+    try {
+        const res = await fetch('/api/layout', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(layout)
+        });
+        const data = await res.json();
+        if (data.success) {
+            layoutModified = false;
+            showToast('布局已保存', 'success');
+        } else {
+            showToast(data.error || '保存失败', 'error');
+        }
+    } catch (e) {
+        showToast('保存布局请求失败', 'error');
+    }
+}
+
+/**
+ * 重置布局为默认值
+ */
+async function resetLayout() {
+    if (!confirm('确定恢复默认布局？')) return;
+
+    // 清除所有内联样式
+    const panelLeft = document.querySelector('.panel-left');
+    const panelRight = document.querySelector('.panel-right');
+    if (panelLeft) panelLeft.style.width = '';
+    if (panelRight) panelRight.style.width = '';
+
+    document.querySelectorAll('[data-layout-id]').forEach(card => {
+        card.style.flex = '';
+        card.style.height = '';
+    });
+
+    // 删除后端保存的布局
+    try {
+        await fetch('/api/layout', { method: 'DELETE' });
+    } catch (e) {
+        // 忽略
+    }
+
+    layoutModified = false;
+    handleResize();
+    showToast('已恢复默认布局', 'success');
 }

@@ -962,6 +962,55 @@ def test_api_connection():
         return error_response(f'测试失败: {str(e)}', 500)
 
 
+@api_bp.route('/layout', methods=['GET'])
+def get_layout():
+    """获取仪表盘布局配置"""
+    try:
+        settings = load_settings()
+        layout = settings.get('layout', {})
+        return success_response(layout)
+    except Exception as e:
+        return error_response(f'获取布局失败: {str(e)}', 500)
+
+
+@api_bp.route('/layout', methods=['PUT'])
+def update_layout():
+    """保存仪表盘布局配置"""
+    try:
+        data = request.get_json()
+        if data is None:
+            return error_response('请求体不能为空', 400)
+
+        from models.settings import set_setting
+        set_setting('layout', data)
+
+        log_operation(
+            action='更新仪表盘布局',
+            details={'panels': list(data.get('panels', {}).keys())},
+            status='success'
+        )
+        return success_response({'message': '布局已保存'})
+    except Exception as e:
+        return error_response(f'保存布局失败: {str(e)}', 500)
+
+
+@api_bp.route('/layout', methods=['DELETE'])
+def reset_layout():
+    """重置仪表盘布局为默认"""
+    try:
+        from models.settings import set_setting
+        set_setting('layout', {})
+
+        log_operation(
+            action='重置仪表盘布局',
+            details={},
+            status='success'
+        )
+        return success_response({'message': '布局已重置'})
+    except Exception as e:
+        return error_response(f'重置布局失败: {str(e)}', 500)
+
+
 @api_bp.route('/duty', methods=['GET'])
 def get_duty():
     """获取今日值班人员"""

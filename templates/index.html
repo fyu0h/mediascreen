@@ -35,7 +35,7 @@
         <!-- 左侧面板 -->
         <aside class="panel panel-left">
             <!-- 实时统计 -->
-            <section class="card">
+            <section class="card" data-layout-id="stats-overview">
                 <div class="card-header">
                     <span class="card-title">实时数据概览</span>
                     <span class="refresh-indicator" id="refreshIndicator"></span>
@@ -64,7 +64,7 @@
             </section>
 
             <!-- 新闻源分布 -->
-            <section class="card flex-1">
+            <section class="card flex-1" data-layout-id="source-chart">
                 <div class="card-header">
                     <span class="card-title">新闻源文章分布</span>
                 </div>
@@ -74,7 +74,7 @@
             </section>
 
             <!-- 最新获取文章 -->
-            <section class="card flex-1">
+            <section class="card flex-1" data-layout-id="latest-articles">
                 <div class="card-header">
                     <span class="card-title">最新获取文章</span>
                     <span class="article-count" id="latestArticleCount">0</span>
@@ -89,7 +89,7 @@
 
         <!-- 中央地图区 -->
         <section class="panel panel-center">
-            <div class="card map-card">
+            <div class="card map-card" data-layout-id="world-map">
                 <div class="card-header">
                     <span class="card-title">全球新闻源分布</span>
                     <div class="map-legend">
@@ -106,7 +106,7 @@
             </div>
 
             <!-- 成果展示 -->
-            <div class="card achievements-card achievements-card-compact">
+            <div class="card achievements-card achievements-card-compact" data-layout-id="achievements">
                 <div class="card-header">
                     <span class="card-title">成果展示</span>
                     <button class="btn-manage" onclick="openAchievementModal()" title="添加成果">
@@ -125,7 +125,7 @@
             </div>
 
             <!-- Telegram 群组监控 -->
-            <div class="card telegram-card">
+            <div class="card telegram-card" data-layout-id="telegram">
                 <div class="card-header">
                     <span class="card-title">Telegram群组监控</span>
                     <div class="telegram-header-actions">
@@ -185,7 +185,7 @@
         <!-- 右侧面板 -->
         <aside class="panel panel-right">
             <!-- 今日值班 -->
-            <section class="card duty-card">
+            <section class="card duty-card" data-layout-id="duty">
                 <div class="card-header">
                     <span class="card-title">今日值班</span>
                     <button class="btn-manage" onclick="openDutyModal()" title="设置值班人员">
@@ -228,7 +228,7 @@
             </section>
 
             <!-- 风控告警统计 -->
-            <section class="card">
+            <section class="card" data-layout-id="risk-monitor">
                 <div class="card-header">
                     <span class="card-title">风控监控中心</span>
                     <button class="btn-manage" onclick="openKeywordModal()" title="管理关键词">
@@ -266,7 +266,7 @@
             </section>
 
             <!-- 关键词热度 -->
-            <section class="card">
+            <section class="card" data-layout-id="keyword-chart">
                 <div class="card-header">
                     <span class="card-title">风控关键词热度</span>
                     <span class="chart-hint">点击筛选</span>
@@ -277,7 +277,7 @@
             </section>
 
             <!-- 风控告警列表 -->
-            <section class="card flex-2">
+            <section class="card flex-2" data-layout-id="risk-alerts">
                 <div class="card-header">
                     <span class="card-title">最新风控告警</span>
                     <div class="alert-header-right">
@@ -353,6 +353,15 @@
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                 </svg>
                 日志
+            </button>
+            <button class="footer-btn" id="btnEditLayout" onclick="toggleEditMode()" title="编辑布局">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                </svg>
+                布局
             </button>
             <button class="footer-btn" onclick="openSettingsModal()" title="系统设置">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

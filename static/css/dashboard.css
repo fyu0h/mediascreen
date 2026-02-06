@@ -6684,3 +6684,188 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     left: 18px;
 }
 
+/* ========== 布局编辑模式 ========== */
+
+/* 编辑模式下卡片视觉反馈 */
+body.edit-mode .card {
+    border: 2px dashed rgba(0, 240, 255, 0.35) !important;
+    transition: border-color 0.3s ease;
+}
+
+body.edit-mode .card:hover {
+    border-color: rgba(0, 240, 255, 0.6) !important;
+}
+
+/* 垂直 resize handle（面板之间） */
+.resize-handle-v {
+    width: 8px;
+    cursor: col-resize;
+    background: rgba(0, 240, 255, 0.1);
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    z-index: 10;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.resize-handle-v::after {
+    content: '';
+    width: 2px;
+    height: 40px;
+    background: rgba(0, 240, 255, 0.3);
+    border-radius: 1px;
+}
+
+.resize-handle-v:hover,
+.resize-handle-v.active {
+    background: rgba(0, 240, 255, 0.25);
+}
+
+.resize-handle-v:hover::after,
+.resize-handle-v.active::after {
+    background: var(--primary);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+/* 水平 resize handle（卡片之间） */
+.resize-handle-h {
+    height: 8px;
+    cursor: row-resize;
+    background: rgba(0, 240, 255, 0.1);
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    z-index: 10;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.resize-handle-h::after {
+    content: '';
+    height: 2px;
+    width: 40px;
+    background: rgba(0, 240, 255, 0.3);
+    border-radius: 1px;
+}
+
+.resize-handle-h:hover,
+.resize-handle-h.active {
+    background: rgba(0, 240, 255, 0.25);
+}
+
+.resize-handle-h:hover::after,
+.resize-handle-h.active::after {
+    background: var(--primary);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+/* 浮动编辑工具栏 */
+.edit-toolbar {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 20px;
+    background: rgba(10, 20, 40, 0.95);
+    border: 1px solid var(--border-glow);
+    border-radius: 8px;
+    box-shadow: var(--shadow-glow), var(--shadow-card);
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.edit-toolbar .toolbar-label {
+    color: var(--primary);
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.edit-toolbar .toolbar-label::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.edit-toolbar .toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border-color);
+}
+
+.edit-toolbar .toolbar-btn {
+    padding: 5px 14px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: rgba(0, 240, 255, 0.05);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.edit-toolbar .toolbar-btn:hover {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: var(--primary);
+    color: var(--text-primary);
+}
+
+.edit-toolbar .toolbar-btn.btn-save-layout {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.edit-toolbar .toolbar-btn.btn-save-layout:hover {
+    background: rgba(0, 240, 255, 0.3);
+}
+
+.edit-toolbar .toolbar-btn.btn-exit-edit {
+    background: rgba(255, 71, 87, 0.1);
+    border-color: rgba(255, 71, 87, 0.3);
+    color: #ff6b7a;
+}
+
+.edit-toolbar .toolbar-btn.btn-exit-edit:hover {
+    background: rgba(255, 71, 87, 0.25);
+    border-color: #ff4757;
+}
+
+/* 拖拽中状态 */
+body.resizing {
+    user-select: none !important;
+}
+
+body.resizing * {
+    user-select: none !important;
+}
+
+body.resizing iframe,
+body.resizing .leaflet-container,
+body.resizing .chart-container,
+body.resizing .chart-container-sm {
+    pointer-events: none !important;
+}
+
+/* 编辑模式按钮高亮 */
+.footer-btn.edit-active {
+    background: rgba(0, 240, 255, 0.15) !important;
+    border-color: var(--primary) !important;
+    color: var(--primary) !important;
+}
+
