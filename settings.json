@@ -1,7 +1,7 @@
 {
   "llm": {
-    "provider": "siliconflow",
-    "model": "deepseek-ai/DeepSeek-V3",
+    "provider": "poixe",
+    "model": "gpt-4o",
     "providers": {
       "siliconflow": {
         "api_key": "sk-bgyzpzozdwghavpnsnglmbnmwakalhspstohaoasancrtokl",
@@ -16,12 +16,20 @@
         "api_url": "https://api.openai.com/v1/chat/completions"
       },
       "gemini": {
-        "api_key": "AIzaSyDkknpA4htjKSC2saFqQWEEMQPgNqzopEg",
+        "api_key": "AIzaSyARk0zI09F6dLjkRkkjAVsjNaGey-bAJ1o",
         "api_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
       },
       "custom": {
         "api_key": "",
         "api_url": ""
+      },
+      "aimlapi": {
+        "api_key": "943c689d107843559a5a8e5814f410cb",
+        "api_url": "https://api.aimlapi.com/v1/chat/completions"
+      },
+      "poixe": {
+        "api_key": "sk-6zWGb6qEYIJ5QmDGmyNjsT6dc1Cb1eSalIAXjFArVy8dCqbW",
+        "api_url": "https://api.poixe.com/v1/chat/completions"
       }
     },
     "api_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
@@ -32,7 +40,9 @@
   "crawler": {
     "timeout": 30,
     "max_articles": 500,
-    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "auto_crawl_enabled": true,
+    "auto_crawl_interval": 15
   },
   "duty": {
     "leaders": [
@@ -47,5 +57,45 @@
   "summary": {
     "custom_prompt": ""
   },
-  "updated_at": "2026-02-04 18:50:05"
+  "telegram": {
+    "webhook_url": "",
+    "webhook_enabled": false,
+    "monitor_enabled": false
+  },
+  "translation": {
+    "provider": "siliconflow",
+    "model": "deepseek-ai/DeepSeek-V3",
+    "custom_prompt": "翻译下面的内容为中文，符合新闻标题要求，不需要任何解释：\n{text}",
+    "providers": {
+      "siliconflow": {
+        "api_key": "sk-bgyzpzozdwghavpnsnglmbnmwakalhspstohaoasancrtokl",
+        "api_url": "https://api.siliconflow.cn/v1/chat/completions"
+      },
+      "deepseek": {
+        "api_key": "",
+        "api_url": "https://api.deepseek.com/v1/chat/completions"
+      },
+      "openai": {
+        "api_key": "",
+        "api_url": "https://api.openai.com/v1/chat/completions"
+      },
+      "gemini": {
+        "api_key": "",
+        "api_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+      },
+      "aimlapi": {
+        "api_key": "",
+        "api_url": "https://api.aimlapi.com/v1/chat/completions"
+      },
+      "poixe": {
+        "api_key": "sk-6zWGb6qEYIJ5QmDGmyNjsT6dc1Cb1eSalIAXjFArVy8dCqbW",
+        "api_url": "https://api.poixe.com/v1/chat/completions"
+      },
+      "custom": {
+        "api_key": "",
+        "api_url": ""
+      }
+    }
+  },
+  "updated_at": "2026-02-05 18:45:22"
 }

@@ -380,9 +380,18 @@ def search_articles(
 def get_map_markers() -> List[Dict[str, Any]]:
     """
     获取地图标记数据
-    返回：包含坐标和文章数量的标记列表
+    返回：包含坐标、文章数量和风控状态的标记列表
     """
     articles = get_articles_collection()
+
+    # 获取所有风控关键词
+    keywords_by_level = get_risk_keywords_flat()
+    all_keywords = []
+    keyword_levels = {}
+    for level, keywords in keywords_by_level.items():
+        for kw in keywords:
+            all_keywords.append(kw)
+            keyword_levels[kw.lower()] = level
 
     pipeline = [
         {'$match': {'coords': {'$ne': None}}},
@@ -392,18 +401,48 @@ def get_map_markers() -> List[Dict[str, Any]]:
                 'coords': '$coords',
                 'country': '$country_code'
             },
-            'count': {'$sum': 1}
+            'count': {'$sum': 1},
+            'titles': {'$push': '$title'}  # 收集所有标题用于风控匹配
         }},
         {'$project': {
             '_id': 0,
             'source': '$_id.source',
             'coords': '$_id.coords',
             'country': '$_id.country',
-            'count': 1
+            'count': 1,
+            'titles': 1
         }}
     ]
 
-    return list(articles.aggregate(pipeline))
+    results = list(articles.aggregate(pipeline))
+
+    # 为每个新闻源计算风控等级
+    for item in results:
+        titles = item.get('titles', [])
+        risk_level = None  # 默认无风控警报
+        risk_count = 0
+
+        if all_keywords and titles:
+            for title in titles:
+                if not title:
+                    continue
+                for kw in all_keywords:
+                    if re.search(re.escape(kw), title, re.IGNORECASE):
+                        risk_count += 1
+                        kw_level = keyword_levels.get(kw.lower(), 'low')
+                        if kw_level == 'high':
+                            risk_level = 'high'
+                        elif kw_level == 'medium' and risk_level != 'high':
+                            risk_level = 'medium'
+                        elif risk_level is None:
+                            risk_level = 'low'
+                        break  # 每篇文章只计一次
+
+        item['risk_level'] = risk_level
+        item['risk_count'] = risk_count
+        del item['titles']  # 不返回标题数组，减少数据量
+
+    return results
 
 
 # ==================== 新闻源查询 ====================

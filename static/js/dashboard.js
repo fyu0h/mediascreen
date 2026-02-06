@@ -22,11 +22,44 @@ let allAlertsData = [];           // 存储所有告警数据
 let currentFilterKeyword = null;  // 当前筛选的关键词
 let keywordChartData = [];        // 关键词图表数据
 
-// 国家代码映射
+// 国家代码映射（扩展中文名称）
 const COUNTRY_NAMES = {
-    'US': '美国', 'GB': '英国', 'CN': '中国', 'HK': '香港',
-    'JP': '日本', 'KZ': '哈萨克斯坦', 'PK': '巴基斯坦',
-    'AR': '阿根廷', 'IL': '以色列', 'TM': '土库曼斯坦'
+    // 亚洲
+    'CN': '中国', 'HK': '香港', 'TW': '台湾', 'MO': '澳门',
+    'JP': '日本', 'KR': '韩国', 'KP': '朝鲜',
+    'SG': '新加坡', 'MY': '马来西亚', 'TH': '泰国', 'VN': '越南',
+    'PH': '菲律宾', 'ID': '印度尼西亚', 'MM': '缅甸', 'KH': '柬埔寨',
+    'LA': '老挝', 'BD': '孟加拉国', 'NP': '尼泊尔', 'BT': '不丹',
+    'IN': '印度', 'PK': '巴基斯坦', 'AF': '阿富汗', 'LK': '斯里兰卡',
+    'KZ': '哈萨克斯坦', 'UZ': '乌兹别克斯坦', 'TM': '土库曼斯坦',
+    'KG': '吉尔吉斯斯坦', 'TJ': '塔吉克斯坦', 'MN': '蒙古',
+    // 中东
+    'IL': '以色列', 'PS': '巴勒斯坦', 'LB': '黎巴嫩', 'SY': '叙利亚',
+    'JO': '约旦', 'IQ': '伊拉克', 'IR': '伊朗', 'SA': '沙特阿拉伯',
+    'AE': '阿联酋', 'QA': '卡塔尔', 'KW': '科威特', 'BH': '巴林',
+    'OM': '阿曼', 'YE': '也门', 'TR': '土耳其',
+    // 欧洲
+    'GB': '英国', 'FR': '法国', 'DE': '德国', 'IT': '意大利',
+    'ES': '西班牙', 'PT': '葡萄牙', 'NL': '荷兰', 'BE': '比利时',
+    'CH': '瑞士', 'AT': '奥地利', 'PL': '波兰', 'CZ': '捷克',
+    'SK': '斯洛伐克', 'HU': '匈牙利', 'RO': '罗马尼亚', 'BG': '保加利亚',
+    'GR': '希腊', 'RS': '塞尔维亚', 'HR': '克罗地亚', 'SI': '斯洛文尼亚',
+    'UA': '乌克兰', 'BY': '白俄罗斯', 'RU': '俄罗斯', 'MD': '摩尔多瓦',
+    'SE': '瑞典', 'NO': '挪威', 'DK': '丹麦', 'FI': '芬兰',
+    'IE': '爱尔兰', 'IS': '冰岛', 'EE': '爱沙尼亚', 'LV': '拉脱维亚',
+    'LT': '立陶宛',
+    // 北美
+    'US': '美国', 'CA': '加拿大', 'MX': '墨西哥',
+    // 南美
+    'BR': '巴西', 'AR': '阿根廷', 'CL': '智利', 'PE': '秘鲁',
+    'CO': '哥伦比亚', 'VE': '委内瑞拉', 'EC': '厄瓜多尔', 'BO': '玻利维亚',
+    'PY': '巴拉圭', 'UY': '乌拉圭',
+    // 大洋洲
+    'AU': '澳大利亚', 'NZ': '新西兰',
+    // 非洲
+    'ZA': '南非', 'EG': '埃及', 'NG': '尼日利亚', 'KE': '肯尼亚',
+    'ET': '埃塞俄比亚', 'MA': '摩洛哥', 'DZ': '阿尔及利亚', 'TN': '突尼斯',
+    'LY': '利比亚', 'SD': '苏丹', 'GH': '加纳'
 };
 
 // ECharts 科技风格主题配置
@@ -421,40 +454,169 @@ async function loadWorldMap() {
         }).addTo(worldMap);
     }
 
-    // 清除现有标记
+    // 清除现有标记（包括自定义图层组）
     worldMap.eachLayer(layer => {
-        if (layer instanceof L.CircleMarker) {
+        if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
             worldMap.removeLayer(layer);
         }
     });
 
-    // 添加气泡标记
+    // 计算活跃度阈值（基于数据分布，用于决定点的大小）
+    const counts = data.map(item => item.count).sort((a, b) => a - b);
+    const highThreshold = counts[Math.floor(counts.length * 0.7)] || 100;
+    const medThreshold = counts[Math.floor(counts.length * 0.3)] || 20;
+
+    // 默认颜色配置（非警告色，柔和的科技感配色）
+    const normalConfig = {
+        high: {
+            color: '#7b68ee',      // 紫罗兰 - 高活跃
+            glowColor: 'rgba(123, 104, 238, 0.5)',
+            size: { min: 12, max: 24 },
+            pulseSize: 2.2,
+            animationDuration: '3s'
+        },
+        medium: {
+            color: '#00d4aa',      // 青绿色 - 中活跃
+            glowColor: 'rgba(0, 212, 170, 0.4)',
+            size: { min: 9, max: 18 },
+            pulseSize: 2,
+            animationDuration: '3.5s'
+        },
+        low: {
+            color: '#4a9eff',      // 天蓝色 - 低活跃
+            glowColor: 'rgba(74, 158, 255, 0.35)',
+            size: { min: 6, max: 12 },
+            pulseSize: 1.8,
+            animationDuration: '4s'
+        }
+    };
+
+    // 风控警告色配置（仅当有风控匹配时使用）
+    const riskConfig = {
+        high: {
+            color: '#ff4757',      // 红色 - 高风险
+            glowColor: 'rgba(255, 71, 87, 0.6)',
+            size: { min: 14, max: 28 },
+            pulseSize: 2.5,
+            animationDuration: '1.8s'
+        },
+        medium: {
+            color: '#ffa502',      // 橙色 - 中风险
+            glowColor: 'rgba(255, 165, 2, 0.5)',
+            size: { min: 11, max: 22 },
+            pulseSize: 2.2,
+            animationDuration: '2.2s'
+        },
+        low: {
+            color: '#ffd93d',      // 金黄色 - 低风险
+            glowColor: 'rgba(255, 217, 61, 0.45)',
+            size: { min: 8, max: 16 },
+            pulseSize: 2,
+            animationDuration: '2.5s'
+        }
+    };
+
+    // 添加标记
     data.forEach(item => {
         if (!item.coords || item.coords.length !== 2) return;
 
         const lat = item.coords[1];
         const lng = item.coords[0];
-        const size = Math.max(8, Math.min(30, 5 + Math.log10(item.count + 1) * 10));
+        const count = item.count || 0;
+        const riskLevel = item.risk_level;  // 风控等级：null, 'low', 'medium', 'high'
+        const riskCount = item.risk_count || 0;
 
-        const marker = L.circleMarker([lat, lng], {
-            radius: size,
-            fillColor: '#00f0ff',
-            fillOpacity: 0.6,
-            color: '#00f0ff',
-            weight: 2,
-            opacity: 0.8
-        }).addTo(worldMap);
+        // 确定活跃度等级（用于大小）
+        let activityLevel = 'low';
+        if (count >= highThreshold) {
+            activityLevel = 'high';
+        } else if (count >= medThreshold) {
+            activityLevel = 'medium';
+        }
+
+        // 根据是否有风控警报决定使用哪套配色
+        let config;
+        let displayLevel;
+        let hasRisk = riskLevel !== null && riskLevel !== undefined;
+
+        if (hasRisk) {
+            // 有风控警报，使用警告色，等级由风控等级决定
+            config = riskConfig[riskLevel];
+            displayLevel = riskLevel;
+        } else {
+            // 无风控警报，使用默认色，等级由活跃度决定
+            config = normalConfig[activityLevel];
+            displayLevel = activityLevel;
+        }
+
+        // 计算标记大小（在配置范围内根据数量缩放）
+        const sizeRange = config.size.max - config.size.min;
+        const normalizedCount = Math.min(1, Math.log10(count + 1) / 3);
+        const size = config.size.min + sizeRange * normalizedCount;
+
+        // 标记样式类名
+        const markerClass = hasRisk ? `map-marker-risk map-marker-risk-${riskLevel}` : `map-marker map-marker-${activityLevel}`;
+
+        // 创建自定义HTML标记（带动效）
+        const markerHtml = `
+            <div class="${markerClass}" style="--marker-color: ${config.color}; --glow-color: ${config.glowColor}; --pulse-size: ${config.pulseSize}; --animation-duration: ${config.animationDuration};">
+                <div class="marker-pulse"></div>
+                <div class="marker-core" style="width: ${size}px; height: ${size}px;"></div>
+            </div>
+        `;
+
+        const icon = L.divIcon({
+            html: markerHtml,
+            className: 'map-marker-wrapper',
+            iconSize: [size * config.pulseSize, size * config.pulseSize],
+            iconAnchor: [size * config.pulseSize / 2, size * config.pulseSize / 2]
+        });
+
+        const marker = L.marker([lat, lng], { icon: icon }).addTo(worldMap);
+
+        // 绑定弹窗
+        const activityText = { high: '高活跃', medium: '中活跃', low: '低活跃' };
+        const riskText = { high: '高风险', medium: '中风险', low: '低风险' };
+
+        // 状态标签
+        let statusHtml = '';
+        if (hasRisk) {
+            statusHtml = `<span class="popup-level popup-risk" style="background: ${config.color}20; color: ${config.color};">${riskText[riskLevel]} (${riskCount}条)</span>`;
+        } else {
+            statusHtml = `<span class="popup-level" style="background: ${config.color}20; color: ${config.color};">${activityText[activityLevel]}</span>`;
+        }
 
         marker.bindPopup(`
-            <div style="font-family: 'Microsoft YaHei'; min-width: 120px;">
-                <div style="font-weight: bold; color: #00f0ff; margin-bottom: 5px;">${item.source || '未知'}</div>
-                <div style="color: rgba(255,255,255,0.7); font-size: 12px;">
-                    国家: ${COUNTRY_NAMES[item.country] || item.country || '-'}<br/>
-                    文章: ${formatNumber(item.count)} 篇
+            <div class="marker-popup">
+                <div class="popup-header" style="border-left-color: ${config.color};">
+                    <span class="popup-source">${item.source || '未知'}</span>
+                    ${statusHtml}
+                </div>
+                <div class="popup-body">
+                    <div class="popup-row">
+                        <span class="popup-label">国家/地区</span>
+                        <span class="popup-value">${COUNTRY_NAMES[item.country] || item.country || '-'}</span>
+                    </div>
+                    <div class="popup-row">
+                        <span class="popup-label">文章总数</span>
+                        <span class="popup-value popup-count">${formatNumber(count)} 篇</span>
+                    </div>
                 </div>
             </div>
         `, {
-            className: 'custom-popup'
+            className: 'custom-popup',
+            maxWidth: 220,
+            minWidth: 160
+        });
+
+        // 鼠标悬停效果
+        marker.on('mouseover', function() {
+            const el = this.getElement().querySelector('.map-marker, .map-marker-risk');
+            if (el) el.classList.add('marker-hover');
+        });
+        marker.on('mouseout', function() {
+            const el = this.getElement().querySelector('.map-marker, .map-marker-risk');
+            if (el) el.classList.remove('marker-hover');
         });
     });
 }

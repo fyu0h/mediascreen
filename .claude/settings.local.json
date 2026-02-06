@@ -29,7 +29,17 @@
       "Bash(find:*)",
       "Bash(set PYTHONIOENCODING=utf-8)",
       "Bash(del:*)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: AI报告URL回退查询 - 当title_url_map找不到时从数据库查询\n\nroutes/api.py:\n- 新增 _lookup_url_from_db\\(\\) 函数，从 MongoDB news_articles 集合根据标题查询URL\n- 修改 _lookup_url_by_title\\(\\)，增加数据库回退查询机制\n- 支持精确匹配、正则模糊匹配、前缀匹配三种查询方式\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: 统一气泡弹窗管理组件，防止重叠\n\ntemplates/index.html:\n- 创建 .bubble-container 容器统一管理所有进度气泡\n- 气泡使用 data-bubble-id 标识，通过 BubbleManager 管理\n\nstatic/css/dashboard.css:\n- 新增 .bubble-container 使用 flex-direction: column-reverse 从底部向上堆叠\n- 容器 bottom: 60px 确保不遮盖底部 footer \\(AI总结/插件/日志/设置\\)\n- .progress-bubble 统一通用样式，简化 .crawl-bubble 和 .summary-bubble\n\nstatic/js/dashboard.js:\n- 新增 BubbleManager 对象统一管理气泡的显示/隐藏/运行状态\n- 提供 show/hide/close/setRunning/isRunning 方法\n- crawlIsRunning 和 summaryGenerating 改用 BubbleManager 管理\n- 保留兼容性属性访问器，确保旧代码正常工作\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: AI总结增加查看原始内容功能 + 修复结构化数据解析\n\ntemplates/index.html:\n- AI总结弹窗底部新增\"原始内容\"按钮\n- 新增原始内容查看弹窗，支持复制内容\n\nstatic/css/dashboard.css:\n- 新增 .raw-content-wrapper 和 .raw-content 样式\n- 新增 .btn-sm 小号按钮样式\n\nstatic/js/dashboard.js:\n- 新增 showRawContent\\(\\)、closeRawContentModal\\(\\)、copyRawContent\\(\\) 函数\n- 支持查看和复制 AI 返回的完整原始内容\n\nmodels/settings.py:\n- 更新 DEFAULT_SUMMARY_PROMPT 提示词\n- JSON 结构中移除 url 字段，仅保留 title（通过数据库回填 URL）\n- 强调使用 ```json 代码块格式\n\n提示词.md:\n- 同步更新提示词文档\n- 添加正确的 JSON 代码块标记\n- 添加格式约束说明\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 修复AI返回内容解析逻辑，支持多种标题格式\n\nroutes/api.py:\n- 支持 Markdown ## 格式分割\n- 支持中文序号格式（一、二、三、）分割\n- 支持 PART 1/PART 2 格式分割\n- 增加更多关键词匹配（态势、预警等）\n- 修复AI返回内容全部显示在一个区域的问题\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(ls \"D:\\\\code\\\\态势感知\\\\services\"\" 2>/dev/null || echo \"services directory does not exist \")",
+      "WebFetch(domain:hongkongfp.com)"
     ]
   }
 }
