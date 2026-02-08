@@ -2467,6 +2467,45 @@ function closeSettingsModal() {
     document.getElementById('settingsModal').classList.remove('active');
 }
 
+// 修改密码
+async function changePassword() {
+    const oldPwd = document.getElementById('oldPassword').value;
+    const newPwd = document.getElementById('newPassword').value;
+    const confirmPwd = document.getElementById('confirmPassword').value;
+
+    if (!oldPwd || !newPwd || !confirmPwd) {
+        showToast('请填写所有密码字段', 'error');
+        return;
+    }
+    if (newPwd.length < 6) {
+        showToast('新密码长度至少6位', 'error');
+        return;
+    }
+    if (newPwd !== confirmPwd) {
+        showToast('两次输入的新密码不一致', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/auth/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_password: oldPwd, new_password: newPwd })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast('密码修改成功', 'success');
+            document.getElementById('oldPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        } else {
+            showToast(result.error || '密码修改失败', 'error');
+        }
+    } catch (e) {
+        showToast('网络错误', 'error');
+    }
+}
+
 // 保存各提供商的状态数据
 let providersStatusData = {};
 

@@ -638,6 +638,28 @@
                     </div>
                 </div>
 
+                <!-- 修改密码 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <span class="section-title">修改密码</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">当前密码</label>
+                        <input type="password" id="oldPassword" class="form-input" placeholder="输入当前密码">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">新密码</label>
+                        <input type="password" id="newPassword" class="form-input" placeholder="至少6位">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">确认新密码</label>
+                        <input type="password" id="confirmPassword" class="form-input" placeholder="再次输入新密码">
+                    </div>
+                    <div class="form-actions" style="justify-content: flex-start;">
+                        <button class="btn btn-save" onclick="changePassword()">修改密码</button>
+                    </div>
+                </div>
+
                 <!-- 保存按钮 -->
                 <div class="form-actions">
                     <button class="btn btn-cancel" onclick="closeSettingsModal()">取消</button>
