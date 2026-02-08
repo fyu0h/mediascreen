@@ -150,6 +150,7 @@ def init_database():
     """初始化数据库（迁移和索引）"""
     from models.sites import migrate_from_json, ensure_indexes
     from models.users import ensure_admin_user
+    from models.mongo import ensure_articles_indexes
 
     # 迁移 sites.json 到 MongoDB（兼容旧数据）
     migrated = migrate_from_json()
@@ -158,6 +159,9 @@ def init_database():
 
     # 确保索引存在
     ensure_indexes()
+
+    # 确保文章集合索引存在（性能优化）
+    ensure_articles_indexes()
 
     # 确保默认管理员账号存在
     ensure_admin_user()

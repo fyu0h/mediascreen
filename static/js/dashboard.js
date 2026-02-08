@@ -15,6 +15,8 @@ let keywordChart = null;
 let worldMap = null;
 let refreshTimer = null;
 let articleRefreshTimer = null;  // 文章独立快速刷新定时器
+let clockTimer = null;           // 顶部时钟定时器
+let tgRefreshTimer = null;       // Telegram 模块刷新定时器
 let articleRefreshing = false;   // 文章刷新防并发标记
 
 // 风控告警筛选相关
@@ -1032,7 +1034,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 更新顶部时间
     updateDateTime();
-    setInterval(updateDateTime, 1000);
+    clockTimer = setInterval(updateDateTime, 1000);
 
     // 初始化底部刷新时间
     updateRefreshTime();
@@ -1085,6 +1087,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!calendarDropdown.contains(e.target) && !datePickerBtn.contains(e.target)) {
                 closeCalendar();
             }
+        }
+    });
+
+    // 页面可见性变化：隐藏时暂停定时器，可见时恢复
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            // 页面隐藏，暂停所有定时器
+            if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+            if (articleRefreshTimer) { clearInterval(articleRefreshTimer); articleRefreshTimer = null; }
+            if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+            if (tgRefreshTimer) { clearInterval(tgRefreshTimer); tgRefreshTimer = null; }
+        } else {
+            // 页面恢复可见，重新启动定时器
+            updateDateTime();
+            clockTimer = setInterval(updateDateTime, 1000);
+            startAutoRefresh();
+            startArticleAutoRefresh();
+            // 恢复后立即刷新一次数据
+            loadAllData(true);
         }
     });
 });
@@ -5076,7 +5097,7 @@ function initTelegramModule() {
     loadTgRecentAlerts();
     loadTgMonitorStatus();
     // 定时刷新
-    setInterval(() => {
+    tgRefreshTimer = setInterval(() => {
         loadTgOverviewStats();
         loadTgRecentAlerts();
         loadTgMonitorStatus();

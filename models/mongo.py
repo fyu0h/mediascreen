@@ -60,6 +60,62 @@ def close_db() -> None:
 atexit.register(close_db)
 
 
+def ensure_articles_indexes() -> None:
+    """
+    创建 news_articles 集合的索引
+    在应用启动时调用，提升查询性能
+    """
+    collection = get_articles_collection()
+
+    try:
+        # 获取现有索引名称
+        existing_indexes = set(collection.index_information().keys())
+
+        # 定义需要创建的索引
+        indexes_to_create = []
+
+        # 1. loc 唯一索引（用于去重检查）
+        if 'loc_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING, DESCENDING, TEXT
+            indexes_to_create.append(IndexModel([('loc', ASCENDING)], unique=True, name='loc_1'))
+
+        # 2. fetched_at 降序索引（时间线查询）
+        if 'fetched_at_-1' not in existing_indexes:
+            from pymongo import IndexModel, DESCENDING
+            indexes_to_create.append(IndexModel([('fetched_at', DESCENDING)], name='fetched_at_-1'))
+
+        # 3. pub_date 降序索引（发布日期查询）
+        if 'pub_date_-1' not in existing_indexes:
+            from pymongo import IndexModel, DESCENDING
+            indexes_to_create.append(IndexModel([('pub_date', DESCENDING)], name='pub_date_-1'))
+
+        # 4. source_name 索引（按来源筛选）
+        if 'source_name_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel([('source_name', ASCENDING)], name='source_name_1'))
+
+        # 5. country_code 索引（按国家筛选）
+        if 'country_code_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel([('country_code', ASCENDING)], name='country_code_1'))
+
+        # 6. 复合索引 (pub_date, source_name)（常见组合查询）
+        if 'pub_date_-1_source_name_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING, DESCENDING
+            indexes_to_create.append(IndexModel(
+                [('pub_date', DESCENDING), ('source_name', ASCENDING)],
+                name='pub_date_-1_source_name_1'
+            ))
+
+        # 批量创建索引
+        if indexes_to_create:
+            collection.create_indexes(indexes_to_create)
+            print(f"[MongoDB] 已为 news_articles 创建 {len(indexes_to_create)} 个索引")
+
+    except Exception as e:
+        print(f"[MongoDB] 创建索引时出错: {e}")
+
+
 def get_articles_collection() -> Collection:
     """获取文章集合"""
     return get_db()[Config.COLLECTION_ARTICLES]
@@ -150,11 +206,11 @@ def save_articles(articles: List[Dict[str, Any]], translate: bool = True) -> int
 
 
 def article_exists(url: str) -> bool:
-    """检查文章是否已存在"""
+    """检查文章是否已存在（使用 find_one 比 count_documents 更高效）"""
     if not url:
         return False
     collection = get_articles_collection()
-    return collection.count_documents({'loc': url}) > 0
+    return collection.find_one({'loc': url}, {'_id': 1}) is not None
 
 
 # ==================== 统计查询 ====================
@@ -486,28 +542,53 @@ def get_all_sources() -> List[Dict[str, Any]]:
 
 def get_keyword_stats(keywords: List[str], days: int = 7) -> Dict[str, Any]:
     """
-    统计关键词匹配的文章数量
+    统计关键词匹配的文章数量（优化版：使用聚合管道避免 N+1 查询）
     参数：
         keywords: 关键词列表
         days: 统计天数
     返回：各关键词匹配数量
     """
+    if not keywords:
+        return []
+
     articles = get_articles_collection()
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
 
-    results = []
-    for keyword in keywords:
-        # 使用正则表达式匹配（不区分大小写）
-        query = {
-            'title': {'$regex': re.escape(keyword), '$options': 'i'},
-            'pub_date': {'$gte': start_date, '$lte': end_date}
-        }
-        count = articles.count_documents(query)
-        if count > 0:
-            results.append({'keyword': keyword, 'count': count})
+    # 构建正则表达式匹配所有关键词
+    regex_pattern = '|'.join(re.escape(kw) for kw in keywords)
 
-    # 按数量降序排序
+    # 使用聚合管道，一次查询获取所有匹配文章
+    pipeline = [
+        {
+            '$match': {
+                'title': {'$regex': regex_pattern, '$options': 'i'},
+                'pub_date': {'$gte': start_date, '$lte': end_date}
+            }
+        },
+        {
+            '$project': {
+                'title': 1
+            }
+        }
+    ]
+
+    # 获取所有匹配的文章标题
+    matching_docs = list(articles.aggregate(pipeline))
+
+    # 在内存中统计每个关键词的匹配次数
+    keyword_counts = {kw: 0 for kw in keywords}
+    for doc in matching_docs:
+        title = doc.get('title', '')
+        if not title:
+            continue
+        for kw in keywords:
+            if re.search(re.escape(kw), title, re.IGNORECASE):
+                keyword_counts[kw] += 1
+                break  # 每篇文章只计入第一个匹配的关键词
+
+    # 过滤并排序结果
+    results = [{'keyword': kw, 'count': count} for kw, count in keyword_counts.items() if count > 0]
     results.sort(key=lambda x: x['count'], reverse=True)
     return results
 
@@ -988,4 +1069,4 @@ def is_alert_read(article_url: str) -> bool:
     返回：是否已读
     """
     collection = get_alert_reads_collection()
-    return collection.count_documents({'article_url': article_url}) > 0
+    return collection.find_one({'article_url': article_url}, {'_id': 1}) is not None
