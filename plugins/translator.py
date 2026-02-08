@@ -2,6 +2,7 @@
 """
 标题翻译模块
 使用 LLM API 将非中文标题翻译为中文
+支持批量翻译（多条标题合并为一次 API 调用）和数据库去重
 """
 
 import re
@@ -9,6 +10,9 @@ import requests
 from typing import Optional, List, Dict, Any
 from collections import OrderedDict
 from models.settings import get_translation_config, get_translation_prompt
+
+# 批量翻译配置
+BATCH_SIZE = 10  # 每批翻译的标题数量
 
 
 def is_chinese(text: str) -> bool:
@@ -28,31 +32,16 @@ def is_chinese(text: str) -> bool:
     return chinese_count / total_chars > 0.3
 
 
-def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
+def _get_translation_api_config() -> Optional[Dict[str, str]]:
     """
-    将标题翻译为中文
-
-    参数:
-        title: 原始标题
-        source_lang: 源语言（auto=自动检测）
-
-    返回:
-        翻译后的中文标题，失败返回 None
+    获取翻译 API 配置（内部复用）
+    返回 {api_key, api_url, model}，配置不完整返回 None
     """
-    if not title or not title.strip():
-        return None
-
-    # 如果已经是中文，直接返回
-    if is_chinese(title):
-        return title
-
-    # 获取翻译 LLM 配置
     config = get_translation_config()
     api_key = config.get('api_key')
     api_url = config.get('api_url')
     model = config.get('model')
 
-    # 检查必要配置
     if not api_key:
         print("[翻译] 未配置翻译 API 密钥，请在系统设置中配置")
         return None
@@ -69,44 +58,67 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
         else:
             api_url = api_url.rstrip('/') + '/v1/chat/completions'
 
-    # 获取翻译提示词
+    return {'api_key': api_key, 'api_url': api_url, 'model': model}
+
+
+def _clean_translated_text(text: str) -> str:
+    """清理翻译结果中的多余引号"""
+    text = text.strip()
+    if text.startswith('"') and text.endswith('"'):
+        text = text[1:-1]
+    if text.startswith('「') and text.endswith('」'):
+        text = text[1:-1]
+    if text.startswith("'") and text.endswith("'"):
+        text = text[1:-1]
+    return text
+
+
+def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
+    """
+    将单个标题翻译为中文（保留用于测试 API 等单条场景）
+
+    参数:
+        title: 原始标题
+        source_lang: 源语言（auto=自动检测）
+
+    返回:
+        翻译后的中文标题，失败返回 None
+    """
+    if not title or not title.strip():
+        return None
+
+    if is_chinese(title):
+        return title
+
+    api_config = _get_translation_api_config()
+    if not api_config:
+        return None
+
     prompt_template = get_translation_prompt()
     prompt = prompt_template.replace('{text}', title)
 
     try:
         response = requests.post(
-            api_url,
+            api_config['api_url'],
             headers={
-                'Authorization': f'Bearer {api_key}',
+                'Authorization': f'Bearer {api_config["api_key"]}',
                 'Content-Type': 'application/json'
             },
             json={
-                'model': model,
+                'model': api_config['model'],
                 'messages': [
-                    {
-                        'role': 'user',
-                        'content': prompt
-                    }
+                    {'role': 'user', 'content': prompt}
                 ],
                 'max_tokens': 200,
                 'temperature': 0.1
             },
-            timeout=60  # 增加超时时间到60秒
+            timeout=60
         )
 
         if response.status_code == 200:
             result = response.json()
             translated = result.get('choices', [{}])[0].get('message', {}).get('content', '')
-            translated = translated.strip()
-
-            # 清理可能的引号
-            if translated.startswith('"') and translated.endswith('"'):
-                translated = translated[1:-1]
-            if translated.startswith('「') and translated.endswith('」'):
-                translated = translated[1:-1]
-            if translated.startswith("'") and translated.endswith("'"):
-                translated = translated[1:-1]
-
+            translated = _clean_translated_text(translated)
             return translated if translated else None
         else:
             print(f"[翻译] API 请求失败: {response.status_code} - {response.text[:100]}")
@@ -120,27 +132,191 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
         return None
 
 
-def translate_titles_batch(titles: List[str], batch_size: int = 10) -> List[Optional[str]]:
+def _translate_batch_api(titles: List[str]) -> List[Optional[str]]:
     """
-    批量翻译标题（逐个翻译，可优化为批量）
+    批量翻译：将多条标题合并为一次 API 调用
+
+    发送格式:
+        1. Title one
+        2. Title two
+        3. Title three
+
+    期望返回:
+        1. 标题一
+        2. 标题二
+        3. 标题三
+
+    参数:
+        titles: 需要翻译的标题列表（已过滤中文）
+
+    返回:
+        翻译结果列表，与输入顺序一一对应，失败项为 None
+    """
+    if not titles:
+        return []
+
+    # 单条直接走单条接口
+    if len(titles) == 1:
+        return [translate_title(titles[0])]
+
+    api_config = _get_translation_api_config()
+    if not api_config:
+        return [None] * len(titles)
+
+    # 构建编号列表
+    numbered_text = '\n'.join(f'{i+1}. {t}' for i, t in enumerate(titles))
+
+    system_prompt = (
+        '你是翻译助手。将用户提供的编号标题逐条翻译为中文。'
+        '严格保持编号格式，每行一条，只输出翻译结果，不要解释。'
+    )
+
+    try:
+        response = requests.post(
+            api_config['api_url'],
+            headers={
+                'Authorization': f'Bearer {api_config["api_key"]}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': api_config['model'],
+                'messages': [
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': numbered_text}
+                ],
+                'max_tokens': 100 * len(titles),  # 每条标题预留约100 token
+                'temperature': 0.1
+            },
+            timeout=90
+        )
+
+        if response.status_code != 200:
+            print(f"[批量翻译] API 请求失败: {response.status_code} - {response.text[:100]}")
+            return [None] * len(titles)
+
+        result = response.json()
+        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+        # 解析编号格式的返回结果
+        return _parse_batch_response(content, len(titles))
+
+    except requests.exceptions.Timeout:
+        print("[批量翻译] API 请求超时")
+        return [None] * len(titles)
+    except Exception as e:
+        print(f"[批量翻译] 翻译失败: {e}")
+        return [None] * len(titles)
+
+
+def _parse_batch_response(content: str, expected_count: int) -> List[Optional[str]]:
+    """
+    解析批量翻译的返回结果
+
+    支持格式:
+        1. 翻译结果
+        1、翻译结果
+        1）翻译结果
+    """
+    results: Dict[int, str] = {}
+
+    for line in content.strip().split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+
+        # 匹配编号: "1. xxx", "1、xxx", "1）xxx", "1) xxx"
+        match = re.match(r'^(\d+)\s*[.、）)]\s*(.+)', line)
+        if match:
+            idx = int(match.group(1))
+            text = _clean_translated_text(match.group(2))
+            if 1 <= idx <= expected_count and text:
+                results[idx] = text
+
+    # 按顺序组装结果
+    return [results.get(i + 1) for i in range(expected_count)]
+
+
+def _get_existing_translations(locs: List[str]) -> Dict[str, str]:
+    """
+    从数据库查询已有的翻译结果（去重用）
+
+    参数:
+        locs: 文章 URL 列表
+
+    返回:
+        {loc: title_cn, ...} 已翻译的文章映射
+    """
+    if not locs:
+        return {}
+
+    try:
+        from models.mongo import get_articles_collection
+        collection = get_articles_collection()
+
+        # 批量查询已存在的文章
+        cursor = collection.find(
+            {'loc': {'$in': locs}},
+            {'loc': 1, 'title': 1, 'title_original': 1}
+        )
+
+        result = {}
+        for doc in cursor:
+            loc = doc.get('loc', '')
+            title = doc.get('title', '')
+            # 如果数据库中已有中文标题，视为已翻译
+            if loc and title and is_chinese(title):
+                result[loc] = title
+        return result
+
+    except Exception as e:
+        print(f"[翻译去重] 查询数据库失败: {e}")
+        return {}
+
+
+def translate_titles_batch(titles: List[str], batch_size: int = BATCH_SIZE) -> List[Optional[str]]:
+    """
+    批量翻译标题
 
     参数:
         titles: 标题列表
-        batch_size: 批次大小（预留接口）
+        batch_size: 每批大小
 
     返回:
         翻译后的标题列表
     """
-    results = []
-    for title in titles:
-        translated = translate_title(title)
-        results.append(translated)
+    results: List[Optional[str]] = []
+
+    for i in range(0, len(titles), batch_size):
+        batch = titles[i:i + batch_size]
+        # 分离中文和非中文
+        to_translate = []
+        indices = []
+        batch_results = [None] * len(batch)
+
+        for j, title in enumerate(batch):
+            if is_chinese(title):
+                batch_results[j] = title
+            else:
+                to_translate.append(title)
+                indices.append(j)
+
+        # 批量翻译非中文标题
+        if to_translate:
+            translated = _translate_batch_api(to_translate)
+            for k, idx in enumerate(indices):
+                batch_results[idx] = translated[k]
+
+        results.extend(batch_results)
+
     return results
 
 
 def process_articles_translation(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     处理文章列表，为非中文标题添加翻译
+    优化策略：
+        1. 数据库去重 — 已翻译过的文章直接复用
+        2. 批量翻译 — 多条标题合并为一次 API 调用
 
     参数:
         articles: 文章列表
@@ -148,24 +324,68 @@ def process_articles_translation(articles: List[Dict[str, Any]]) -> List[Dict[st
     返回:
         处理后的文章列表，每篇文章会添加 title_cn 字段
     """
-    for article in articles:
-        title = article.get('title', '')
+    if not articles:
+        return articles
 
+    # ===== 第一步：数据库去重 =====
+    locs = [a.get('loc', '') for a in articles if a.get('loc')]
+    existing = _get_existing_translations(locs)
+    dedup_count = 0
+
+    # 收集需要翻译的文章索引和标题
+    need_translate_indices: List[int] = []
+    need_translate_titles: List[str] = []
+
+    for i, article in enumerate(articles):
+        title = article.get('title', '')
+        loc = article.get('loc', '')
+
+        # 已是中文，直接使用
         if is_chinese(title):
-            # 已是中文，直接使用
             article['title_cn'] = title
             article['needs_translation'] = False
-        else:
-            # 需要翻译
-            translated = translate_title(title)
-            if translated:
-                article['title_cn'] = translated
-                article['title_original'] = title
-                article['needs_translation'] = False
-            else:
-                # 翻译失败，保留原标题
-                article['title_cn'] = title
-                article['needs_translation'] = True
+            continue
+
+        # 数据库中已有翻译，直接复用
+        if loc in existing:
+            article['title_cn'] = existing[loc]
+            article['title_original'] = title
+            article['needs_translation'] = False
+            dedup_count += 1
+            continue
+
+        # 需要翻译
+        need_translate_indices.append(i)
+        need_translate_titles.append(title)
+
+    if dedup_count > 0:
+        print(f"[翻译] 数据库去重跳过 {dedup_count} 篇已翻译文章")
+
+    # ===== 第二步：批量翻译 =====
+    if need_translate_titles:
+        print(f"[翻译] 需要翻译 {len(need_translate_titles)} 篇，"
+              f"分 {(len(need_translate_titles) + BATCH_SIZE - 1) // BATCH_SIZE} 批")
+
+        # 按批次翻译
+        for batch_start in range(0, len(need_translate_titles), BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, len(need_translate_titles))
+            batch_titles = need_translate_titles[batch_start:batch_end]
+            batch_indices = need_translate_indices[batch_start:batch_end]
+
+            translated_batch = _translate_batch_api(batch_titles)
+
+            for j, idx in enumerate(batch_indices):
+                article = articles[idx]
+                translated = translated_batch[j] if j < len(translated_batch) else None
+
+                if translated:
+                    article['title_cn'] = translated
+                    article['title_original'] = article.get('title', '')
+                    article['needs_translation'] = False
+                else:
+                    # 翻译失败，保留原标题
+                    article['title_cn'] = article.get('title', '')
+                    article['needs_translation'] = True
 
     return articles
 
