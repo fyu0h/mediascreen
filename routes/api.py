@@ -1394,12 +1394,17 @@ def crawl_start():
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from models.tasks import (
         create_task, update_task, register_running_task,
-        unregister_task, is_cancelled
+        unregister_task, is_cancelled, has_running_task, get_running_task_id
     )
     from models.plugins import get_enabled_sites
     from plugins.crawler import get_crawler
 
     try:
+        # 检查是否有任务正在运行
+        if has_running_task():
+            running_id = get_running_task_id()
+            return error_response(f'已有爬虫任务正在运行 (ID: {running_id})，请等待完成或取消后再试', 409)
+
         sites = get_enabled_sites()
 
         if not sites:

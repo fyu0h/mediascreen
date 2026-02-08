@@ -1064,10 +1064,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             closeKeywordModal();
             closeEditModal();
             closeSitesModal();
-            closeEditSiteModal();
-            closeBatchImportModal();
             closeAllAlertsModal();
-            closeCrawlModal();
             closeSettingsModal();
             closeCalendar();
             closeSourceArticlesModal();

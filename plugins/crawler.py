@@ -5,6 +5,8 @@
 """
 
 import asyncio
+import time
+import threading
 import requests
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
@@ -42,6 +44,9 @@ class PluginCrawler:
         'thetimes.com': 30,  # The Times 需要VPN，设置较短超时快速跳过
         'nytimes.com': 45,
     }
+    # 重试配置
+    MAX_RETRIES = 2
+    RETRY_DELAYS = [1, 2]  # 重试间隔（秒）
 
     def __init__(self):
         if not CRAWL4AI_AVAILABLE:
@@ -60,9 +65,20 @@ class PluginCrawler:
             pass
         return self.DEFAULT_TIMEOUT
 
+    def _is_retryable_error(self, error: Exception) -> bool:
+        """判断错误是否可重试（网络错误、临时故障等）"""
+        error_msg = str(error).lower()
+        # 不可重试的错误类型
+        non_retryable = ['timeout', '404', '403', '401', 'not found', 'forbidden']
+        if any(x in error_msg for x in non_retryable):
+            return False
+        # 可重试：网络错误、连接错误、临时故障
+        retryable = ['connection', 'network', 'reset', 'refused', 'temporary', 'eof']
+        return any(x in error_msg for x in retryable)
+
     async def fetch_page(self, url: str, timeout: int = None) -> str:
         """
-        异步获取页面内容（模拟正常浏览器）
+        异步获取页面内容（模拟正常浏览器），带重试机制
 
         Args:
             url: 要抓取的URL
@@ -75,30 +91,42 @@ class PluginCrawler:
             timeout = self._get_timeout_for_url(url)
 
         timeout_ms = timeout * 1000
+        last_error = None
 
-        try:
-            config = CrawlerRunConfig(
-                wait_until="domcontentloaded",
-                page_timeout=timeout_ms,
-                cache_mode=CacheMode.BYPASS
-            )
-            async with AsyncWebCrawler(config=self.browser_config) as crawler:
-                result = await crawler.arun(url, config=config)
-                if result.success:
-                    return result.html
-                print(f"[PluginCrawler] 页面抓取未成功 {url}")
-                return ""
-        except asyncio.TimeoutError:
-            print(f"[PluginCrawler] ⏱️ 超时跳过 ({timeout}秒): {url}")
-            return ""
-        except Exception as e:
-            error_msg = str(e)
-            # 检查是否是Playwright超时错误
-            if 'Timeout' in error_msg or 'timeout' in error_msg.lower():
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                config = CrawlerRunConfig(
+                    wait_until="domcontentloaded",
+                    page_timeout=timeout_ms,
+                    cache_mode=CacheMode.BYPASS
+                )
+                async with AsyncWebCrawler(config=self.browser_config) as crawler:
+                    result = await crawler.arun(url, config=config)
+                    if result.success:
+                        return result.html
+                    print(f"[PluginCrawler] 页面抓取未成功 {url}")
+                    return ""
+            except asyncio.TimeoutError:
                 print(f"[PluginCrawler] ⏱️ 超时跳过 ({timeout}秒): {url}")
-            else:
+                return ""
+            except Exception as e:
+                last_error = e
+                error_msg = str(e)
+                # 检查是否是超时错误
+                if 'Timeout' in error_msg or 'timeout' in error_msg.lower():
+                    print(f"[PluginCrawler] ⏱️ 超时跳过 ({timeout}秒): {url}")
+                    return ""
+                # 检查是否可重试
+                if attempt < self.MAX_RETRIES and self._is_retryable_error(e):
+                    delay = self.RETRY_DELAYS[attempt] if attempt < len(self.RETRY_DELAYS) else 2
+                    print(f"[PluginCrawler] 重试 {attempt + 1}/{self.MAX_RETRIES} ({delay}秒后): {url}")
+                    time.sleep(delay)
+                    continue
                 print(f"[PluginCrawler] 获取页面失败 {url}: {e}")
-            return ""
+                return ""
+
+        print(f"[PluginCrawler] 重试耗尽 {url}: {last_error}")
+        return ""
 
     def fetch_url_simple(self, url: str, timeout: int = 30) -> str:
         """简单HTTP请求获取页面（用于sitemap等不需要渲染的页面）"""
@@ -402,13 +430,17 @@ class PluginCrawler:
                 }
 
 
-# 全局爬取器实例
+# 全局爬取器实例和锁
 _crawler_instance = None
+_crawler_lock = threading.Lock()
 
 
 def get_crawler() -> PluginCrawler:
-    """获取爬取器单例"""
+    """获取爬取器单例（线程安全）"""
     global _crawler_instance
     if _crawler_instance is None:
-        _crawler_instance = PluginCrawler()
+        with _crawler_lock:
+            # 双重检查锁定
+            if _crawler_instance is None:
+                _crawler_instance = PluginCrawler()
     return _crawler_instance

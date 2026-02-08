@@ -7,6 +7,7 @@
 import re
 import requests
 from typing import Optional, List, Dict, Any
+from collections import OrderedDict
 from models.settings import get_translation_config, get_translation_prompt
 
 
@@ -172,11 +173,13 @@ def process_articles_translation(articles: List[Dict[str, Any]]) -> List[Dict[st
 class TitleTranslator:
     """
     标题翻译器类
-    支持缓存和批量翻译
+    支持 LRU 缓存和批量翻译
     """
 
+    MAX_CACHE_SIZE = 10000  # 最大缓存条目数
+
     def __init__(self):
-        self._cache: Dict[str, str] = {}
+        self._cache: OrderedDict[str, str] = OrderedDict()
         self._enabled = True
 
     def enable(self):
@@ -190,6 +193,11 @@ class TitleTranslator:
     def is_enabled(self) -> bool:
         """检查翻译是否启用"""
         return self._enabled
+
+    @property
+    def cache_size(self) -> int:
+        """返回当前缓存大小"""
+        return len(self._cache)
 
     def translate(self, title: str) -> str:
         """
@@ -207,13 +215,14 @@ class TitleTranslator:
         if not self._enabled:
             return title
 
-        # 检查缓存
+        # 检查缓存（命中时移到末尾，实现 LRU）
         if title in self._cache:
+            self._cache.move_to_end(title)
             return self._cache[title]
 
         # 如果已经是中文
         if is_chinese(title):
-            self._cache[title] = title
+            self._add_to_cache(title, title)
             return title
 
         # 翻译
@@ -221,9 +230,19 @@ class TitleTranslator:
         result = translated if translated else title
 
         # 缓存结果
-        self._cache[title] = result
+        self._add_to_cache(title, result)
 
         return result
+
+    def _add_to_cache(self, key: str, value: str):
+        """添加到缓存，超过上限时删除最旧条目"""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        else:
+            if len(self._cache) >= self.MAX_CACHE_SIZE:
+                # 删除最旧的条目（OrderedDict 的第一个）
+                self._cache.popitem(last=False)
+            self._cache[key] = value
 
     def clear_cache(self):
         """清空缓存"""

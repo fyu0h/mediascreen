@@ -171,3 +171,29 @@ def cleanup_old_tasks(days: int = 7):
     get_tasks_collection().delete_many({
         'created_at': {'$lt': cutoff}
     })
+
+
+def has_running_task() -> bool:
+    """检查是否有正在运行的爬虫任务"""
+    # 先检查内存中的任务
+    with _task_lock:
+        if _running_tasks:
+            return True
+    # 再检查数据库中的任务状态
+    count = get_tasks_collection().count_documents({
+        'status': {'$in': ['pending', 'running']}
+    })
+    return count > 0
+
+
+def get_running_task_id() -> Optional[str]:
+    """获取正在运行的任务ID"""
+    with _task_lock:
+        for task_id in _running_tasks:
+            return task_id
+    # 查数据库
+    task = get_tasks_collection().find_one(
+        {'status': {'$in': ['pending', 'running']}},
+        {'task_id': 1}
+    )
+    return task['task_id'] if task else None
