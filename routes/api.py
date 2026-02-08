@@ -6,7 +6,7 @@ REST API 路由
 
 import time
 from datetime import datetime
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from typing import Any
 
 from config import Config
@@ -50,6 +50,60 @@ def error_response(message: str, code: int = 400) -> tuple:
     return jsonify({'success': False, 'error': message}), code
 
 
+# ==================== 认证中间件 ====================
+
+@api_bp.before_request
+def check_auth():
+    """API 请求认证检查"""
+    if 'user' not in session:
+        return jsonify({'success': False, 'error': '未登录，请先登录'}), 401
+
+
+# ==================== 认证接口 ====================
+
+@api_bp.route('/auth/status', methods=['GET'])
+def auth_status():
+    """获取当前登录状态"""
+    user = session.get('user')
+    if user:
+        return success_response({
+            'logged_in': True,
+            'username': user['username'],
+            'role': user.get('role', 'admin')
+        })
+    return success_response({'logged_in': False})
+
+
+@api_bp.route('/auth/change-password', methods=['POST'])
+def auth_change_password():
+    """修改密码"""
+    try:
+        from models.users import change_password
+
+        data = request.get_json(silent=True)
+        if not data:
+            return error_response('请求格式错误')
+
+        old_password = data.get('old_password', '')
+        new_password = data.get('new_password', '')
+
+        if not old_password or not new_password:
+            return error_response('请输入旧密码和新密码')
+
+        if len(new_password) < 6:
+            return error_response('新密码长度至少6位')
+
+        username = session['user']['username']
+        if change_password(username, old_password, new_password):
+            log_operation(action='修改密码', details={'username': username}, status='success')
+            return success_response({'message': '密码修改成功'})
+        else:
+            return error_response('旧密码错误')
+    except Exception as e:
+        log_error(action='修改密码失败', error=str(e))
+        return error_response('修改密码失败，请重试', 500)
+
+
 # ==================== 统计接口 ====================
 
 @api_bp.route('/stats/overview', methods=['GET'])
@@ -62,7 +116,8 @@ def stats_overview():
         data = get_overview_stats()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取概览统计失败: {str(e)}', 500)
+        log_error(action='获取概览统计失败', error=str(e))
+        return error_response('获取概览统计失败，请稍后重试', 500)
 
 
 @api_bp.route('/stats/realtime', methods=['GET'])
@@ -75,7 +130,8 @@ def stats_realtime():
         data = get_realtime_stats()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取实时统计失败: {str(e)}', 500)
+        log_error(action='获取实时统计失败', error=str(e))
+        return error_response('获取实时统计失败，请稍后重试', 500)
 
 
 @api_bp.route('/stats/sources', methods=['GET'])
@@ -88,7 +144,8 @@ def stats_sources():
         data = get_source_stats()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取源统计失败: {str(e)}', 500)
+        log_error(action='获取源统计失败', error=str(e))
+        return error_response('获取源统计失败，请稍后重试', 500)
 
 
 @api_bp.route('/stats/trend', methods=['GET'])
@@ -105,7 +162,8 @@ def stats_trend():
         data = get_trend_stats(days)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取趋势统计失败: {str(e)}', 500)
+        log_error(action='获取趋势统计失败', error=str(e))
+        return error_response('获取趋势统计失败，请稍后重试', 500)
 
 
 @api_bp.route('/stats/countries', methods=['GET'])
@@ -118,7 +176,8 @@ def stats_countries():
         data = get_country_stats()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取国家统计失败: {str(e)}', 500)
+        log_error(action='获取国家统计失败', error=str(e))
+        return error_response('获取国家统计失败，请稍后重试', 500)
 
 
 # ==================== 文章接口 ====================
@@ -158,7 +217,8 @@ def articles():
         )
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取文章列表失败: {str(e)}', 500)
+        log_error(action='获取文章列表失败', error=str(e))
+        return error_response('获取文章列表失败，请稍后重试', 500)
 
 
 # ==================== 地图接口 ====================
@@ -174,7 +234,8 @@ def map_markers():
         data = get_map_markers()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取地图标记失败: {str(e)}', 500)
+        log_error(action='获取地图标记失败', error=str(e))
+        return error_response('获取地图标记失败，请稍后重试', 500)
 
 
 # ==================== 新闻源接口 ====================
@@ -189,7 +250,8 @@ def sources():
         data = get_source_list()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取新闻源列表失败: {str(e)}', 500)
+        log_error(action='获取新闻源列表失败', error=str(e))
+        return error_response('获取新闻源列表失败，请稍后重试', 500)
 
 
 @api_bp.route('/sources/detail', methods=['GET'])
@@ -202,7 +264,8 @@ def sources_detail():
         data = get_all_sources()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取新闻源详情失败: {str(e)}', 500)
+        log_error(action='获取新闻源详情失败', error=str(e))
+        return error_response('获取新闻源详情失败，请稍后重试', 500)
 
 
 # ==================== 风控监控接口 ====================
@@ -217,7 +280,8 @@ def risk_keywords_list():
         data = get_all_risk_keywords()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取风控关键词失败: {str(e)}', 500)
+        log_error(action='获取风控关键词失败', error=str(e))
+        return error_response('获取风控关键词失败，请稍后重试', 500)
 
 
 @api_bp.route('/risk/keywords', methods=['POST'])
@@ -248,7 +312,8 @@ def risk_keywords_add():
     except ValueError as e:
         return error_response(str(e), 400)
     except Exception as e:
-        return error_response(f'添加关键词失败: {str(e)}', 500)
+        log_error(action='添加关键词失败', error=str(e))
+        return error_response('添加关键词失败，请稍后重试', 500)
 
 
 @api_bp.route('/risk/keywords/<keyword_id>', methods=['PUT'])
@@ -281,7 +346,8 @@ def risk_keywords_update(keyword_id: str):
     except ValueError as e:
         return error_response(str(e), 400)
     except Exception as e:
-        return error_response(f'更新关键词失败: {str(e)}', 500)
+        log_error(action='更新关键词失败', error=str(e))
+        return error_response('更新关键词失败，请稍后重试', 500)
 
 
 @api_bp.route('/risk/keywords/<keyword_id>', methods=['DELETE'])
@@ -296,7 +362,8 @@ def risk_keywords_delete(keyword_id: str):
         else:
             return error_response('未找到该关键词', 404)
     except Exception as e:
-        return error_response(f'删除关键词失败: {str(e)}', 500)
+        log_error(action='删除关键词失败', error=str(e))
+        return error_response('删除关键词失败，请稍后重试', 500)
 
 
 @api_bp.route('/risk/alerts', methods=['GET'])
@@ -320,7 +387,8 @@ def risk_alerts():
         data = get_risk_alerts(keywords, limit, date_str=date_str, filter_keyword=filter_keyword)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取风控告警失败: {str(e)}', 500)
+        log_error(action='获取风控告警失败', error=str(e))
+        return error_response('获取风控告警失败，请稍后重试', 500)
 
 
 @api_bp.route('/risk/alerts/calendar', methods=['GET'])
@@ -344,7 +412,8 @@ def risk_alerts_calendar():
         data = get_alerts_count_by_day(keywords, year, month)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取日历数据失败: {str(e)}', 500)
+        log_error(action='获取日历数据失败', error=str(e))
+        return error_response('获取日历数据失败，请稍后重试', 500)
 
 
 @api_bp.route('/risk/alerts/read', methods=['POST'])
@@ -376,7 +445,8 @@ def risk_alerts_mark_read():
             return error_response('标记已读失败', 500)
 
     except Exception as e:
-        return error_response(f'标记已读失败: {str(e)}', 500)
+        log_error(action='标记已读失败', error=str(e))
+        return error_response('标记已读失败，请稍后重试', 500)
 
 
 @api_bp.route('/risk/stats', methods=['GET'])
@@ -413,7 +483,8 @@ def risk_stats():
             'summary': summary
         })
     except Exception as e:
-        return error_response(f'获取风控统计失败: {str(e)}', 500)
+        log_error(action='获取风控统计失败', error=str(e))
+        return error_response('获取风控统计失败，请稍后重试', 500)
 
 
 @api_bp.route('/risk/trend', methods=['GET'])
@@ -434,7 +505,8 @@ def risk_trend():
         data = get_keyword_trend(keyword, days)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取关键词趋势失败: {str(e)}', 500)
+        log_error(action='获取关键词趋势失败', error=str(e))
+        return error_response('获取关键词趋势失败，请稍后重试', 500)
 
 
 # ==================== 订阅管理接口（已废弃，使用插件管理替代） ====================
@@ -463,7 +535,8 @@ def sites_list():
         data = get_enabled_sites()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取站点列表失败: {str(e)}', 500)
+        log_error(action='获取站点列表失败', error=str(e))
+        return error_response('获取站点列表失败，请稍后重试', 500)
 
 
 @api_bp.route('/sites', methods=['POST'])
@@ -486,7 +559,8 @@ def sites_get(site_id: str):
                 return success_response(site)
         return error_response('站点不存在', 404)
     except Exception as e:
-        return error_response(f'获取站点失败: {str(e)}', 500)
+        log_error(action='获取站点失败', error=str(e))
+        return error_response('获取站点失败，请稍后重试', 500)
 
 
 @api_bp.route('/sites/<site_id>', methods=['PUT'])
@@ -531,7 +605,8 @@ def sites_countries():
         ]
         return success_response(countries)
     except Exception as e:
-        return error_response(f'获取国家列表失败: {str(e)}', 500)
+        log_error(action='获取国家列表失败', error=str(e))
+        return error_response('获取国家列表失败，请稍后重试', 500)
 
 
 @api_bp.route('/sites/batch-import', methods=['POST'])
@@ -575,7 +650,8 @@ def plugins_list():
         data = get_plugins_with_status()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取插件列表失败: {str(e)}', 500)
+        log_error(action='获取插件列表失败', error=str(e))
+        return error_response('获取插件列表失败，请稍后重试', 500)
 
 
 @api_bp.route('/plugins/<plugin_id>', methods=['GET'])
@@ -594,7 +670,8 @@ def plugins_get(plugin_id: str):
 
         return error_response('插件不存在', 404)
     except Exception as e:
-        return error_response(f'获取插件详情失败: {str(e)}', 500)
+        log_error(action='获取插件详情失败', error=str(e))
+        return error_response('获取插件详情失败，请稍后重试', 500)
 
 
 @api_bp.route('/plugins/<plugin_id>/sites/<site_id>/toggle', methods=['POST'])
@@ -632,7 +709,8 @@ def plugins_toggle_site(plugin_id: str, site_id: str):
             'message': f'站点已{"启用" if enabled else "禁用"}'
         })
     except Exception as e:
-        return error_response(f'切换站点状态失败: {str(e)}', 500)
+        log_error(action='切换站点状态失败', error=str(e))
+        return error_response('切换站点状态失败，请稍后重试', 500)
 
 
 @api_bp.route('/plugins/<plugin_id>/sites/<site_id>/method', methods=['PUT'])
@@ -671,7 +749,8 @@ def plugins_set_method(plugin_id: str, site_id: str):
             'message': '抓取方式已更新'
         })
     except Exception as e:
-        return error_response(f'修改抓取方式失败: {str(e)}', 500)
+        log_error(action='修改抓取方式失败', error=str(e))
+        return error_response('修改抓取方式失败，请稍后重试', 500)
 
 
 @api_bp.route('/plugins/<plugin_id>/sites/<site_id>/auto-update', methods=['PUT'])
@@ -724,7 +803,8 @@ def plugins_set_auto_update(plugin_id: str, site_id: str):
             'message': f'定时更新已{"启用" if auto_update else "禁用"}'
         })
     except Exception as e:
-        return error_response(f'设置定时更新失败: {str(e)}', 500)
+        log_error(action='设置定时更新失败', error=str(e))
+        return error_response('设置定时更新失败，请稍后重试', 500)
 
 
 @api_bp.route('/plugins/auto-update-sites', methods=['GET'])
@@ -736,7 +816,8 @@ def plugins_auto_update_sites():
         data = get_auto_update_sites()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取定时更新站点失败: {str(e)}', 500)
+        log_error(action='获取定时更新站点失败', error=str(e))
+        return error_response('获取定时更新站点失败，请稍后重试', 500)
 
 
 @api_bp.route('/subscriptions', methods=['GET'])
@@ -748,7 +829,8 @@ def subscriptions_list():
         data = get_enabled_sites()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取订阅列表失败: {str(e)}', 500)
+        log_error(action='获取订阅列表失败', error=str(e))
+        return error_response('获取订阅列表失败，请稍后重试', 500)
 
 
 # ==================== 设置接口 ====================
@@ -816,7 +898,8 @@ def get_settings():
 
         return success_response(settings)
     except Exception as e:
-        return error_response(f'获取设置失败: {str(e)}', 500)
+        log_error(action='获取设置失败', error=str(e))
+        return error_response('获取设置失败，请稍后重试', 500)
 
 
 @api_bp.route('/settings', methods=['PUT'])
@@ -890,7 +973,8 @@ def update_settings():
         else:
             return error_response('保存设置失败', 500)
     except Exception as e:
-        return error_response(f'更新设置失败: {str(e)}', 500)
+        log_error(action='更新设置失败', error=str(e))
+        return error_response('更新设置失败，请稍后重试', 500)
 
 
 @api_bp.route('/settings/test-api', methods=['POST'])
@@ -959,7 +1043,8 @@ def test_api_connection():
             return error_response('无法连接到 API 服务器', 503)
 
     except Exception as e:
-        return error_response(f'测试失败: {str(e)}', 500)
+        log_error(action='测试失败', error=str(e))
+        return error_response('测试失败，请稍后重试', 500)
 
 
 @api_bp.route('/layout', methods=['GET'])
@@ -970,7 +1055,8 @@ def get_layout():
         layout = settings.get('layout', {})
         return success_response(layout)
     except Exception as e:
-        return error_response(f'获取布局失败: {str(e)}', 500)
+        log_error(action='获取布局失败', error=str(e))
+        return error_response('获取布局失败，请稍后重试', 500)
 
 
 @api_bp.route('/layout', methods=['PUT'])
@@ -991,7 +1077,8 @@ def update_layout():
         )
         return success_response({'message': '布局已保存'})
     except Exception as e:
-        return error_response(f'保存布局失败: {str(e)}', 500)
+        log_error(action='保存布局失败', error=str(e))
+        return error_response('保存布局失败，请稍后重试', 500)
 
 
 @api_bp.route('/layout', methods=['DELETE'])
@@ -1008,7 +1095,8 @@ def reset_layout():
         )
         return success_response({'message': '布局已重置'})
     except Exception as e:
-        return error_response(f'重置布局失败: {str(e)}', 500)
+        log_error(action='重置布局失败', error=str(e))
+        return error_response('重置布局失败，请稍后重试', 500)
 
 
 @api_bp.route('/duty', methods=['GET'])
@@ -1022,7 +1110,8 @@ def get_duty():
             'officers': duty.get('officers', [])
         })
     except Exception as e:
-        return error_response(f'获取值班信息失败: {str(e)}', 500)
+        log_error(action='获取值班信息失败', error=str(e))
+        return error_response('获取值班信息失败，请稍后重试', 500)
 
 
 @api_bp.route('/duty', methods=['PUT'])
@@ -1055,7 +1144,8 @@ def update_duty():
         else:
             return error_response('保存失败', 500)
     except Exception as e:
-        return error_response(f'设置值班人员失败: {str(e)}', 500)
+        log_error(action='设置值班人员失败', error=str(e))
+        return error_response('设置值班人员失败，请稍后重试', 500)
 
 
 # ==================== 文章爬取接口 ====================
@@ -1136,7 +1226,8 @@ def crawl_update():
 
         return success_response(results)
     except Exception as e:
-        return error_response(f'更新文章失败: {str(e)}', 500)
+        log_error(action='更新文章失败', error=str(e))
+        return error_response('更新文章失败，请稍后重试', 500)
 
 
 @api_bp.route('/crawl/update/stream', methods=['GET'])
@@ -1491,7 +1582,8 @@ def crawl_start():
         })
 
     except Exception as e:
-        return error_response(f'启动任务失败: {str(e)}', 500)
+        log_error(action='启动任务失败', error=str(e))
+        return error_response('启动任务失败，请稍后重试', 500)
 
 
 @api_bp.route('/crawl/status', methods=['GET'])
@@ -1569,7 +1661,8 @@ def scheduler_status():
         scheduler = get_rss_scheduler()
         return success_response(scheduler.get_status())
     except Exception as e:
-        return error_response(f'获取调度器状态失败: {str(e)}', 500)
+        log_error(action='获取调度器状态失败', error=str(e))
+        return error_response('获取调度器状态失败，请稍后重试', 500)
 
 
 @api_bp.route('/scheduler/trigger', methods=['POST'])
@@ -1581,7 +1674,8 @@ def scheduler_trigger():
         scheduler.trigger_update()
         return success_response({'message': '已触发更新'})
     except Exception as e:
-        return error_response(f'触发更新失败: {str(e)}', 500)
+        log_error(action='触发更新失败', error=str(e))
+        return error_response('触发更新失败，请稍后重试', 500)
 
 
 # ==================== 定时全量爬取接口 ====================
@@ -1603,7 +1697,8 @@ def crawl_schedule_get():
 
         return success_response(status)
     except Exception as e:
-        return error_response(f'获取定时爬取配置失败: {str(e)}', 500)
+        log_error(action='获取定时爬取配置失败', error=str(e))
+        return error_response('获取定时爬取配置失败，请稍后重试', 500)
 
 
 @api_bp.route('/crawl/schedule', methods=['PUT'])
@@ -1644,7 +1739,8 @@ def crawl_schedule_set():
                        (f'，间隔{interval_minutes}分钟' if enabled else '')
         })
     except Exception as e:
-        return error_response(f'更新定时爬取配置失败: {str(e)}', 500)
+        log_error(action='更新定时爬取配置失败', error=str(e))
+        return error_response('更新定时爬取配置失败，请稍后重试', 500)
 
 
 # ==================== 日志接口 ====================
@@ -1678,7 +1774,8 @@ def logs_list():
         )
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取日志失败: {str(e)}', 500)
+        log_error(action='获取日志失败', error=str(e))
+        return error_response('获取日志失败，请稍后重试', 500)
 
 
 @api_bp.route('/logs/<log_id>', methods=['GET'])
@@ -1690,7 +1787,8 @@ def logs_detail(log_id: str):
             return success_response(log)
         return error_response('日志不存在', 404)
     except Exception as e:
-        return error_response(f'获取日志详情失败: {str(e)}', 500)
+        log_error(action='获取日志详情失败', error=str(e))
+        return error_response('获取日志详情失败，请稍后重试', 500)
 
 
 @api_bp.route('/logs/stats', methods=['GET'])
@@ -1700,7 +1798,8 @@ def logs_stats():
         data = get_log_stats()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取日志统计失败: {str(e)}', 500)
+        log_error(action='获取日志统计失败', error=str(e))
+        return error_response('获取日志统计失败，请稍后重试', 500)
 
 
 @api_bp.route('/logs', methods=['DELETE'])
@@ -1711,7 +1810,8 @@ def logs_clear():
         log_system('清空日志', {'cleared_count': count}, status='success')
         return success_response({'message': f'已清空 {count} 条日志', 'count': count})
     except Exception as e:
-        return error_response(f'清空日志失败: {str(e)}', 500)
+        log_error(action='清空日志失败', error=str(e))
+        return error_response('清空日志失败，请稍后重试', 500)
 
 
 # ==================== 成果展示接口 ====================
@@ -1735,7 +1835,8 @@ def achievements_list():
         data = get_all_achievements()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取成果列表失败: {str(e)}', 500)
+        log_error(action='获取成果列表失败', error=str(e))
+        return error_response('获取成果列表失败，请稍后重试', 500)
 
 
 @api_bp.route('/achievements', methods=['POST'])
@@ -1777,8 +1878,18 @@ def achievements_add():
                 if ext not in allowed_extensions:
                     return error_response('不支持的图片格式，请上传 PNG/JPG/GIF/WEBP 格式', 400)
 
-                # 保存图片
+                # 读取并验证文件内容
                 image_data = image_file.read()
+
+                # 检查文件大小（双重保险，MAX_CONTENT_LENGTH 已在 config 中限制）
+                if len(image_data) > 5 * 1024 * 1024:
+                    return error_response('图片大小不能超过 5MB', 400)
+
+                # 验证文件头 magic bytes
+                valid_signatures = [b'\x89PNG', b'\xff\xd8\xff', b'GIF8', b'RIFF']
+                if not any(image_data.startswith(sig) for sig in valid_signatures):
+                    return error_response('文件内容与格式不匹配，请上传有效的图片文件', 400)
+
                 image_filename = save_uploaded_image(image_data, image_file.filename)
 
         # 添加成果
@@ -1798,7 +1909,8 @@ def achievements_add():
         return success_response(achievement)
 
     except Exception as e:
-        return error_response(f'添加成果失败: {str(e)}', 500)
+        log_error(action='添加成果失败', error=str(e))
+        return error_response('添加成果失败，请稍后重试', 500)
 
 
 @api_bp.route('/achievements/<achievement_id>', methods=['PUT'])
@@ -1837,7 +1949,8 @@ def achievements_update(achievement_id: str):
         return error_response('成果不存在', 404)
 
     except Exception as e:
-        return error_response(f'更新成果失败: {str(e)}', 500)
+        log_error(action='更新成果失败', error=str(e))
+        return error_response('更新成果失败，请稍后重试', 500)
 
 
 @api_bp.route('/achievements/<achievement_id>', methods=['DELETE'])
@@ -1854,7 +1967,8 @@ def achievements_delete(achievement_id: str):
             return success_response({'message': '删除成功'})
         return error_response('成果不存在', 404)
     except Exception as e:
-        return error_response(f'删除成果失败: {str(e)}', 500)
+        log_error(action='删除成果失败', error=str(e))
+        return error_response('删除成果失败，请稍后重试', 500)
 
 
 @api_bp.route('/achievements/fetch-title', methods=['POST'])
@@ -1884,7 +1998,8 @@ def achievements_fetch_title():
             return error_response('无法获取页面标题', 400)
 
     except Exception as e:
-        return error_response(f'抓取标题失败: {str(e)}', 500)
+        log_error(action='抓取标题失败', error=str(e))
+        return error_response('抓取标题失败，请稍后重试', 500)
 
 
 # ==================== 舆情总结接口 ====================
@@ -2383,7 +2498,8 @@ def summary_daily():
         error_detail = traceback.format_exc()
         print(f"舆情总结生成异常详情:\n{error_detail}")
         log_operation(action='舆情总结生成异常', details={'error': str(e), 'traceback': error_detail[:1000]}, status='error')
-        return error_response(f'生成舆情总结失败: {str(e)}', 500)
+        log_error(action='生成舆情总结失败', error=str(e))
+        return error_response('生成舆情总结失败，请稍后重试', 500)
 
 
 @api_bp.route('/summary/history', methods=['GET'])
@@ -2430,7 +2546,8 @@ def summary_history():
             'total_pages': (total + page_size - 1) // page_size
         })
     except Exception as e:
-        return error_response(f'获取历史记录失败: {str(e)}', 500)
+        log_error(action='获取历史记录失败', error=str(e))
+        return error_response('获取历史记录失败，请稍后重试', 500)
 
 
 @api_bp.route('/summary/detail/<summary_id>', methods=['GET'])
@@ -2469,7 +2586,8 @@ def summary_get_by_id(summary_id):
             'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S')
         })
     except Exception as e:
-        return error_response(f'获取总结失败: {str(e)}', 500)
+        log_error(action='获取总结失败', error=str(e))
+        return error_response('获取总结失败，请稍后重试', 500)
 
 
 @api_bp.route('/summary/<date_str>', methods=['GET'])
@@ -2513,7 +2631,8 @@ def summary_get_by_date(date_str):
             'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S')
         })
     except Exception as e:
-        return error_response(f'获取总结失败: {str(e)}', 500)
+        log_error(action='获取总结失败', error=str(e))
+        return error_response('获取总结失败，请稍后重试', 500)
 
 
 @api_bp.route('/summary/today', methods=['GET'])
@@ -2553,7 +2672,8 @@ def summary_get_today():
             'created_at': doc.get('created_at', doc['date']).strftime('%Y-%m-%d %H:%M:%S')
         })
     except Exception as e:
-        return error_response(f'获取总结失败: {str(e)}', 500)
+        log_error(action='获取总结失败', error=str(e))
+        return error_response('获取总结失败，请稍后重试', 500)
 
 
 @api_bp.route('/summary/prompt', methods=['GET'])
@@ -2568,7 +2688,8 @@ def summary_get_prompt():
             'is_custom': current_prompt != default_prompt
         })
     except Exception as e:
-        return error_response(f'获取提示词失败: {str(e)}', 500)
+        log_error(action='获取提示词失败', error=str(e))
+        return error_response('获取提示词失败，请稍后重试', 500)
 
 
 @api_bp.route('/summary/prompt', methods=['PUT'])
@@ -2598,7 +2719,8 @@ def summary_set_prompt():
 
         return success_response({'message': '提示词已保存'})
     except Exception as e:
-        return error_response(f'保存提示词失败: {str(e)}', 500)
+        log_error(action='保存提示词失败', error=str(e))
+        return error_response('保存提示词失败，请稍后重试', 500)
 
 
 # ==================== 翻译设置 API ====================
@@ -2643,7 +2765,8 @@ def get_translation_settings():
             'providers': API_PROVIDERS
         })
     except Exception as e:
-        return error_response(f'获取翻译设置失败: {str(e)}', 500)
+        log_error(action='获取翻译设置失败', error=str(e))
+        return error_response('获取翻译设置失败，请稍后重试', 500)
 
 
 @api_bp.route('/translation/settings', methods=['PUT'])
@@ -2704,7 +2827,8 @@ def update_translation_settings():
         else:
             return error_response('保存翻译设置失败', 500)
     except Exception as e:
-        return error_response(f'更新翻译设置失败: {str(e)}', 500)
+        log_error(action='更新翻译设置失败', error=str(e))
+        return error_response('更新翻译设置失败，请稍后重试', 500)
 
 
 @api_bp.route('/translation/prompt', methods=['GET'])
@@ -2719,7 +2843,8 @@ def translation_get_prompt():
             'is_custom': current_prompt != default_prompt
         })
     except Exception as e:
-        return error_response(f'获取翻译提示词失败: {str(e)}', 500)
+        log_error(action='获取翻译提示词失败', error=str(e))
+        return error_response('获取翻译提示词失败，请稍后重试', 500)
 
 
 @api_bp.route('/translation/prompt', methods=['PUT'])
@@ -2747,7 +2872,8 @@ def translation_set_prompt():
 
         return success_response({'message': '翻译提示词已保存'})
     except Exception as e:
-        return error_response(f'保存翻译提示词失败: {str(e)}', 500)
+        log_error(action='保存翻译提示词失败', error=str(e))
+        return error_response('保存翻译提示词失败，请稍后重试', 500)
 
 
 @api_bp.route('/translation/test-api', methods=['POST'])
@@ -2816,7 +2942,8 @@ def test_translation_api():
     except requests.exceptions.Timeout:
         return error_response('连接超时', 408)
     except Exception as e:
-        return error_response(f'测试失败: {str(e)}', 500)
+        log_error(action='测试失败', error=str(e))
+        return error_response('测试失败，请稍后重试', 500)
 
 
 # ==================== Telegram 监控接口 ====================
@@ -2831,7 +2958,8 @@ def telegram_accounts_list():
         accounts = get_all_accounts()
         return success_response(accounts)
     except Exception as e:
-        return error_response(f'获取账号列表失败: {str(e)}', 500)
+        log_error(action='获取账号列表失败', error=str(e))
+        return error_response('获取账号列表失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/accounts', methods=['POST'])
@@ -2856,7 +2984,8 @@ def telegram_accounts_add():
     except ValueError as e:
         return error_response(str(e))
     except Exception as e:
-        return error_response(f'添加账号失败: {str(e)}', 500)
+        log_error(action='添加账号失败', error=str(e))
+        return error_response('添加账号失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/accounts/<account_id>', methods=['DELETE'])
@@ -2868,7 +2997,8 @@ def telegram_accounts_delete(account_id):
             return success_response({'message': '账号已删除'})
         return error_response('账号不存在', 404)
     except Exception as e:
-        return error_response(f'删除账号失败: {str(e)}', 500)
+        log_error(action='删除账号失败', error=str(e))
+        return error_response('删除账号失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/accounts/<account_id>/connect', methods=['POST'])
@@ -2881,7 +3011,8 @@ def telegram_accounts_connect(account_id):
             return success_response(result)
         return error_response(result.get('error', '连接失败'))
     except Exception as e:
-        return error_response(f'连接失败: {str(e)}', 500)
+        log_error(action='连接失败', error=str(e))
+        return error_response('连接失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/accounts/<account_id>/verify', methods=['POST'])
@@ -2901,7 +3032,8 @@ def telegram_accounts_verify(account_id):
             return success_response(result)
         return error_response(result.get('error', '验证失败'))
     except Exception as e:
-        return error_response(f'验证失败: {str(e)}', 500)
+        log_error(action='验证失败', error=str(e))
+        return error_response('验证失败，请稍后重试', 500)
 
 
 # ---------- 群组管理 ----------
@@ -2915,7 +3047,8 @@ def telegram_groups_list():
         groups = get_all_groups(account_id)
         return success_response(groups)
     except Exception as e:
-        return error_response(f'获取群组列表失败: {str(e)}', 500)
+        log_error(action='获取群组列表失败', error=str(e))
+        return error_response('获取群组列表失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/groups/search', methods=['POST'])
@@ -2937,7 +3070,8 @@ def telegram_groups_search():
             return success_response(result.get('groups', []))
         return error_response(result.get('error', '搜索失败'))
     except Exception as e:
-        return error_response(f'搜索失败: {str(e)}', 500)
+        log_error(action='搜索失败', error=str(e))
+        return error_response('搜索失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/groups/subscribe', methods=['POST'])
@@ -2959,7 +3093,8 @@ def telegram_groups_subscribe():
     except ValueError as e:
         return error_response(str(e))
     except Exception as e:
-        return error_response(f'订阅失败: {str(e)}', 500)
+        log_error(action='订阅失败', error=str(e))
+        return error_response('订阅失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/groups/<group_db_id>', methods=['DELETE'])
@@ -2971,7 +3106,8 @@ def telegram_groups_unsubscribe(group_db_id):
             return success_response({'message': '已取消订阅'})
         return error_response('群组不存在', 404)
     except Exception as e:
-        return error_response(f'取消订阅失败: {str(e)}', 500)
+        log_error(action='取消订阅失败', error=str(e))
+        return error_response('取消订阅失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/groups/<group_db_id>/toggle', methods=['POST'])
@@ -2982,7 +3118,8 @@ def telegram_groups_toggle(group_db_id):
         new_state = toggle_group(group_db_id)
         return success_response({'enabled': new_state})
     except Exception as e:
-        return error_response(f'切换状态失败: {str(e)}', 500)
+        log_error(action='切换状态失败', error=str(e))
+        return error_response('切换状态失败，请稍后重试', 500)
 
 
 # ---------- 关键词管理 ----------
@@ -2995,7 +3132,8 @@ def telegram_keywords_list():
         keywords = get_all_tg_keywords()
         return success_response(keywords)
     except Exception as e:
-        return error_response(f'获取关键词失败: {str(e)}', 500)
+        log_error(action='获取关键词失败', error=str(e))
+        return error_response('获取关键词失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/keywords', methods=['POST'])
@@ -3015,7 +3153,8 @@ def telegram_keywords_add():
     except ValueError as e:
         return error_response(str(e))
     except Exception as e:
-        return error_response(f'添加关键词失败: {str(e)}', 500)
+        log_error(action='添加关键词失败', error=str(e))
+        return error_response('添加关键词失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/keywords/<keyword_id>', methods=['PUT'])
@@ -3034,7 +3173,8 @@ def telegram_keywords_update(keyword_id):
     except ValueError as e:
         return error_response(str(e))
     except Exception as e:
-        return error_response(f'更新失败: {str(e)}', 500)
+        log_error(action='更新失败', error=str(e))
+        return error_response('更新失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/keywords/<keyword_id>', methods=['DELETE'])
@@ -3046,7 +3186,8 @@ def telegram_keywords_delete(keyword_id):
             return success_response({'message': '已删除'})
         return error_response('关键词不存在', 404)
     except Exception as e:
-        return error_response(f'删除失败: {str(e)}', 500)
+        log_error(action='删除失败', error=str(e))
+        return error_response('删除失败，请稍后重试', 500)
 
 
 # ---------- 报警与消息 ----------
@@ -3065,7 +3206,8 @@ def telegram_alerts_list():
         data = get_alerts(page, page_size, unread_only, group_id, level)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取报警列表失败: {str(e)}', 500)
+        log_error(action='获取报警列表失败', error=str(e))
+        return error_response('获取报警列表失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/alerts/<alert_id>/read', methods=['POST'])
@@ -3077,7 +3219,8 @@ def telegram_alerts_mark_read(alert_id):
             return success_response({'message': '已标记已读'})
         return error_response('报警不存在', 404)
     except Exception as e:
-        return error_response(f'标记失败: {str(e)}', 500)
+        log_error(action='标记失败', error=str(e))
+        return error_response('标记失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/messages', methods=['GET'])
@@ -3092,7 +3235,8 @@ def telegram_messages_list():
         data = get_messages(group_id, page, page_size)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取消息失败: {str(e)}', 500)
+        log_error(action='获取消息失败', error=str(e))
+        return error_response('获取消息失败，请稍后重试', 500)
 
 
 # ---------- 统计分析 ----------
@@ -3105,7 +3249,8 @@ def telegram_stats_overview():
         data = tg_overview()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取统计失败: {str(e)}', 500)
+        log_error(action='获取统计失败', error=str(e))
+        return error_response('获取统计失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/stats/alert-trend', methods=['GET'])
@@ -3117,7 +3262,8 @@ def telegram_stats_alert_trend():
         data = get_alert_trend(days)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取趋势失败: {str(e)}', 500)
+        log_error(action='获取趋势失败', error=str(e))
+        return error_response('获取趋势失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/stats/keyword-hotness', methods=['GET'])
@@ -3129,7 +3275,8 @@ def telegram_stats_keyword_hotness():
         data = get_keyword_hotness(limit)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取热度失败: {str(e)}', 500)
+        log_error(action='获取热度失败', error=str(e))
+        return error_response('获取热度失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/stats/group-activity', methods=['GET'])
@@ -3141,7 +3288,8 @@ def telegram_stats_group_activity():
         data = get_group_activity(days)
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取活跃度失败: {str(e)}', 500)
+        log_error(action='获取活跃度失败', error=str(e))
+        return error_response('获取活跃度失败，请稍后重试', 500)
 
 
 # ---------- 设置与控制 ----------
@@ -3157,7 +3305,8 @@ def telegram_webhook_settings_get():
         }
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取配置失败: {str(e)}', 500)
+        log_error(action='获取配置失败', error=str(e))
+        return error_response('获取配置失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/webhook/settings', methods=['PUT'])
@@ -3172,7 +3321,8 @@ def telegram_webhook_settings_update():
             set_setting('telegram.webhook_enabled', data['webhook_enabled'])
         return success_response({'message': '配置已保存'})
     except Exception as e:
-        return error_response(f'保存配置失败: {str(e)}', 500)
+        log_error(action='保存配置失败', error=str(e))
+        return error_response('保存配置失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/webhook/test', methods=['POST'])
@@ -3188,7 +3338,8 @@ def telegram_webhook_test():
             return success_response(result)
         return error_response(result.get('error', '推送失败'))
     except Exception as e:
-        return error_response(f'测试失败: {str(e)}', 500)
+        log_error(action='测试失败', error=str(e))
+        return error_response('测试失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/monitor/status', methods=['GET'])
@@ -3199,7 +3350,8 @@ def telegram_monitor_status():
         data = telegram_monitor.get_status()
         return success_response(data)
     except Exception as e:
-        return error_response(f'获取状态失败: {str(e)}', 500)
+        log_error(action='获取状态失败', error=str(e))
+        return error_response('获取状态失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/monitor/start', methods=['POST'])
@@ -3210,7 +3362,8 @@ def telegram_monitor_start():
         telegram_monitor.start()
         return success_response({'message': '监控服务已启动'})
     except Exception as e:
-        return error_response(f'启动失败: {str(e)}', 500)
+        log_error(action='启动失败', error=str(e))
+        return error_response('启动失败，请稍后重试', 500)
 
 
 @api_bp.route('/telegram/monitor/stop', methods=['POST'])
@@ -3221,4 +3374,5 @@ def telegram_monitor_stop():
         telegram_monitor.stop()
         return success_response({'message': '监控服务已停止'})
     except Exception as e:
-        return error_response(f'停止失败: {str(e)}', 500)
+        log_error(action='停止失败', error=str(e))
+        return error_response('停止失败，请稍后重试', 500)

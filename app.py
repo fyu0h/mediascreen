@@ -6,6 +6,7 @@ Flask 应用入口
 """
 
 import time
+from datetime import timedelta
 from flask import Flask, request, g
 from flask_cors import CORS
 
@@ -21,9 +22,17 @@ def create_app() -> Flask:
 
     # 加载配置
     app.config.from_object(Config)
+    app.permanent_session_lifetime = timedelta(hours=12)
 
-    # 启用 CORS（允许前端开发调试）
-    CORS(app)
+    # CORS 配置（限制跨域来源）
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:5000", "http://127.0.0.1:5000"],
+            "methods": ["GET", "POST", "PUT", "DELETE"],
+            "allow_headers": ["Content-Type"],
+            "supports_credentials": True
+        }
+    })
 
     # 注册蓝图
     app.register_blueprint(api_bp)
@@ -140,6 +149,8 @@ def _filter_sensitive_headers(headers: dict) -> dict:
 def init_database():
     """初始化数据库（迁移和索引）"""
     from models.sites import migrate_from_json, ensure_indexes
+    from models.users import ensure_admin_user
+
     # 迁移 sites.json 到 MongoDB（兼容旧数据）
     migrated = migrate_from_json()
     if migrated > 0:
@@ -147,6 +158,9 @@ def init_database():
 
     # 确保索引存在
     ensure_indexes()
+
+    # 确保默认管理员账号存在
+    ensure_admin_user()
 
 
 def init_plugins():

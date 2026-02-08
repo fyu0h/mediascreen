@@ -45,6 +45,29 @@ def save_achievements(achievements: List[Dict[str, Any]]) -> bool:
         return False
 
 
+def _is_internal_url(url: str) -> bool:
+    """检查 URL 是否指向内网地址（SSRF 防护）"""
+    import ipaddress
+    import socket
+
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+
+    if not hostname:
+        return True
+
+    # 检查常见内网主机名
+    if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
+        return True
+
+    try:
+        # 解析域名为 IP 地址并检查是否为内网
+        ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+        return ip.is_private or ip.is_loopback or ip.is_reserved
+    except (socket.gaierror, ValueError):
+        return False
+
+
 def fetch_page_title(url: str) -> Optional[str]:
     """
     从URL抓取页面标题
@@ -56,6 +79,11 @@ def fetch_page_title(url: str) -> Optional[str]:
         页面标题，抓取失败返回 None
     """
     try:
+        # SSRF 防护：拒绝内网地址
+        if _is_internal_url(url):
+            print(f"[安全] 拒绝请求内网地址: {url}")
+            return None
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',

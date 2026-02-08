@@ -141,6 +141,10 @@ const BubbleManager = {
 async function fetchAPI(endpoint) {
     try {
         const response = await fetch(`/api${endpoint}`);
+        if (response.status === 401) {
+            window.location.href = '/login';
+            return null;
+        }
         const data = await response.json();
         return data.success ? data.data : null;
     } catch (error) {
@@ -163,9 +167,12 @@ function formatCompactNumber(num) {
 
 function escapeHtml(text) {
     if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function updateDateTime() {
@@ -913,12 +920,7 @@ function renderFilteredAlerts() {
     `}).join('');
 }
 
-// 高亮关键词
-function highlightKeyword(text, keyword) {
-    if (!keyword) return text;
-    const regex = new RegExp(`(${escapeRegExp(keyword)})`, 'gi');
-    return text.replace(regex, '<span class="highlight">$1</span>');
-}
+// highlightKeyword 定义在搜索模块中（第5015行附近），此处不再重复定义
 
 // 转义正则特殊字符
 function escapeRegExp(string) {

@@ -51,11 +51,13 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
     api_url = config.get('api_url')
     model = config.get('model')
 
-    # 使用默认配置（如果未配置）
+    # 检查必要配置
     if not api_key:
-        api_key = 'sk-bgyzpzozdwghavpnsnglmbnmwakalhspstohaoasancrtokl'
+        print("[翻译] 未配置翻译 API 密钥，请在系统设置中配置")
+        return None
     if not api_url:
-        api_url = 'https://api.siliconflow.cn/v1/chat/completions'
+        print("[翻译] 未配置翻译 API 地址，请在系统设置中配置")
+        return None
     if not model:
         model = 'Pro/Qwen/Qwen2.5-7B-Instruct'
 

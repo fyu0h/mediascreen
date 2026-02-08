@@ -15,8 +15,11 @@ class Config:
     """应用配置类"""
 
     # Flask 配置
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+    SECRET_KEY = os.environ.get('SECRET_KEY', os.urandom(24).hex())
+    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+
+    # 上传文件大小限制（5MB）
+    MAX_CONTENT_LENGTH = 5 * 1024 * 1024
 
     # MongoDB 配置
     # 优先使用完整 URI（支持 MongoDB Atlas）
