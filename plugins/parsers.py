@@ -374,31 +374,45 @@ def parse_zaobao(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
 def parse_sinchew(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     星洲日报专用解析器
-    URL格式: /news/xxx/2025/01/15/xxxxx
+    URL格式: https://{subdomain}.sinchew.com.my/news/YYYYMMDD/category/id
+    子域名包括: www, sarawak, johor, metro, northern, perak 等
+    标题优先从 data-title 属性提取（比 get_text 更干净）
     """
     articles = []
     seen_urls = set()
-    base_url = 'https://www.sinchew.com.my'
 
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 星洲日报文章URL模式
-        article_pattern = re.compile(r'/\d{8}/[a-z0-9-]+')
+        # 星洲日报文章URL模式：匹配 sinchew.com.my 域名下包含 /news/YYYYMMDD/ 的链接
+        article_pattern = re.compile(r'sinchew\.com\.my/news/\d{8}/')
 
         for link in soup.find_all('a', href=True):
             href = link.get('href', '').strip()
+
+            # 必须匹配文章URL模式
             if not article_pattern.search(href):
                 continue
 
-            if href.startswith('/'):
-                href = base_url + href
+            # 跳过广告/赞助内容
+            if '/advertorial/' in href:
+                continue
 
+            # 去重
             if href in seen_urls:
                 continue
             seen_urls.add(href)
 
-            title = link.get_text(strip=True)
+            # 优先从 data-title 属性提取标题（星洲网所有文章链接都有此属性）
+            title = link.get('data-title', '').strip()
+            if not title:
+                # 尝试从 normal-title 子元素提取
+                normal_title = link.select_one('.normal-title')
+                if normal_title:
+                    title = normal_title.get_text(strip=True)
+                else:
+                    title = link.get_text(strip=True)
+
             if len(title) < 5:
                 continue
 
