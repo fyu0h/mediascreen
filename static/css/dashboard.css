@@ -7211,14 +7211,30 @@ body.resizing .chart-container-sm {
         padding: 8px;
     }
 
-    /* 最新文章列表 */
+    /* 最新文章列表 - 父容器允许滚动，列表给定max-height */
     .latest-articles-body {
+        overflow: visible;
+        max-height: none;
+    }
+
+    .latest-articles-list {
+        height: auto;
         max-height: 300px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* 告警列表 */
     .alert-body {
+        overflow: visible;
+        max-height: none;
+    }
+
+    .alert-list {
+        height: auto;
         max-height: 300px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* 成果展示 */
@@ -7226,18 +7242,46 @@ body.resizing .chart-container-sm {
         max-height: none;
     }
 
+    .achievements-body {
+        overflow: visible;
+    }
+
+    .achievements-list {
+        height: auto;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
     /* Telegram 卡片 */
     .tg-stats-row {
         gap: 8px;
     }
 
+    .telegram-body {
+        overflow: visible;
+    }
+
     .tg-alert-list {
+        flex: none;
         max-height: 200px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .tg-card-footer {
         flex-wrap: wrap;
         gap: 6px;
+    }
+
+    /* 新闻源分布图表卡片 */
+    .card.flex-1 .card-body,
+    .card.flex-2 .card-body {
+        overflow: visible;
+    }
+
+    .card.flex-1,
+    .card.flex-2 {
+        flex: none;
     }
 
     /* 值班卡片 */
@@ -7302,6 +7346,12 @@ body.resizing .chart-container-sm {
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         flex: 1;
+    }
+
+    /* 全屏弹窗(AI总结)的modal-body也需要可滚动 */
+    .modal-fullscreen .modal-body {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .modal-footer {
@@ -7525,6 +7575,56 @@ body.resizing .chart-container-sm {
         flex-wrap: wrap;
         justify-content: center;
         gap: 8px;
+    }
+
+    /* ===== 弹窗内列表 - 移除vh计算，让modal-body统一滚动 ===== */
+    .full-alert-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .logs-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .source-article-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .keyword-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .tg-full-alert-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .tg-subscribed-list,
+    .tg-group-search-list,
+    .tg-keyword-list,
+    .tg-account-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .plugin-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .history-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    /* 搜索结果列表 */
+    .search-results-list {
+        max-height: none;
+        overflow-y: visible;
     }
 
     /* ===== 触摸友好 ===== */
