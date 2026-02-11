@@ -5601,6 +5601,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     gap: 10px;
 }
 
+/* 关闭按钮默认隐藏，仅移动端显示 */
+.btn-summary-close {
+    display: none;
+}
+
 /* 返回按钮 */
 .btn-back {
     display: flex;
@@ -7113,9 +7118,6 @@ body.resizing .chart-container-sm {
 
     .logo-text {
         font-size: 13px;
-        max-width: 160px;
-        overflow: hidden;
-        text-overflow: ellipsis;
         white-space: nowrap;
     }
 
@@ -7555,10 +7557,28 @@ body.resizing .chart-container-sm {
     }
 
     .footer-buttons {
+        display: flex;
         flex-wrap: wrap;
         gap: 6px;
         width: 100%;
-        justify-content: flex-end;
+    }
+
+    .btn-summary-close {
+        display: inline-flex;
+    }
+
+    /* 底部按钮等宽居中 */
+    .footer-buttons .btn {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 0;
+        text-align: center;
+        white-space: nowrap;
+        font-size: 13px;
+        padding: 10px 8px;
     }
 
     /* 全局搜索弹窗 */

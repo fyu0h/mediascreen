@@ -448,9 +448,10 @@ async function loadWorldMap() {
     if (!data) return;
 
     if (!worldMap) {
+        const isMobile = window.innerWidth <= 768;
         worldMap = L.map('worldMap', {
-            center: [25, 20],
-            zoom: 2,
+            center: isMobile ? [20, 0] : [25, 20],
+            zoom: isMobile ? 1 : 2,
             minZoom: 1,
             maxZoom: 6,
             zoomControl: false,
