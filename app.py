@@ -27,7 +27,7 @@ def create_app() -> Flask:
     # CORS 配置（限制跨域来源）
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:5000", "http://127.0.0.1:5000"],
+            "origins": ["http://localhost:5000", "http://127.0.0.1:5000", "http://home.iinin.me:9906"],
             "methods": ["GET", "POST", "PUT", "DELETE"],
             "allow_headers": ["Content-Type"],
             "supports_credentials": True

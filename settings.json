@@ -1,7 +1,7 @@
 {
   "llm": {
-    "provider": "siliconflow",
-    "model": "",
+    "provider": "poixe",
+    "model": "gpt-4o",
     "providers": {
       "siliconflow": {
         "api_key": "",
@@ -28,7 +28,7 @@
         "api_url": "https://api.aimlapi.com/v1/chat/completions"
       },
       "poixe": {
-        "api_key": "",
+        "api_key": "sk-6zWGb6qEYIJ5QmDGmyNjsT6dc1Cb1eSalIAXjFArVy8dCqbW",
         "api_url": "https://api.poixe.com/v1/chat/completions"
       }
     },
@@ -58,8 +58,8 @@
     "monitor_enabled": false
   },
   "translation": {
-    "provider": "siliconflow",
-    "model": "",
+    "provider": "poixe",
+    "model": "gpt-4o",
     "custom_prompt": "",
     "providers": {
       "siliconflow": {
@@ -83,7 +83,7 @@
         "api_url": "https://api.aimlapi.com/v1/chat/completions"
       },
       "poixe": {
-        "api_key": "",
+        "api_key": "sk-6zWGb6qEYIJ5QmDGmyNjsT6dc1Cb1eSalIAXjFArVy8dCqbW",
         "api_url": "https://api.poixe.com/v1/chat/completions"
       },
       "custom": {
@@ -92,6 +92,29 @@
       }
     }
   },
-  "updated_at": "",
-  "layout": {}
+  "updated_at": "2026-02-08 17:35:18",
+  "layout": {
+    "panels": {
+      "panel-left": {
+        "width": "21.74%"
+      },
+      "panel-right": {
+        "width": "24.71%"
+      }
+    },
+    "cards": {
+      "world-map": {
+        "flex": "0.8947 1 0%",
+        "height": null
+      },
+      "achievements": {
+        "flex": "0.57 1 0%",
+        "height": null
+      },
+      "telegram": {
+        "flex": "0.43 1 0%",
+        "height": null
+      }
+    }
+  }
 }

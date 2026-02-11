@@ -39,7 +39,10 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(ls \"D:\\\\code\\\\态势感知\\\\services\"\" 2>/dev/null || echo \"services directory does not exist \")",
-      "WebFetch(domain:hongkongfp.com)"
+      "WebFetch(domain:hongkongfp.com)",
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && wc -l \"\"{}\"\"')",
+      "Bash(grep:*)",
+      "Bash(copy \"D:\\\\code\\\\态势感知\\\\settings.json\" \"D:\\\\code\\\\态势感知\\\\settings.example.json\")"
     ]
   }
 }

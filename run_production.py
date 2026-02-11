@@ -28,7 +28,8 @@ def main():
     from models.logger import log_system
 
     # 生产环境配置
-    HOST = '127.0.0.1'  # 配合 Nginx 时监听本地
+    # 修改说明: 将 '127.0.0.1' 改为 '0.0.0.0' 以允许局域网或外网访问
+    HOST = '0.0.0.0'
     PORT = 5000
     THREADS = 8         # 工作线程数（小型应用 4-8 足够）
 
@@ -36,7 +37,7 @@ def main():
     print("皇岗边检站全球舆情态势感知平台")
     print("=" * 50)
     print(f"运行模式: 生产环境 (Waitress)")
-    print(f"监听地址: http://{HOST}:{PORT}")
+    print(f"监听地址: http://{HOST}:{PORT} (允许外部访问)")
     print(f"工作线程: {THREADS}")
     print(f"MongoDB: {Config.MONGO_HOST}:{Config.MONGO_PORT}/{Config.MONGO_DB}")
     print("=" * 50)
@@ -59,7 +60,7 @@ def main():
     )
 
     print(f"\n服务已启动，按 Ctrl+C 停止")
-    print(f"提示: 请配置 Nginx 反向代理到 http://{HOST}:{PORT}\n")
+    print(f"提示: 请配置 Nginx 反向代理或直接访问 http://服务器IP:{PORT}\n")
 
     # 启动 Waitress 服务器
     serve(
