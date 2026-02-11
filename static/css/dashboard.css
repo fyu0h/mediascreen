@@ -7135,6 +7135,14 @@ body.resizing .chart-container-sm {
         font-size: 11px;
         text-align: right;
         line-height: 1.4;
+        background: none;
+        border: none;
+        padding: 0;
+        letter-spacing: 0;
+        text-shadow: none;
+        color: var(--text-secondary);
+        font-family: inherit;
+        font-weight: 400;
     }
 
     .header-center {
