@@ -7491,6 +7491,50 @@ body.resizing .chart-container-sm {
         justify-content: space-between;
     }
 
+    /* 插件站点项 - 移动端换行布局 */
+    .site-item {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 12px;
+    }
+
+    .site-toggle {
+        flex-shrink: 0;
+    }
+
+    /* 开关保持原始尺寸，不受触摸友好规则影响 */
+    .toggle-switch {
+        width: 40px;
+        height: 22px;
+        min-height: 22px;
+        min-width: 40px;
+    }
+
+    .site-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .site-meta {
+        flex-shrink: 0;
+    }
+
+    .site-auto-update {
+        width: 100%;
+        margin-left: 0;
+        padding-top: 4px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .auto-update-label {
+        min-height: auto;
+    }
+
+    .interval-select {
+        min-height: auto;
+        font-size: 12px;
+    }
+
     /* Telegram 设置弹窗 */
     .tg-tabs {
         flex-wrap: wrap;
