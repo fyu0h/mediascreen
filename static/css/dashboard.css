@@ -7440,9 +7440,32 @@ body.resizing .chart-container-sm {
     }
 
     /* AI总结弹窗 */
+    .summary-body {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
     .summary-grid {
         grid-template-columns: 1fr;
+        grid-template-rows: auto;
         gap: 12px;
+        flex: none;
+        overflow: visible;
+    }
+
+    .summary-section-main,
+    .summary-section-hot,
+    .summary-section-risk {
+        grid-column: auto;
+        grid-row: auto;
+        overflow: visible;
+        min-height: auto;
+    }
+
+    .summary-section-content {
+        overflow: visible;
+        min-height: auto;
+        flex: none;
     }
 
     .summary-section-title {
