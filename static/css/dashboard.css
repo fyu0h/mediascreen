@@ -7142,12 +7142,24 @@ body.resizing .chart-container-sm {
         padding-bottom: 64px; /* 为底部导航留空间 */
     }
 
+    /* 打散面板，让所有卡片成为main-content的直接flex子项 */
     .panel-left,
     .panel-center,
     .panel-right {
-        width: 100% !important;
-        min-width: 0 !important;
+        display: contents;
     }
+
+    /* 移动端卡片排序：实时概览 → 值班/风控 → 其余 */
+    [data-layout-id="stats-overview"]  { order: 1; }
+    [data-layout-id="duty"]            { order: 2; }
+    [data-layout-id="risk-monitor"]    { order: 3; }
+    [data-layout-id="keyword-chart"]   { order: 4; }
+    [data-layout-id="risk-alerts"]     { order: 5; }
+    [data-layout-id="source-chart"]    { order: 6; }
+    [data-layout-id="latest-articles"] { order: 7; }
+    [data-layout-id="world-map"]       { order: 8; }
+    [data-layout-id="achievements"]    { order: 9; }
+    [data-layout-id="telegram"]        { order: 10; }
 
     .panel {
         gap: 8px;
