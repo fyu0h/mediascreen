@@ -5218,6 +5218,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     flex-shrink: 0;
 }
 
+.settings-footer {
+    justify-content: flex-end;
+    gap: 10px;
+}
+
 .summary-meta {
     font-size: 11px;
     color: var(--text-muted);
