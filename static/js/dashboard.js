@@ -6385,3 +6385,151 @@ async function resetLayout() {
     handleResize();
     showToast('已恢复默认布局', 'success');
 }
+
+// ========== 移动端交互逻辑 ==========
+
+/**
+ * 判断当前是否为移动端视口
+ */
+function isMobileView() {
+    return window.innerWidth <= 768;
+}
+
+/**
+ * 移动端菜单切换 - 弹出更多操作面板
+ */
+function toggleMobileMenu() {
+    const overlay = document.getElementById('mobilePanelOverlay');
+    if (!overlay) return;
+
+    if (overlay.classList.contains('active')) {
+        closeMobileMenu();
+    } else {
+        overlay.classList.add('active');
+        // 显示一个快捷操作弹窗
+        openMobileMoreMenu();
+    }
+}
+
+/**
+ * 关闭移动端菜单
+ */
+function closeMobileMenu() {
+    const overlay = document.getElementById('mobilePanelOverlay');
+    if (overlay) overlay.classList.remove('active');
+    // 关闭更多菜单弹窗
+    const moreModal = document.getElementById('mobileMoreModal');
+    if (moreModal) moreModal.classList.remove('active');
+}
+
+/**
+ * 打开移动端"更多"菜单
+ */
+function openMobileMoreMenu() {
+    let modal = document.getElementById('mobileMoreModal');
+    if (!modal) {
+        // 动态创建更多菜单弹窗
+        modal = document.createElement('div');
+        modal.id = 'mobileMoreModal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal modal-sm" style="width:90vw;max-width:360px;height:auto;border-radius:12px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">更多操作</h3>
+                    <button class="modal-close" onclick="closeMobileMenu()">&times;</button>
+                </div>
+                <div class="modal-body" style="padding:12px;">
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <button class="btn btn-outline" style="width:100%;justify-content:flex-start;min-height:44px;" onclick="closeMobileMenu();openLogsModal();">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                            </svg>
+                            后台日志
+                        </button>
+                        <button class="btn btn-outline" style="width:100%;justify-content:flex-start;min-height:44px;" onclick="closeMobileMenu();openKeywordModal();">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                            风控关键词
+                        </button>
+                        <button class="btn btn-outline" style="width:100%;justify-content:flex-start;min-height:44px;" onclick="closeMobileMenu();openAllAlertsModal();">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            全部告警
+                        </button>
+                        <button class="btn btn-outline" style="width:100%;justify-content:flex-start;min-height:44px;" onclick="closeMobileMenu();openDutyModal();">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            值班设置
+                        </button>
+                        <button class="btn btn-outline" style="width:100%;justify-content:flex-start;min-height:44px;" onclick="closeMobileMenu();openTelegramSettingsModal();">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                            Telegram设置
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.classList.add('active');
+}
+
+/**
+ * 增强handleResize - 移动端图表重绘
+ */
+const _originalHandleResize = handleResize;
+// 覆盖原有的handleResize，增加移动端延迟resize
+window.handleResize = function() {
+    _originalHandleResize();
+    // 移动端延迟再次resize，确保布局稳定后图表正确渲染
+    if (isMobileView()) {
+        setTimeout(() => {
+            if (typeof sourceChart !== 'undefined' && sourceChart) sourceChart.resize();
+            if (typeof keywordChart !== 'undefined' && keywordChart) keywordChart.resize();
+            if (typeof worldMap !== 'undefined' && worldMap) worldMap.invalidateSize();
+        }, 300);
+    }
+};
+
+/**
+ * 移动端弹窗关闭 - 支持返回键
+ */
+window.addEventListener('popstate', function() {
+    if (!isMobileView()) return;
+    // 查找当前打开的弹窗并关闭
+    const activeModal = document.querySelector('.modal-overlay.active');
+    if (activeModal) {
+        activeModal.classList.remove('active');
+    }
+});
+
+/**
+ * 移动端弹窗打开时禁止背景滚动
+ */
+const _mobileModalObserver = new MutationObserver(function(mutations) {
+    if (!isMobileView()) return;
+    const anyModalActive = document.querySelector('.modal-overlay.active');
+    if (anyModalActive) {
+        document.body.style.overflow = 'hidden';
+    } else {
+        document.body.style.overflow = '';
+    }
+});
+
+// 监听所有modal-overlay的class变化
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.modal-overlay').forEach(function(modal) {
+        _mobileModalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    });
+});

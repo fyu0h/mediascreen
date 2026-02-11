@@ -6869,3 +6869,820 @@ body.resizing .chart-container-sm {
     color: var(--primary) !important;
 }
 
+/* ================================================================
+   移动端响应式适配
+   ================================================================ */
+
+/* ---------- 移动端菜单按钮（默认隐藏） ---------- */
+.mobile-menu-btn {
+    display: none;
+    background: none;
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    color: var(--primary);
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+/* ---------- 移动端底部导航栏（默认隐藏） ---------- */
+.mobile-bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: linear-gradient(180deg, rgba(0, 20, 40, 0.95) 0%, rgba(0, 10, 25, 0.98) 100%);
+    border-top: 1px solid var(--border-color);
+    z-index: 900;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 4px;
+    backdrop-filter: blur(10px);
+}
+
+.mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 8px;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s;
+    min-width: 52px;
+}
+
+.mobile-nav-item.active {
+    color: var(--primary);
+}
+
+.mobile-nav-item svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* ---------- 移动端面板菜单覆盖层 ---------- */
+.mobile-panel-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 800;
+}
+
+.mobile-panel-overlay.active {
+    display: block;
+}
+
+/* ========== 平板适配 (≤1024px) ========== */
+@media (max-width: 1024px) {
+    html, body {
+        overflow: auto;
+        overflow-x: hidden;
+    }
+
+    .header {
+        height: 50px;
+        padding: 0 15px;
+    }
+
+    .logo-text {
+        font-size: 15px;
+    }
+
+    .logo-img {
+        width: 32px;
+        height: 32px;
+    }
+
+    .header-center {
+        display: none;
+    }
+
+    .main-content {
+        flex-direction: column;
+        height: auto;
+        min-height: calc(100vh - 50px - 44px);
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .panel-left,
+    .panel-center,
+    .panel-right {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .map-card {
+        height: 350px;
+        min-height: 280px;
+    }
+
+    .chart-container {
+        min-height: 160px;
+    }
+
+    .chart-container-sm {
+        height: 180px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+    }
+
+    .stat-value {
+        font-size: 22px;
+    }
+
+    .card-header {
+        padding: 10px 14px;
+    }
+
+    .card-body {
+        padding: 12px;
+    }
+
+    /* 弹窗适配 */
+    .modal {
+        max-width: 95vw;
+        max-height: 90vh;
+    }
+
+    .modal-fullscreen {
+        width: 98vw;
+        height: 92vh;
+        max-width: none;
+        max-height: none;
+    }
+
+    /* 工具栏换行 */
+    .alerts-toolbar,
+    .articles-toolbar,
+    .logs-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .toolbar-right {
+        justify-content: flex-end;
+    }
+
+    /* 底部栏按钮文字隐藏，只留图标 */
+    .footer {
+        padding: 0 10px;
+        gap: 4px;
+    }
+
+    .footer-center {
+        display: none;
+    }
+
+    .footer-btn {
+        padding: 5px 8px;
+        font-size: 10px;
+    }
+}
+
+/* ========== 手机适配 (≤768px) ========== */
+@media (max-width: 768px) {
+    html, body {
+        overflow: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 显示移动端菜单按钮 */
+    .mobile-menu-btn {
+        display: flex;
+        align-items: center;
+    }
+
+    /* 显示移动端底部导航 */
+    .mobile-bottom-nav {
+        display: flex;
+    }
+
+    /* 隐藏桌面端底部栏 */
+    .footer {
+        display: none;
+    }
+
+    /* 顶部栏 */
+    .header {
+        height: 48px;
+        padding: 0 12px;
+        position: sticky;
+        top: 0;
+        z-index: 500;
+    }
+
+    .header-left {
+        flex: none;
+    }
+
+    .logo {
+        gap: 8px;
+    }
+
+    .logo-img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .logo-text {
+        font-size: 13px;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .header-center {
+        display: none;
+    }
+
+    .header-right {
+        flex: none;
+        gap: 8px;
+    }
+
+    .datetime {
+        font-size: 11px;
+    }
+
+    /* 主内容区 - 单列滚动 */
+    .main-content {
+        flex-direction: column;
+        height: auto;
+        min-height: auto;
+        padding: 8px;
+        gap: 8px;
+        padding-bottom: 64px; /* 为底部导航留空间 */
+    }
+
+    .panel-left,
+    .panel-center,
+    .panel-right {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .panel {
+        gap: 8px;
+    }
+
+    /* 统计网格 - 手机2x2 */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .stat-item {
+        padding: 10px 6px;
+    }
+
+    .stat-value {
+        font-size: 20px;
+    }
+
+    .stat-label {
+        font-size: 11px;
+    }
+
+    /* 卡片 */
+    .card {
+        border-radius: 8px;
+    }
+
+    .card-header {
+        padding: 10px 12px;
+    }
+
+    .card-title {
+        font-size: 13px;
+    }
+
+    .card-body {
+        padding: 10px;
+    }
+
+    /* 地图 */
+    .map-card {
+        height: 260px;
+        min-height: 220px;
+    }
+
+    .map-legend {
+        display: none;
+    }
+
+    /* 图表 */
+    .chart-container {
+        min-height: 150px;
+    }
+
+    .chart-container-sm {
+        height: 160px;
+    }
+
+    /* 风控摘要 */
+    .risk-summary {
+        gap: 8px;
+    }
+
+    .risk-item {
+        padding: 8px;
+    }
+
+    /* 最新文章列表 */
+    .latest-articles-body {
+        max-height: 300px;
+    }
+
+    /* 告警列表 */
+    .alert-body {
+        max-height: 300px;
+    }
+
+    /* 成果展示 */
+    .achievements-card {
+        max-height: none;
+    }
+
+    /* Telegram 卡片 */
+    .tg-stats-row {
+        gap: 8px;
+    }
+
+    .tg-alert-list {
+        max-height: 200px;
+    }
+
+    .tg-card-footer {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    /* 值班卡片 */
+    .duty-body {
+        padding: 10px;
+    }
+
+    .duty-roles {
+        gap: 8px;
+    }
+
+    /* ===== 弹窗移动端全屏 ===== */
+    .modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        max-height: 100vh !important;
+        height: 100vh;
+        border-radius: 0;
+        margin: 0;
+    }
+
+    .modal-sm,
+    .modal-md,
+    .modal-lg,
+    .modal-xl,
+    .modal-fullscreen {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0;
+    }
+
+    .modal-overlay {
+        align-items: stretch;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal-header {
+        padding: 12px 16px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(10, 20, 40, 0.98);
+    }
+
+    .modal-title {
+        font-size: 15px;
+    }
+
+    .modal-close {
+        width: 36px;
+        height: 36px;
+        font-size: 22px;
+    }
+
+    .modal-body {
+        padding: 12px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        flex: 1;
+    }
+
+    .modal-footer {
+        padding: 10px 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    /* 弹窗内工具栏 */
+    .alerts-toolbar,
+    .articles-toolbar,
+    .logs-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .toolbar-left {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .toolbar-right {
+        justify-content: space-between;
+    }
+
+    .date-picker-group,
+    .keyword-filter-group,
+    .search-group {
+        width: 100%;
+    }
+
+    .quick-dates {
+        width: 100%;
+        display: flex;
+        gap: 6px;
+    }
+
+    .btn-quick-date {
+        flex: 1;
+    }
+
+    /* 日志弹窗 */
+    .logs-stats {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .logs-toolbar .toolbar-left {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .logs-toolbar .toolbar-left select,
+    .logs-toolbar .toolbar-left input {
+        width: 100%;
+    }
+
+    /* 设置弹窗 */
+    .settings-section {
+        padding: 12px;
+    }
+
+    .form-textarea {
+        font-size: 13px;
+    }
+
+    .input-with-btn {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .input-with-btn .btn-icon {
+        align-self: flex-end;
+    }
+
+    /* 插件管理弹窗 */
+    .site-toolbar {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .toolbar-actions {
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .schedule-settings {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Telegram 设置弹窗 */
+    .tg-tabs {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .tg-tab {
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        padding: 8px 6px;
+        text-align: center;
+    }
+
+    .tg-search-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .tg-search-row select,
+    .tg-search-row input {
+        width: 100%;
+    }
+
+    .form-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .tg-keyword-form {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* Telegram 统计弹窗 */
+    .tg-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tg-chart-container {
+        height: 200px;
+    }
+
+    /* AI总结弹窗 */
+    .summary-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .summary-section-title {
+        font-size: 14px;
+    }
+
+    .modal-fullscreen .modal-footer {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .footer-buttons {
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    /* 全局搜索弹窗 */
+    .global-search-modal {
+        border-radius: 0 !important;
+    }
+
+    .global-search-input {
+        font-size: 16px; /* 防止iOS自动缩放 */
+    }
+
+    .search-shortcut {
+        display: none;
+    }
+
+    /* 成果弹窗 */
+    .image-upload-area {
+        min-height: 120px;
+    }
+
+    /* 关键词管理弹窗 */
+    .keyword-form {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .keyword-tabs {
+        flex-wrap: wrap;
+    }
+
+    .tab-btn {
+        flex: 1;
+        min-width: 0;
+        text-align: center;
+    }
+
+    /* 分页 */
+    .logs-pagination,
+    .articles-pagination,
+    .tg-alerts-pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    /* ===== 触摸友好 ===== */
+    /* 所有可点击元素最小44px触摸区域 */
+    .btn,
+    .btn-manage,
+    .btn-view-all,
+    .btn-quick-date,
+    .btn-icon,
+    .btn-icon-sm,
+    .tab-btn,
+    .tg-tab,
+    .tg-kw-tab,
+    .calendar-nav,
+    .modal-close,
+    .filter-clear,
+    .bubble-close {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .btn-manage,
+    .btn-view-all {
+        padding: 8px 12px;
+    }
+
+    /* 表单元素触摸优化 */
+    .form-input,
+    .form-select,
+    .form-select-sm,
+    .form-input-sm,
+    .form-textarea {
+        min-height: 44px;
+        font-size: 16px; /* 防止iOS缩放 */
+        padding: 10px 12px;
+    }
+
+    /* 列表项触摸优化 */
+    .alert-item,
+    .article-item,
+    .log-item,
+    .tg-alert-item,
+    .keyword-item,
+    .plugin-card,
+    .achievement-item {
+        padding: 12px;
+    }
+
+    /* 气泡容器 */
+    .bubble-container {
+        bottom: 64px; /* 在底部导航上方 */
+        right: 8px;
+    }
+
+    .progress-bubble {
+        max-width: calc(100vw - 16px);
+        width: 280px;
+    }
+
+    /* 禁用hover效果（触摸设备不需要） */
+    .card:hover {
+        border-color: var(--border-color);
+        box-shadow: var(--shadow-card);
+    }
+
+    .stat-item:hover {
+        transform: none;
+    }
+}
+
+/* ========== 超小屏幕 (≤480px) ========== */
+@media (max-width: 480px) {
+    .logo-text {
+        font-size: 12px;
+        max-width: 120px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+
+    .stat-value {
+        font-size: 18px;
+    }
+
+    .map-card {
+        height: 220px;
+        min-height: 180px;
+    }
+
+    .mobile-nav-item {
+        font-size: 9px;
+        min-width: 44px;
+        padding: 6px 4px;
+    }
+
+    .mobile-nav-item svg {
+        width: 18px;
+        height: 18px;
+    }
+}
+
+/* ========== 横屏手机适配 ========== */
+@media (max-width: 768px) and (orientation: landscape) {
+    .header {
+        height: 40px;
+    }
+
+    .main-content {
+        padding-bottom: 56px;
+    }
+
+    .map-card {
+        height: 200px;
+        min-height: 180px;
+    }
+
+    .modal {
+        height: 100vh !important;
+    }
+
+    .mobile-bottom-nav {
+        height: 48px;
+    }
+}
+
+/* ========== 触摸设备优化 ========== */
+@media (hover: none) and (pointer: coarse) {
+    /* 移除所有hover动画效果 */
+    .card:hover {
+        border-color: var(--border-color);
+        box-shadow: var(--shadow-card);
+        transform: none;
+    }
+
+    .stat-item:hover {
+        background: rgba(0, 240, 255, 0.05);
+        border-color: rgba(0, 240, 255, 0.1);
+        transform: none;
+    }
+
+    .footer-btn:hover {
+        background: rgba(0, 240, 255, 0.05);
+        border-color: rgba(0, 240, 255, 0.2);
+        color: var(--text-secondary);
+        box-shadow: none;
+    }
+
+    /* 添加active状态替代hover */
+    .btn:active,
+    .footer-btn:active,
+    .mobile-nav-item:active,
+    .btn-manage:active,
+    .btn-view-all:active {
+        opacity: 0.7;
+        transform: scale(0.97);
+    }
+
+    /* 滚动优化 */
+    .modal-body,
+    .alert-list,
+    .alert-body,
+    .latest-articles-list,
+    .keyword-list,
+    .logs-list,
+    .full-alert-list,
+    .source-article-list,
+    .tg-alert-list,
+    .tg-full-alert-list {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+
+    /* 防止长按弹出菜单 */
+    .mobile-nav-item,
+    .btn,
+    .footer-btn {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+}
+
