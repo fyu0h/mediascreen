@@ -187,7 +187,7 @@ function updateDateTime() {
     const timeStr = now.toLocaleTimeString('zh-CN', {
         hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
-    document.getElementById('datetime').textContent = `${year}年${month}月${day}日${weekDay} ${timeStr}`;
+    document.getElementById('datetime').innerHTML = `${year}年${month}月${day}日${weekDay}<br class="mobile-br"> ${timeStr}`;
 }
 
 function showRefreshIndicator() {

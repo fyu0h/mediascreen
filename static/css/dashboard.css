@@ -129,6 +129,11 @@ html, body {
     letter-spacing: 1px;
 }
 
+/* 移动端换行符 - 桌面端隐藏 */
+.mobile-br {
+    display: none;
+}
+
 .status-indicator {
     width: 10px;
     height: 10px;
@@ -7117,8 +7122,19 @@ body.resizing .chart-container-sm {
     }
 
     .logo-text {
-        font-size: 13px;
-        white-space: nowrap;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    /* 移动端显示换行 */
+    .mobile-br {
+        display: block;
+    }
+
+    .datetime {
+        font-size: 11px;
+        text-align: right;
+        line-height: 1.4;
     }
 
     .header-center {
@@ -7128,10 +7144,6 @@ body.resizing .chart-container-sm {
     .header-right {
         flex: none;
         gap: 8px;
-    }
-
-    .datetime {
-        font-size: 11px;
     }
 
     /* 主内容区 - 单列滚动 */
