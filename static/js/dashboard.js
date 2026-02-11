@@ -1060,6 +1060,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 窗口大小变化
     window.addEventListener('resize', handleResize);
 
+    // 移动端延迟刷新地图尺寸（display:contents布局稳定后）
+    setTimeout(() => {
+        if (worldMap) worldMap.invalidateSize();
+    }, 500);
+
     // ESC 关闭弹窗
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
