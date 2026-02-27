@@ -3403,7 +3403,9 @@ def news_preview():
         import requests as http_requests
         from bs4 import BeautifulSoup
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
         }
         resp = http_requests.get(url, headers=headers, timeout=15, verify=False)
         resp.encoding = resp.apparent_encoding or 'utf-8'
@@ -3411,6 +3413,33 @@ def news_preview():
 
         if not html:
             return error_response('无法抓取页面内容', 502)
+
+        # 检测 Cloudflare / bot 保护页面，回退到无头浏览器
+        cf_markers = ['Just a moment...', 'Checking your browser', 'cf-browser-verification',
+                      'challenges.cloudflare.com', '_cf_chl_opt', 'Attention Required']
+        is_cf_blocked = any(m in html for m in cf_markers)
+        if is_cf_blocked:
+            try:
+                import asyncio, os, sys, io
+                from plugins.crawler import get_crawler
+                # 解决 Windows GBK 编码问题：crawl4ai 内部打印含 Unicode 字符
+                old_env = os.environ.get('PYTHONIOENCODING')
+                os.environ['PYTHONIOENCODING'] = 'utf-8'
+                crawler = get_crawler()
+                loop = asyncio.new_event_loop()
+                try:
+                    html = loop.run_until_complete(crawler.fetch_page(url, timeout=20))
+                finally:
+                    loop.close()
+                    if old_env is None:
+                        os.environ.pop('PYTHONIOENCODING', None)
+                    else:
+                        os.environ['PYTHONIOENCODING'] = old_env
+                if not html:
+                    return error_response('页面受 Cloudflare 保护，无头浏览器也无法获取', 502)
+            except Exception as cf_err:
+                log_error(f"Cloudflare 回退抓取失败: {url}", str(cf_err))
+                return error_response(f'页面受 Cloudflare 保护，抓取失败: {str(cf_err)}', 502)
 
         if len(html) > 5 * 1024 * 1024:
             html = html[:5 * 1024 * 1024]
