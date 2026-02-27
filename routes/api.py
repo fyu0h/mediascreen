@@ -3526,6 +3526,64 @@ def _take_page_screenshot(target_url: str) -> str:
             os.environ['PYTHONIOENCODING'] = old_env
 
 
+def _resolve_redirect_url(target_url: str) -> str:
+    """
+    解析中间跳转 URL（如 Google News RSS），返回最终真实文章 URL。
+    支持：news.google.com/rss/articles/*, news.google.com/articles/*
+    如果不是跳转链接或解析失败，返回原始 URL。
+    """
+    parsed = urlparse(target_url)
+    is_google_news = (
+        'news.google.com' in parsed.netloc and
+        ('/rss/articles/' in parsed.path or '/articles/' in parsed.path)
+    )
+    if not is_google_news:
+        return target_url
+
+    try:
+        import asyncio
+        import os
+
+        async def _follow_redirect():
+            from playwright.async_api import async_playwright
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page()
+                try:
+                    await page.goto(target_url, wait_until='domcontentloaded', timeout=15000)
+                    # Google News 需要 JS 执行后才重定向，等待最多 8 秒
+                    for _ in range(16):
+                        await page.wait_for_timeout(500)
+                        current = page.url
+                        if 'news.google.com' not in current:
+                            await browser.close()
+                            return current
+                except Exception:
+                    pass
+                final = page.url
+                await browser.close()
+                return final
+
+        old_env = os.environ.get('PYTHONIOENCODING')
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
+        loop = asyncio.new_event_loop()
+        try:
+            resolved = loop.run_until_complete(_follow_redirect())
+        finally:
+            loop.close()
+            if old_env is None:
+                os.environ.pop('PYTHONIOENCODING', None)
+            else:
+                os.environ['PYTHONIOENCODING'] = old_env
+
+        if resolved and 'news.google.com' not in resolved:
+            return resolved
+    except Exception as e:
+        print(f"Google News URL 解析失败: {e}")
+
+    return target_url
+
+
 def _get_cached_article_info(target_url: str) -> dict:
     """从 MongoDB news_articles 集合查询文章缓存信息"""
     try:
@@ -3559,6 +3617,12 @@ def news_preview():
     parsed = urlparse(url)
     if parsed.scheme not in ('http', 'https'):
         return error_response('URL 必须以 http 或 https 开头', 400)
+
+    # 解析中间跳转 URL（如 Google News RSS 链接）
+    original_url = url
+    url = _resolve_redirect_url(url)
+    if url != original_url:
+        parsed = urlparse(url)
 
     base_url = f"{parsed.scheme}://{parsed.netloc}"
 
