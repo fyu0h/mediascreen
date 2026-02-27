@@ -491,7 +491,7 @@ async function loadLatestArticles(append = false, silent = false) {
     const articlesHtml = data.items.map(article => {
         const timeStr = article.pub_date ? article.pub_date.split(' ')[1] || article.pub_date.split(' ')[0] : '';
         return `
-        <div class="latest-article-item" onclick="window.open('${escapeHtml(article.url)}', '_blank')">
+        <div class="latest-article-item" onclick="openNewsPreview('${escapeHtml(article.url)}', this)">
             <div class="latest-article-title">${escapeHtml(article.title)}</div>
             <div class="latest-article-meta">
                 <span class="latest-article-source">${escapeHtml(article.source)}</span>
@@ -945,17 +945,32 @@ async function markAlertAsRead(url, event) {
             // 重新渲染列表
             renderFilteredAlerts();
 
-            // 打开新窗口
-            window.open(url, '_blank');
+            // 打开预览
+            const alertEl = document.querySelector(`.alert-item[data-url="${url}"]`);
+            if (alertEl) {
+                openNewsPreview(url, alertEl);
+            } else {
+                window.open(url, '_blank');
+            }
         } else {
             console.error('标记已读失败:', result.error);
             // 即使标记失败也打开链接
-            window.open(url, '_blank');
+            const alertEl = document.querySelector(`.alert-item[data-url="${url}"]`);
+            if (alertEl) {
+                openNewsPreview(url, alertEl);
+            } else {
+                window.open(url, '_blank');
+            }
         }
     } catch (error) {
         console.error('标记已读请求失败:', error);
         // 即使请求失败也打开链接
-        window.open(url, '_blank');
+        const alertEl = document.querySelector(`.alert-item[data-url="${url}"]`);
+        if (alertEl) {
+            openNewsPreview(url, alertEl);
+        } else {
+            window.open(url, '_blank');
+        }
     }
 }
 
@@ -1005,7 +1020,7 @@ function renderFilteredAlerts() {
             : `<span class="unread-badge">未读</span>`;
 
         return `
-        <div class="alert-item ${alert.risk_level} ${readClass}" onclick="markAlertAsRead('${escapeHtml(alert.url)}', event)">
+        <div class="alert-item ${alert.risk_level} ${readClass}" data-url="${escapeHtml(alert.url)}" onclick="markAlertAsRead('${escapeHtml(alert.url)}', event)">
             <div class="alert-title-row">
                 <div class="alert-title">${highlightKeyword(escapeHtml(alert.title), currentFilterKeyword)}</div>
                 ${readBadge}
@@ -2235,7 +2250,7 @@ function renderFullAlerts() {
             : `<span class="unread-badge">未读</span>`;
 
         return `
-        <div class="full-alert-item ${alert.risk_level} ${readClass}" onclick="markFullAlertAsRead('${escapeHtml(alert.url)}', event)">
+        <div class="full-alert-item ${alert.risk_level} ${readClass}" data-url="${escapeHtml(alert.url)}" onclick="markFullAlertAsRead('${escapeHtml(alert.url)}', event)">
             <div class="alert-date">
                 <span class="date">${dateStr}</span>
                 <span class="time">${timeStr}</span>
@@ -2303,15 +2318,30 @@ async function markFullAlertAsRead(url, event) {
             renderFullAlerts();
             renderFilteredAlerts();
 
-            // 打开新窗口
-            window.open(url, '_blank');
+            // 打开预览
+            const alertEl2 = document.querySelector(`.full-alert-item[data-url="${url}"]`);
+            if (alertEl2) {
+                openNewsPreview(url, alertEl2);
+            } else {
+                window.open(url, '_blank');
+            }
         } else {
             console.error('标记已读失败:', result.error);
-            window.open(url, '_blank');
+            const alertEl2 = document.querySelector(`.full-alert-item[data-url="${url}"]`);
+            if (alertEl2) {
+                openNewsPreview(url, alertEl2);
+            } else {
+                window.open(url, '_blank');
+            }
         }
     } catch (error) {
         console.error('标记已读请求失败:', error);
-        window.open(url, '_blank');
+        const alertEl2 = document.querySelector(`.full-alert-item[data-url="${url}"]`);
+        if (alertEl2) {
+            openNewsPreview(url, alertEl2);
+        } else {
+            window.open(url, '_blank');
+        }
     }
 }
 
@@ -3612,7 +3642,7 @@ function renderSourceArticles() {
         const urlDisplay = article.url ? (article.url.length > 80 ? article.url.substring(0, 80) + '...' : article.url) : '';
 
         return `
-            <div class="source-article-item" onclick="window.open('${escapeHtml(article.url || '')}', '_blank')">
+            <div class="source-article-item" onclick="openNewsPreview('${escapeHtml(article.url || '')}', this)">
                 <div class="article-date">
                     <span class="date">${dateStr}</span>
                     <span class="time">${timeStr}</span>
