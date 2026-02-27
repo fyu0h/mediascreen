@@ -5,7 +5,9 @@ REST API 路由
 """
 
 import time
+import asyncio
 from datetime import datetime
+from urllib.parse import urlparse
 from flask import Blueprint, request, jsonify, session
 from typing import Any
 
@@ -14,6 +16,8 @@ from models.logger import (
     log_operation, log_request, log_system, log_error,
     get_logs as get_log_entries, get_log_by_id, clear_logs, get_stats as get_log_stats
 )
+from plugins.crawler import get_crawler
+
 from models.mongo import (
     get_overview_stats,
     get_source_stats,
@@ -3381,3 +3385,60 @@ def telegram_monitor_stop():
     except Exception as e:
         log_error(action='停止失败', error=str(e))
         return error_response('停止失败，请稍后重试', 500)
+
+
+@api_bp.route('/news/preview', methods=['GET'])
+def news_preview():
+    """获取新闻预览内容 — 抓取原始页面并处理 HTML"""
+    if 'user' not in session:
+        return error_response('未登录', 401)
+
+    url = request.args.get('url', '').strip()
+    if not url:
+        return error_response('缺少 url 参数', 400)
+
+    # 校验 URL 合法性
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        return error_response('URL 必须以 http 或 https 开头', 400)
+
+    try:
+        # 复用爬虫抓取页面
+        crawler = get_crawler()
+        loop = asyncio.new_event_loop()
+        try:
+            html = loop.run_until_complete(crawler.fetch_page(url, timeout=15))
+        finally:
+            loop.close()
+
+        if not html:
+            return error_response('无法抓取页面内容', 502)
+
+        # HTML 内容大小检查（>5MB 截断）
+        if len(html) > 5 * 1024 * 1024:
+            html = html[:5 * 1024 * 1024]
+
+        # HTML 处理：移除 script，注入 base 标签
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # 移除所有 script 标签
+        for script in soup.find_all('script'):
+            script.decompose()
+
+        # 注入 base 标签确保相对路径资源正确加载
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        base_tag = soup.new_tag('base', href=base_url)
+        if soup.head:
+            soup.head.insert(0, base_tag)
+        elif soup.html:
+            head_tag = soup.new_tag('head')
+            head_tag.insert(0, base_tag)
+            soup.html.insert(0, head_tag)
+
+        processed_html = str(soup)
+        return success_response({'html': processed_html, 'url': url})
+
+    except Exception as e:
+        log_error(f"新闻预览抓取失败: {url}", str(e))
+        return error_response(f'抓取失败: {str(e)}', 502)
