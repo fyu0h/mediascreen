@@ -177,6 +177,108 @@ function escapeHtml(text) {
         .replace(/'/g, '&#39;');
 }
 
+// ==================== 新闻预览功能 ====================
+let currentPreviewController = null;  // 用于取消未完成的请求
+
+/**
+ * 打开新闻预览 — 在点击的新闻条目下方展开预览区域
+ * @param {string} url - 新闻原始链接
+ * @param {HTMLElement} articleEl - 被点击的新闻条目 DOM 元素
+ */
+function openNewsPreview(url, articleEl) {
+    if (!url) return;
+
+    // 检查是否已有预览展开 — 如果点击的是同一条目，则收起
+    const existingPreview = articleEl.nextElementSibling;
+    if (existingPreview && existingPreview.classList.contains('news-preview-container')) {
+        closeNewsPreview(existingPreview);
+        return;
+    }
+
+    // 关闭其他已展开的预览
+    document.querySelectorAll('.news-preview-container').forEach(el => {
+        closeNewsPreview(el);
+    });
+
+    // 取消之前未完成的请求
+    if (currentPreviewController) {
+        currentPreviewController.abort();
+    }
+    currentPreviewController = new AbortController();
+
+    // 创建预览容器
+    const container = document.createElement('div');
+    container.className = 'news-preview-container';
+    container.innerHTML = `
+        <div class="news-preview-toolbar">
+            <button class="preview-btn preview-open-btn" onclick="window.open('${escapeHtml(url)}', '_blank'); event.stopPropagation();">
+                &#128279; 访问原始链接
+            </button>
+            <button class="preview-btn preview-close-btn" onclick="closeNewsPreview(this.closest('.news-preview-container')); event.stopPropagation();">
+                &#10005; 收起
+            </button>
+        </div>
+        <div class="news-preview-loading">
+            <div class="spinner"></div>
+            正在加载预览...
+        </div>
+    `;
+
+    // 插入到被点击条目之后
+    articleEl.insertAdjacentElement('afterend', container);
+
+    // 触发展开动画（需要延迟以触发 CSS transition）
+    requestAnimationFrame(() => {
+        container.classList.add('active');
+    });
+
+    // 发起 API 请求
+    fetch(`/api/news/preview?url=${encodeURIComponent(url)}`, {
+        signal: currentPreviewController.signal
+    })
+    .then(res => res.json())
+    .then(data => {
+        const loadingEl = container.querySelector('.news-preview-loading');
+        if (!loadingEl) return; // 容器已被移除
+
+        if (data.success) {
+            loadingEl.outerHTML = `<iframe class="news-preview-iframe" sandbox="allow-same-origin" srcdoc="${escapeHtml(data.data.html)}"></iframe>`;
+        } else {
+            loadingEl.outerHTML = `
+                <div class="news-preview-error">
+                    <div class="error-icon">&#9888;</div>
+                    <div>无法加载预览内容</div>
+                    <div>请点击上方「访问原始链接」查看原文</div>
+                </div>
+            `;
+        }
+    })
+    .catch(err => {
+        if (err.name === 'AbortError') return; // 请求被取消，忽略
+        const loadingEl = container.querySelector('.news-preview-loading');
+        if (loadingEl) {
+            loadingEl.outerHTML = `
+                <div class="news-preview-error">
+                    <div class="error-icon">&#9888;</div>
+                    <div>无法加载预览内容</div>
+                    <div>请点击上方「访问原始链接」查看原文</div>
+                </div>
+            `;
+        }
+    });
+}
+
+/**
+ * 关闭预览区域（带动画）
+ */
+function closeNewsPreview(container) {
+    if (!container) return;
+    container.classList.remove('active');
+    setTimeout(() => {
+        container.remove();
+    }, 300); // 等待收起动画完成
+}
+
 function updateDateTime() {
     const now = new Date();
     const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
