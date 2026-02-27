@@ -7274,6 +7274,107 @@ body.resizing .chart-container-sm {
     opacity: 0.5;
 }
 
+/* ========== 截图模式 ========== */
+.preview-screenshot-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.preview-screenshot-hint {
+    padding: 8px 16px;
+    background: rgba(255, 193, 7, 0.1);
+    border-bottom: 1px solid rgba(255, 193, 7, 0.3);
+    color: #ffc107;
+    font-size: 13px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.preview-screenshot-scroll {
+    flex: 1;
+    overflow: auto;
+    text-align: center;
+    background: #1a1a2e;
+}
+
+.preview-screenshot-img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+/* ========== 缓存模式 ========== */
+.preview-cached-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px 24px;
+    text-align: center;
+}
+
+.preview-cached-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+    opacity: 0.6;
+}
+
+.preview-cached-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    max-width: 600px;
+    line-height: 1.5;
+}
+
+.preview-cached-meta {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.preview-cached-divider {
+    width: 60px;
+    height: 1px;
+    background: var(--border-color);
+    margin: 20px 0;
+}
+
+.preview-cached-notice {
+    font-size: 13px;
+    color: var(--text-secondary);
+    opacity: 0.8;
+    line-height: 1.6;
+    max-width: 400px;
+}
+
+/* ========== 预览模式标识 ========== */
+.preview-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.preview-mode-badge.mode-screenshot {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.preview-mode-badge.mode-cached {
+    background: rgba(108, 117, 125, 0.15);
+    color: #adb5bd;
+    border: 1px solid rgba(108, 117, 125, 0.3);
+}
+
 /* ========== 手机适配 (≤768px) ========== */
 @media (max-width: 768px) {
     /* 新闻预览移动端适配 */

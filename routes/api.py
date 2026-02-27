@@ -3384,9 +3384,170 @@ def telegram_monitor_stop():
         return error_response('停止失败，请稍后重试', 500)
 
 
+# ==================== 新闻预览辅助函数 ====================
+
+def _extract_content_blocks(html: str, base_url: str) -> tuple:
+    """从 HTML 提取正文内容块，返回 (title, content_blocks)"""
+    from bs4 import BeautifulSoup
+
+    if len(html) > 5 * 1024 * 1024:
+        html = html[:5 * 1024 * 1024]
+
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # 提取页面标题
+    title = ''
+    title_tag = soup.find('title')
+    if title_tag:
+        title = title_tag.get_text(strip=True)
+
+    # 尝试提取正文区域
+    article_selectors = [
+        'article', '[role="main"]', '.article-body', '.article-content',
+        '.post-content', '.entry-content', '.story-body', '.content-body',
+        '#article-body', '#content', '.detail-content', '.news-content', 'main'
+    ]
+    content_el = None
+    for sel in article_selectors:
+        content_el = soup.select_one(sel)
+        if content_el:
+            break
+    if not content_el:
+        content_el = soup.body or soup
+
+    # 移除干扰元素
+    for tag in content_el.find_all(['script', 'style', 'nav', 'header', 'footer',
+                                     'aside', 'iframe', 'form', 'button',
+                                     '.ad', '.ads', '.advertisement', '.sidebar',
+                                     '.comment', '.comments', '.share', '.social']):
+        tag.decompose()
+
+    # 提取内容块
+    content_blocks = []
+    for el in content_el.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'img',
+                                    'blockquote', 'ul', 'ol', 'figure', 'figcaption']):
+        if el.name == 'img':
+            src = el.get('src', '') or el.get('data-src', '') or el.get('data-original', '')
+            if src:
+                if src.startswith('//'):
+                    src = 'https:' + src
+                elif src.startswith('/'):
+                    src = base_url + src
+                elif not src.startswith('http'):
+                    src = base_url + '/' + src
+                proxy_src = f"/api/proxy/image?url={src}"
+                content_blocks.append({'type': 'image', 'src': proxy_src, 'alt': el.get('alt', '')})
+        elif el.name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+            text = el.get_text(strip=True)
+            if text:
+                content_blocks.append({'type': 'heading', 'level': int(el.name[1]), 'text': text})
+        elif el.name == 'blockquote':
+            text = el.get_text(strip=True)
+            if text:
+                content_blocks.append({'type': 'blockquote', 'text': text})
+        elif el.name in ('ul', 'ol'):
+            items = [li.get_text(strip=True) for li in el.find_all('li') if li.get_text(strip=True)]
+            if items:
+                content_blocks.append({'type': 'list', 'ordered': el.name == 'ol', 'items': items})
+        elif el.name == 'figcaption':
+            text = el.get_text(strip=True)
+            if text:
+                content_blocks.append({'type': 'caption', 'text': text})
+        else:
+            if el.name == 'figure':
+                img = el.find('img')
+                if img:
+                    src = img.get('src', '') or img.get('data-src', '')
+                    if src:
+                        if src.startswith('//'):
+                            src = 'https:' + src
+                        elif src.startswith('/'):
+                            src = base_url + src
+                        elif not src.startswith('http'):
+                            src = base_url + '/' + src
+                        proxy_src = f"/api/proxy/image?url={src}"
+                        content_blocks.append({'type': 'image', 'src': proxy_src, 'alt': img.get('alt', '')})
+                caption = el.find('figcaption')
+                if caption:
+                    text = caption.get_text(strip=True)
+                    if text:
+                        content_blocks.append({'type': 'caption', 'text': text})
+            else:
+                text = el.get_text(strip=True)
+                if text and len(text) > 5:
+                    content_blocks.append({'type': 'paragraph', 'text': text})
+
+    return title, content_blocks
+
+
+def _content_quality_ok(content_blocks: list) -> bool:
+    """检查提取内容质量是否足够（至少3个文本块且总文本≥100字符）"""
+    text_blocks = [b for b in content_blocks if b['type'] in ('paragraph', 'heading', 'blockquote')]
+    if len(text_blocks) < 3:
+        return False
+    total_text = sum(len(b.get('text', '')) for b in text_blocks)
+    return total_text >= 100
+
+
+def _take_page_screenshot(target_url: str) -> str:
+    """使用 Playwright 截取页面截图，返回 Base64 编码的 PNG"""
+    import asyncio
+    import base64
+    import os
+
+    async def _do_screenshot():
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page(viewport={'width': 1280, 'height': 720})
+            try:
+                await page.goto(target_url, wait_until='networkidle', timeout=20000)
+            except Exception:
+                try:
+                    await page.goto(target_url, wait_until='domcontentloaded', timeout=15000)
+                except Exception:
+                    pass
+            # 等待页面渲染稳定
+            await page.wait_for_timeout(1500)
+            screenshot_bytes = await page.screenshot(full_page=True, type='png')
+            await browser.close()
+            return base64.b64encode(screenshot_bytes).decode('utf-8')
+
+    old_env = os.environ.get('PYTHONIOENCODING')
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_do_screenshot())
+    finally:
+        loop.close()
+        if old_env is None:
+            os.environ.pop('PYTHONIOENCODING', None)
+        else:
+            os.environ['PYTHONIOENCODING'] = old_env
+
+
+def _get_cached_article_info(target_url: str) -> dict:
+    """从 MongoDB news_articles 集合查询文章缓存信息"""
+    try:
+        from models.mongo import get_articles_collection
+        collection = get_articles_collection()
+        doc = collection.find_one({'loc': target_url}, {'title': 1, 'source_name': 1, 'pub_date': 1})
+        if doc:
+            return {
+                'title': doc.get('title', ''),
+                'source': doc.get('source_name', ''),
+                'pub_date': doc['pub_date'].strftime('%Y-%m-%d') if doc.get('pub_date') else ''
+            }
+    except Exception:
+        pass
+    return None
+
+
+# ==================== 新闻预览端点 ====================
+
 @api_bp.route('/news/preview', methods=['GET'])
 def news_preview():
-    """获取新闻预览内容 — 提取正文文本和图片，图片通过服务器代理"""
+    """获取新闻预览内容 — 智能回退链（正文提取 → 无头浏览器 → 截图 → 缓存摘要）"""
     if 'user' not in session:
         return error_response('未登录', 401)
 
@@ -3399,181 +3560,99 @@ def news_preview():
     if parsed.scheme not in ('http', 'https'):
         return error_response('URL 必须以 http 或 https 开头', 400)
 
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+    # Cloudflare 检测标记
+    cf_markers = ['Just a moment...', 'Checking your browser', 'cf-browser-verification',
+                  'challenges.cloudflare.com', '_cf_chl_opt', 'Attention Required']
+
     try:
-        import requests as http_requests
-        from bs4 import BeautifulSoup
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
-        }
-        resp = http_requests.get(url, headers=headers, timeout=15, verify=False)
-        resp.encoding = resp.apparent_encoding or 'utf-8'
-        html = resp.text
+        # ===== Level 1: requests.get() + 正文提取 =====
+        html = None
+        try:
+            import requests as http_requests
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+            }
+            resp = http_requests.get(url, headers=headers, timeout=15, verify=False)
+            resp.encoding = resp.apparent_encoding or 'utf-8'
+            html = resp.text
+        except Exception:
+            pass
 
-        if not html:
-            return error_response('无法抓取页面内容', 502)
+        is_cf = html and any(m in html for m in cf_markers)
 
-        # 检测 Cloudflare / bot 保护页面，回退到无头浏览器
-        cf_markers = ['Just a moment...', 'Checking your browser', 'cf-browser-verification',
-                      'challenges.cloudflare.com', '_cf_chl_opt', 'Attention Required']
-        is_cf_blocked = any(m in html for m in cf_markers)
-        if is_cf_blocked:
+        if html and not is_cf:
+            title, blocks = _extract_content_blocks(html, base_url)
+            if _content_quality_ok(blocks):
+                return success_response({
+                    'type': 'content',
+                    'title': title,
+                    'url': url,
+                    'content': blocks
+                })
+
+        # ===== Level 2: 无头浏览器 (crawl4ai) + 正文提取 =====
+        try:
+            import asyncio
+            import os
+            from plugins.crawler import get_crawler
+            old_env = os.environ.get('PYTHONIOENCODING')
+            os.environ['PYTHONIOENCODING'] = 'utf-8'
+            crawler = get_crawler()
+            loop = asyncio.new_event_loop()
             try:
-                import asyncio, os, sys, io
-                from plugins.crawler import get_crawler
-                # 解决 Windows GBK 编码问题：crawl4ai 内部打印含 Unicode 字符
-                old_env = os.environ.get('PYTHONIOENCODING')
-                os.environ['PYTHONIOENCODING'] = 'utf-8'
-                crawler = get_crawler()
-                loop = asyncio.new_event_loop()
-                try:
-                    html = loop.run_until_complete(crawler.fetch_page(url, timeout=20))
-                finally:
-                    loop.close()
-                    if old_env is None:
-                        os.environ.pop('PYTHONIOENCODING', None)
-                    else:
-                        os.environ['PYTHONIOENCODING'] = old_env
-                if not html:
-                    return error_response('页面受 Cloudflare 保护，无头浏览器也无法获取', 502)
-            except Exception as cf_err:
-                log_error(f"Cloudflare 回退抓取失败: {url}", str(cf_err))
-                return error_response(f'页面受 Cloudflare 保护，抓取失败: {str(cf_err)}', 502)
-
-        if len(html) > 5 * 1024 * 1024:
-            html = html[:5 * 1024 * 1024]
-
-        soup = BeautifulSoup(html, 'html.parser')
-        base_url = f"{parsed.scheme}://{parsed.netloc}"
-
-        # 提取页面标题
-        title = ''
-        title_tag = soup.find('title')
-        if title_tag:
-            title = title_tag.get_text(strip=True)
-
-        # 尝试提取正文区域（常见正文容器选择器）
-        article_selectors = [
-            'article', '[role="main"]', '.article-body', '.article-content',
-            '.post-content', '.entry-content', '.story-body', '.content-body',
-            '#article-body', '#content', '.detail-content', '.news-content',
-            'main'
-        ]
-        content_el = None
-        for sel in article_selectors:
-            content_el = soup.select_one(sel)
-            if content_el:
-                break
-
-        # 如果没找到正文容器，使用 body
-        if not content_el:
-            content_el = soup.body or soup
-
-        # 移除干扰元素
-        for tag in content_el.find_all(['script', 'style', 'nav', 'header', 'footer',
-                                         'aside', 'iframe', 'form', 'button',
-                                         '.ad', '.ads', '.advertisement', '.sidebar',
-                                         '.comment', '.comments', '.share', '.social']):
-            tag.decompose()
-
-        # 提取内容块（段落、图片、标题）
-        content_blocks = []
-        for el in content_el.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'img',
-                                        'blockquote', 'ul', 'ol', 'figure', 'figcaption']):
-            if el.name == 'img':
-                src = el.get('src', '') or el.get('data-src', '') or el.get('data-original', '')
-                if src:
-                    # 转为绝对URL
-                    if src.startswith('//'):
-                        src = 'https:' + src
-                    elif src.startswith('/'):
-                        src = base_url + src
-                    elif not src.startswith('http'):
-                        src = base_url + '/' + src
-                    # 改写为代理URL
-                    proxy_src = f"/api/proxy/image?url={src}"
-                    alt = el.get('alt', '')
-                    content_blocks.append({
-                        'type': 'image',
-                        'src': proxy_src,
-                        'alt': alt
-                    })
-            elif el.name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
-                text = el.get_text(strip=True)
-                if text:
-                    content_blocks.append({
-                        'type': 'heading',
-                        'level': int(el.name[1]),
-                        'text': text
-                    })
-            elif el.name == 'blockquote':
-                text = el.get_text(strip=True)
-                if text:
-                    content_blocks.append({
-                        'type': 'blockquote',
-                        'text': text
-                    })
-            elif el.name in ('ul', 'ol'):
-                items = [li.get_text(strip=True) for li in el.find_all('li') if li.get_text(strip=True)]
-                if items:
-                    content_blocks.append({
-                        'type': 'list',
-                        'ordered': el.name == 'ol',
-                        'items': items
-                    })
-            elif el.name == 'figcaption':
-                text = el.get_text(strip=True)
-                if text:
-                    content_blocks.append({
-                        'type': 'caption',
-                        'text': text
-                    })
-            else:
-                # p 和 figure
-                # 先检查figure里是否有img
-                if el.name == 'figure':
-                    img = el.find('img')
-                    if img:
-                        src = img.get('src', '') or img.get('data-src', '')
-                        if src:
-                            if src.startswith('//'):
-                                src = 'https:' + src
-                            elif src.startswith('/'):
-                                src = base_url + src
-                            elif not src.startswith('http'):
-                                src = base_url + '/' + src
-                            proxy_src = f"/api/proxy/image?url={src}"
-                            content_blocks.append({
-                                'type': 'image',
-                                'src': proxy_src,
-                                'alt': img.get('alt', '')
-                            })
-                    caption = el.find('figcaption')
-                    if caption:
-                        text = caption.get_text(strip=True)
-                        if text:
-                            content_blocks.append({
-                                'type': 'caption',
-                                'text': text
-                            })
+                crawler_html = loop.run_until_complete(crawler.fetch_page(url, timeout=20))
+            finally:
+                loop.close()
+                if old_env is None:
+                    os.environ.pop('PYTHONIOENCODING', None)
                 else:
-                    text = el.get_text(strip=True)
-                    if text and len(text) > 5:
-                        content_blocks.append({
-                            'type': 'paragraph',
-                            'text': text
-                        })
+                    os.environ['PYTHONIOENCODING'] = old_env
 
-        return success_response({
-            'title': title,
-            'url': url,
-            'content': content_blocks
-        })
+            if crawler_html:
+                title, blocks = _extract_content_blocks(crawler_html, base_url)
+                if _content_quality_ok(blocks):
+                    return success_response({
+                        'type': 'content',
+                        'title': title,
+                        'url': url,
+                        'content': blocks
+                    })
+        except Exception as l2_err:
+            log_error(f"Level 2 无头浏览器抓取失败: {url}", str(l2_err))
+
+        # ===== Level 3: Playwright 全页截图 =====
+        try:
+            screenshot_b64 = _take_page_screenshot(url)
+            if screenshot_b64:
+                return success_response({
+                    'type': 'screenshot',
+                    'image': f'data:image/png;base64,{screenshot_b64}',
+                    'url': url
+                })
+        except Exception as l3_err:
+            log_error(f"Level 3 截图失败: {url}", str(l3_err))
+
+        # ===== Level 4: 数据库缓存摘要 =====
+        cached = _get_cached_article_info(url)
+        if cached:
+            return success_response({
+                'type': 'cached',
+                'title': cached['title'],
+                'source': cached['source'],
+                'pub_date': cached['pub_date'],
+                'url': url
+            })
+
+        # 所有回退都失败
+        return error_response('无法预览该页面，请直接访问原始链接', 502)
 
     except Exception as e:
-        log_error(f"新闻预览抓取失败: {url}", str(e))
-        return error_response(f'抓取失败: {str(e)}', 502)
+        log_error(f"新闻预览失败: {url}", str(e))
+        return error_response(f'预览失败: {str(e)}', 502)
 
 
 @api_bp.route('/proxy/image', methods=['GET'])
