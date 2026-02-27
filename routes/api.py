@@ -3490,25 +3490,40 @@ def _content_quality_ok(content_blocks: list) -> bool:
 
 
 def _take_page_screenshot(target_url: str) -> str:
-    """使用 Playwright 截取页面截图，返回 Base64 编码的 PNG"""
+    """使用 Playwright + stealth 反检测截取页面截图，返回 Base64 编码的 PNG"""
     import asyncio
     import base64
     import os
 
     async def _do_screenshot():
         from playwright.async_api import async_playwright
+        from playwright_stealth import stealth_async
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page(viewport={'width': 1280, 'height': 720})
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                ]
+            )
+            context = await browser.new_context(
+                viewport={'width': 1280, 'height': 720},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                locale='en-US',
+                timezone_id='America/New_York',
+            )
+            page = await context.new_page()
+            await stealth_async(page)
             try:
-                await page.goto(target_url, wait_until='networkidle', timeout=20000)
+                await page.goto(target_url, wait_until='networkidle', timeout=25000)
             except Exception:
                 try:
                     await page.goto(target_url, wait_until='domcontentloaded', timeout=15000)
                 except Exception:
                     pass
             # 等待页面渲染稳定
-            await page.wait_for_timeout(1500)
+            await page.wait_for_timeout(2000)
             screenshot_bytes = await page.screenshot(full_page=True, type='png')
             await browser.close()
             return base64.b64encode(screenshot_bytes).decode('utf-8')
@@ -3529,8 +3544,7 @@ def _take_page_screenshot(target_url: str) -> str:
 def _resolve_redirect_url(target_url: str) -> str:
     """
     解析中间跳转 URL（如 Google News RSS），返回最终真实文章 URL。
-    支持：news.google.com/rss/articles/*, news.google.com/articles/*
-    如果不是跳转链接或解析失败，返回原始 URL。
+    使用 Playwright + stealth 反检测跟随 JS 重定向。
     """
     parsed = urlparse(target_url)
     is_google_news = (
@@ -3546,13 +3560,27 @@ def _resolve_redirect_url(target_url: str) -> str:
 
         async def _follow_redirect():
             from playwright.async_api import async_playwright
+            from playwright_stealth import stealth_async
             async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--no-sandbox',
+                        '--disable-dev-shm-usage',
+                    ]
+                )
+                context = await browser.new_context(
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    locale='en-US',
+                    timezone_id='America/New_York',
+                )
+                page = await context.new_page()
+                await stealth_async(page)
                 try:
                     await page.goto(target_url, wait_until='domcontentloaded', timeout=15000)
-                    # Google News 需要 JS 执行后才重定向，等待最多 8 秒
-                    for _ in range(16):
+                    # Google News 需要 JS 执行后才重定向，等待最多 10 秒
+                    for _ in range(20):
                         await page.wait_for_timeout(500)
                         current = page.url
                         if 'news.google.com' not in current:
