@@ -3386,7 +3386,7 @@ def telegram_monitor_stop():
 
 @api_bp.route('/news/preview', methods=['GET'])
 def news_preview():
-    """获取新闻预览内容 — 抓取原始页面并处理 HTML"""
+    """获取新闻预览内容 — 提取正文文本和图片，图片通过服务器代理"""
     if 'user' not in session:
         return error_response('未登录', 401)
 
@@ -3400,8 +3400,8 @@ def news_preview():
         return error_response('URL 必须以 http 或 https 开头', 400)
 
     try:
-        # 使用 requests 直接获取页面（轻量、无编码问题）
         import requests as http_requests
+        from bs4 import BeautifulSoup
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
@@ -3412,31 +3412,174 @@ def news_preview():
         if not html:
             return error_response('无法抓取页面内容', 502)
 
-        # HTML 内容大小检查（>5MB 截断）
         if len(html) > 5 * 1024 * 1024:
             html = html[:5 * 1024 * 1024]
 
-        # HTML 处理：移除 script，注入 base 标签
-        from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
-
-        # 移除所有 script 标签
-        for script in soup.find_all('script'):
-            script.decompose()
-
-        # 注入 base 标签确保相对路径资源正确加载
         base_url = f"{parsed.scheme}://{parsed.netloc}"
-        base_tag = soup.new_tag('base', href=base_url)
-        if soup.head:
-            soup.head.insert(0, base_tag)
-        elif soup.html:
-            head_tag = soup.new_tag('head')
-            head_tag.insert(0, base_tag)
-            soup.html.insert(0, head_tag)
 
-        processed_html = str(soup)
-        return success_response({'html': processed_html, 'url': url})
+        # 提取页面标题
+        title = ''
+        title_tag = soup.find('title')
+        if title_tag:
+            title = title_tag.get_text(strip=True)
+
+        # 尝试提取正文区域（常见正文容器选择器）
+        article_selectors = [
+            'article', '[role="main"]', '.article-body', '.article-content',
+            '.post-content', '.entry-content', '.story-body', '.content-body',
+            '#article-body', '#content', '.detail-content', '.news-content',
+            'main'
+        ]
+        content_el = None
+        for sel in article_selectors:
+            content_el = soup.select_one(sel)
+            if content_el:
+                break
+
+        # 如果没找到正文容器，使用 body
+        if not content_el:
+            content_el = soup.body or soup
+
+        # 移除干扰元素
+        for tag in content_el.find_all(['script', 'style', 'nav', 'header', 'footer',
+                                         'aside', 'iframe', 'form', 'button',
+                                         '.ad', '.ads', '.advertisement', '.sidebar',
+                                         '.comment', '.comments', '.share', '.social']):
+            tag.decompose()
+
+        # 提取内容块（段落、图片、标题）
+        content_blocks = []
+        for el in content_el.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'img',
+                                        'blockquote', 'ul', 'ol', 'figure', 'figcaption']):
+            if el.name == 'img':
+                src = el.get('src', '') or el.get('data-src', '') or el.get('data-original', '')
+                if src:
+                    # 转为绝对URL
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    elif src.startswith('/'):
+                        src = base_url + src
+                    elif not src.startswith('http'):
+                        src = base_url + '/' + src
+                    # 改写为代理URL
+                    proxy_src = f"/api/proxy/image?url={src}"
+                    alt = el.get('alt', '')
+                    content_blocks.append({
+                        'type': 'image',
+                        'src': proxy_src,
+                        'alt': alt
+                    })
+            elif el.name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+                text = el.get_text(strip=True)
+                if text:
+                    content_blocks.append({
+                        'type': 'heading',
+                        'level': int(el.name[1]),
+                        'text': text
+                    })
+            elif el.name == 'blockquote':
+                text = el.get_text(strip=True)
+                if text:
+                    content_blocks.append({
+                        'type': 'blockquote',
+                        'text': text
+                    })
+            elif el.name in ('ul', 'ol'):
+                items = [li.get_text(strip=True) for li in el.find_all('li') if li.get_text(strip=True)]
+                if items:
+                    content_blocks.append({
+                        'type': 'list',
+                        'ordered': el.name == 'ol',
+                        'items': items
+                    })
+            elif el.name == 'figcaption':
+                text = el.get_text(strip=True)
+                if text:
+                    content_blocks.append({
+                        'type': 'caption',
+                        'text': text
+                    })
+            else:
+                # p 和 figure
+                # 先检查figure里是否有img
+                if el.name == 'figure':
+                    img = el.find('img')
+                    if img:
+                        src = img.get('src', '') or img.get('data-src', '')
+                        if src:
+                            if src.startswith('//'):
+                                src = 'https:' + src
+                            elif src.startswith('/'):
+                                src = base_url + src
+                            elif not src.startswith('http'):
+                                src = base_url + '/' + src
+                            proxy_src = f"/api/proxy/image?url={src}"
+                            content_blocks.append({
+                                'type': 'image',
+                                'src': proxy_src,
+                                'alt': img.get('alt', '')
+                            })
+                    caption = el.find('figcaption')
+                    if caption:
+                        text = caption.get_text(strip=True)
+                        if text:
+                            content_blocks.append({
+                                'type': 'caption',
+                                'text': text
+                            })
+                else:
+                    text = el.get_text(strip=True)
+                    if text and len(text) > 5:
+                        content_blocks.append({
+                            'type': 'paragraph',
+                            'text': text
+                        })
+
+        return success_response({
+            'title': title,
+            'url': url,
+            'content': content_blocks
+        })
 
     except Exception as e:
         log_error(f"新闻预览抓取失败: {url}", str(e))
         return error_response(f'抓取失败: {str(e)}', 502)
+
+
+@api_bp.route('/proxy/image', methods=['GET'])
+def proxy_image():
+    """代理外部图片 — 使服务器中转图片请求，绕过客户端网络限制"""
+    if 'user' not in session:
+        return error_response('未登录', 401)
+
+    image_url = request.args.get('url', '').strip()
+    if not image_url:
+        return error_response('缺少 url 参数', 400)
+
+    try:
+        import requests as http_requests
+        from flask import Response
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        resp = http_requests.get(image_url, headers=headers, timeout=10, verify=False, stream=True)
+
+        # 限制图片大小（最大 10MB）
+        content_length = int(resp.headers.get('content-length', 0))
+        if content_length > 10 * 1024 * 1024:
+            return error_response('图片过大', 413)
+
+        content_type = resp.headers.get('content-type', 'image/jpeg')
+        return Response(
+            resp.content,
+            content_type=content_type,
+            headers={
+                'Cache-Control': 'public, max-age=86400'
+            }
+        )
+    except Exception:
+        # 返回 1x1 透明像素作为 fallback
+        transparent_pixel = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+        from flask import Response
+        return Response(transparent_pixel, content_type='image/gif')

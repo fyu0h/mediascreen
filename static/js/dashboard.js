@@ -250,7 +250,44 @@ function openNewsPreview(url, articleEl) {
         if (!bodyEl) return;
 
         if (data.success) {
-            bodyEl.innerHTML = `<iframe class="news-preview-iframe" sandbox="allow-same-origin" srcdoc="${escapeHtml(data.data.html)}"></iframe>`;
+            const d = data.data;
+            let html = '<div class="news-preview-article">';
+            if (d.title) {
+                html += `<h1 class="preview-title">${escapeHtml(d.title)}</h1>`;
+            }
+            if (d.content && d.content.length > 0) {
+                d.content.forEach(block => {
+                    switch (block.type) {
+                        case 'heading':
+                            html += `<h${block.level} class="preview-heading">${escapeHtml(block.text)}</h${block.level}>`;
+                            break;
+                        case 'paragraph':
+                            html += `<p class="preview-paragraph">${escapeHtml(block.text)}</p>`;
+                            break;
+                        case 'image':
+                            html += `<div class="preview-image-wrap"><img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt)}" loading="lazy" onerror="this.style.display='none'"></div>`;
+                            break;
+                        case 'blockquote':
+                            html += `<blockquote class="preview-blockquote">${escapeHtml(block.text)}</blockquote>`;
+                            break;
+                        case 'list':
+                            const tag = block.ordered ? 'ol' : 'ul';
+                            html += `<${tag} class="preview-list">`;
+                            block.items.forEach(item => {
+                                html += `<li>${escapeHtml(item)}</li>`;
+                            });
+                            html += `</${tag}>`;
+                            break;
+                        case 'caption':
+                            html += `<p class="preview-caption">${escapeHtml(block.text)}</p>`;
+                            break;
+                    }
+                });
+            } else {
+                html += '<p class="preview-paragraph" style="text-align:center;opacity:0.6;">未能提取到正文内容，请点击上方「访问原始链接」查看原文</p>';
+            }
+            html += '</div>';
+            bodyEl.innerHTML = html;
         } else {
             bodyEl.innerHTML = `
                 <div class="news-preview-error">
