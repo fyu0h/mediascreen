@@ -181,24 +181,18 @@ function escapeHtml(text) {
 let currentPreviewController = null;  // 用于取消未完成的请求
 
 /**
- * 打开新闻预览 — 在点击的新闻条目下方展开预览区域
+ * 打开新闻预览 — 全屏模态框展示
  * @param {string} url - 新闻原始链接
- * @param {HTMLElement} articleEl - 被点击的新闻条目 DOM 元素
+ * @param {HTMLElement} articleEl - 被点击的新闻条目 DOM 元素（保留参数兼容性）
  */
 function openNewsPreview(url, articleEl) {
     if (!url) return;
 
-    // 检查是否已有预览展开 — 如果点击的是同一条目，则收起
-    const existingPreview = articleEl.nextElementSibling;
-    if (existingPreview && existingPreview.classList.contains('news-preview-container')) {
-        closeNewsPreview(existingPreview);
-        return;
+    // 关闭已有的模态框
+    const existing = document.getElementById('newsPreviewModal');
+    if (existing) {
+        existing.remove();
     }
-
-    // 关闭其他已展开的预览
-    document.querySelectorAll('.news-preview-container').forEach(el => {
-        closeNewsPreview(el);
-    });
 
     // 取消之前未完成的请求
     if (currentPreviewController) {
@@ -206,31 +200,45 @@ function openNewsPreview(url, articleEl) {
     }
     currentPreviewController = new AbortController();
 
-    // 创建预览容器
-    const container = document.createElement('div');
-    container.className = 'news-preview-container';
-    container.innerHTML = `
-        <div class="news-preview-toolbar">
-            <button class="preview-btn preview-open-btn" onclick="window.open('${escapeHtml(url)}', '_blank'); event.stopPropagation();">
-                &#128279; 访问原始链接
-            </button>
-            <button class="preview-btn preview-close-btn" onclick="closeNewsPreview(this.closest('.news-preview-container')); event.stopPropagation();">
-                &#10005; 收起
-            </button>
-        </div>
-        <div class="news-preview-loading">
-            <div class="spinner"></div>
-            正在加载预览...
+    // 创建模态框
+    const modal = document.createElement('div');
+    modal.id = 'newsPreviewModal';
+    modal.className = 'news-preview-modal';
+    modal.innerHTML = `
+        <div class="news-preview-modal-backdrop" onclick="closeNewsPreview()"></div>
+        <div class="news-preview-modal-content">
+            <div class="news-preview-toolbar">
+                <button class="preview-btn preview-open-btn" onclick="window.open('${escapeHtml(url)}', '_blank'); event.stopPropagation();">
+                    &#128279; 访问原始链接
+                </button>
+                <button class="preview-btn preview-close-btn" onclick="closeNewsPreview()">
+                    &#10005; 关闭
+                </button>
+            </div>
+            <div class="news-preview-body">
+                <div class="news-preview-loading">
+                    <div class="spinner"></div>
+                    正在加载预览...
+                </div>
+            </div>
         </div>
     `;
 
-    // 插入到被点击条目之后
-    articleEl.insertAdjacentElement('afterend', container);
+    document.body.appendChild(modal);
 
-    // 触发展开动画（需要延迟以触发 CSS transition）
+    // 触发淡入动画
     requestAnimationFrame(() => {
-        container.classList.add('active');
+        modal.classList.add('active');
     });
+
+    // 禁止背景滚动
+    document.body.style.overflow = 'hidden';
+
+    // ESC 关闭
+    modal._escHandler = (e) => {
+        if (e.key === 'Escape') closeNewsPreview();
+    };
+    document.addEventListener('keydown', modal._escHandler);
 
     // 发起 API 请求
     fetch(`/api/news/preview?url=${encodeURIComponent(url)}`, {
@@ -238,13 +246,13 @@ function openNewsPreview(url, articleEl) {
     })
     .then(res => res.json())
     .then(data => {
-        const loadingEl = container.querySelector('.news-preview-loading');
-        if (!loadingEl) return; // 容器已被移除
+        const bodyEl = modal.querySelector('.news-preview-body');
+        if (!bodyEl) return;
 
         if (data.success) {
-            loadingEl.outerHTML = `<iframe class="news-preview-iframe" sandbox="allow-same-origin" srcdoc="${escapeHtml(data.data.html)}"></iframe>`;
+            bodyEl.innerHTML = `<iframe class="news-preview-iframe" sandbox="allow-same-origin" srcdoc="${escapeHtml(data.data.html)}"></iframe>`;
         } else {
-            loadingEl.outerHTML = `
+            bodyEl.innerHTML = `
                 <div class="news-preview-error">
                     <div class="error-icon">&#9888;</div>
                     <div>无法加载预览内容</div>
@@ -254,10 +262,10 @@ function openNewsPreview(url, articleEl) {
         }
     })
     .catch(err => {
-        if (err.name === 'AbortError') return; // 请求被取消，忽略
-        const loadingEl = container.querySelector('.news-preview-loading');
-        if (loadingEl) {
-            loadingEl.outerHTML = `
+        if (err.name === 'AbortError') return;
+        const bodyEl = modal.querySelector('.news-preview-body');
+        if (bodyEl) {
+            bodyEl.innerHTML = `
                 <div class="news-preview-error">
                     <div class="error-icon">&#9888;</div>
                     <div>无法加载预览内容</div>
@@ -269,14 +277,23 @@ function openNewsPreview(url, articleEl) {
 }
 
 /**
- * 关闭预览区域（带动画）
+ * 关闭预览模态框
  */
-function closeNewsPreview(container) {
-    if (!container) return;
-    container.classList.remove('active');
+function closeNewsPreview() {
+    const modal = document.getElementById('newsPreviewModal');
+    if (!modal) return;
+
+    // 移除 ESC 监听
+    if (modal._escHandler) {
+        document.removeEventListener('keydown', modal._escHandler);
+    }
+
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+
     setTimeout(() => {
-        container.remove();
-    }, 300); // 等待收起动画完成
+        modal.remove();
+    }, 300);
 }
 
 function updateDateTime() {
@@ -507,8 +524,6 @@ async function loadLatestArticles(append = false, silent = false) {
         // 追加内容
         listEl.insertAdjacentHTML('beforeend', articlesHtml);
     } else {
-        // 刷新前关闭已展开的预览容器
-        listEl.querySelectorAll('.news-preview-container').forEach(el => el.remove());
         // 无感刷新时保持滚动位置
         const scrollTop = listEl.scrollTop;
         listEl.innerHTML = articlesHtml;
