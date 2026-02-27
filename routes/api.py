@@ -5,7 +5,6 @@ REST API 路由
 """
 
 import time
-import asyncio
 from datetime import datetime
 from urllib.parse import urlparse
 from flask import Blueprint, request, jsonify, session
@@ -16,8 +15,6 @@ from models.logger import (
     log_operation, log_request, log_system, log_error,
     get_logs as get_log_entries, get_log_by_id, clear_logs, get_stats as get_log_stats
 )
-from plugins.crawler import get_crawler
-
 from models.mongo import (
     get_overview_stats,
     get_source_stats,
@@ -3403,13 +3400,14 @@ def news_preview():
         return error_response('URL 必须以 http 或 https 开头', 400)
 
     try:
-        # 复用爬虫抓取页面
-        crawler = get_crawler()
-        loop = asyncio.new_event_loop()
-        try:
-            html = loop.run_until_complete(crawler.fetch_page(url, timeout=15))
-        finally:
-            loop.close()
+        # 使用 requests 直接获取页面（轻量、无编码问题）
+        import requests as http_requests
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        resp = http_requests.get(url, headers=headers, timeout=15, verify=False)
+        resp.encoding = resp.apparent_encoding or 'utf-8'
+        html = resp.text
 
         if not html:
             return error_response('无法抓取页面内容', 502)

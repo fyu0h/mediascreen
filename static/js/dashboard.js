@@ -507,6 +507,8 @@ async function loadLatestArticles(append = false, silent = false) {
         // 追加内容
         listEl.insertAdjacentHTML('beforeend', articlesHtml);
     } else {
+        // 刷新前关闭已展开的预览容器
+        listEl.querySelectorAll('.news-preview-container').forEach(el => el.remove());
         // 无感刷新时保持滚动位置
         const scrollTop = listEl.scrollTop;
         listEl.innerHTML = articlesHtml;
