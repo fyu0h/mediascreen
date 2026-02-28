@@ -39,6 +39,10 @@ def create_app() -> Flask:
     app.register_blueprint(api_bp)
     app.register_blueprint(views_bp)
 
+    # 安装控制台输出拦截器
+    from models.console_log import console_manager
+    console_manager.install()
+
     # ========== 请求日志中间件 ==========
     @app.before_request
     def before_request_logging():

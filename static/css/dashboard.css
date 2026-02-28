@@ -3660,6 +3660,168 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     border-top: 1px solid var(--border-color);
 }
 
+/* ========== 日志 Tab 切换 ========== */
+.logs-tab-bar {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(0, 243, 255, 0.15);
+}
+
+.logs-tab {
+    padding: 8px 20px;
+    background: transparent;
+    border: none;
+    color: rgba(224, 224, 224, 0.6);
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.logs-tab:hover {
+    color: rgba(224, 224, 224, 0.9);
+}
+
+.logs-tab.active {
+    color: #00f3ff;
+    border-bottom-color: #00f3ff;
+}
+
+.logs-panel {
+    display: none;
+}
+
+.logs-panel.active {
+    display: block;
+}
+
+/* ========== 控制台面板 ========== */
+.console-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+}
+
+.console-toolbar .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.console-toolbar .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.console-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: rgba(224, 224, 224, 0.7);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.console-checkbox input[type="checkbox"] {
+    accent-color: #00f3ff;
+}
+
+.console-status {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(224, 224, 224, 0.5);
+}
+
+.console-status.connected {
+    background: rgba(0, 200, 83, 0.2);
+    color: #00c853;
+}
+
+.console-status.paused {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+}
+
+.console-output {
+    background: #0a0e14;
+    border: 1px solid rgba(0, 243, 255, 0.1);
+    border-radius: 6px;
+    padding: 12px;
+    height: 450px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #b0bec5;
+}
+
+.console-output::-webkit-scrollbar {
+    width: 6px;
+}
+
+.console-output::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.console-output::-webkit-scrollbar-thumb {
+    background: rgba(0, 243, 255, 0.2);
+    border-radius: 3px;
+}
+
+.console-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+    padding: 1px 0;
+}
+
+.console-line .console-time {
+    color: rgba(0, 243, 255, 0.5);
+    margin-right: 8px;
+    user-select: none;
+}
+
+.console-line .console-tag {
+    margin-right: 8px;
+    font-weight: bold;
+    user-select: none;
+}
+
+.console-line .console-tag.stdout {
+    color: #4caf50;
+}
+
+.console-line .console-tag.stderr {
+    color: #ff5252;
+}
+
+.console-line.stderr {
+    color: #ff8a80;
+    background: rgba(255, 82, 82, 0.05);
+}
+
+.console-welcome {
+    color: rgba(224, 224, 224, 0.3);
+    text-align: center;
+    padding: 40px 0;
+    font-style: italic;
+}
+
+.console-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 6px 0;
+    font-size: 11px;
+    color: rgba(224, 224, 224, 0.4);
+}
+
 .page-info {
     font-size: 12px;
     color: var(--text-muted);
@@ -7373,6 +7535,106 @@ body.resizing .chart-container-sm {
     background: rgba(108, 117, 125, 0.15);
     color: #adb5bd;
     border: 1px solid rgba(108, 117, 125, 0.3);
+}
+
+/* ========== 双栏翻译布局 ========== */
+.preview-bilingual-container {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+
+.preview-translation-pane,
+.preview-original-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.preview-pane-header {
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(0, 206, 209, 0.05);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.preview-translation-content,
+.preview-original-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.preview-translation-content .news-preview-article,
+.preview-original-content .news-preview-article {
+    max-width: none;
+    padding: 20px 24px 40px;
+}
+
+.preview-pane-divider {
+    width: 1px;
+    background: var(--border-color);
+    flex-shrink: 0;
+}
+
+.preview-translation-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: 14px;
+    gap: 10px;
+}
+
+.preview-translation-loading .spinner {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: preview-spin 0.8s linear infinite;
+}
+
+.preview-translation-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: 14px;
+    gap: 6px;
+    padding: 20px;
+    text-align: center;
+}
+
+.preview-translation-error .error-icon {
+    font-size: 32px;
+    opacity: 0.5;
+}
+
+.preview-translation-error .error-detail {
+    font-size: 12px;
+    opacity: 0.7;
+    max-width: 280px;
+}
+
+/* 翻译切换按钮 */
+.preview-translate-toggle {
+    margin-right: 8px;
+}
+
+.preview-translate-toggle.active {
+    background: rgba(0, 206, 209, 0.12);
+    border-color: var(--accent-color);
 }
 
 /* ========== 手机适配 (≤768px) ========== */

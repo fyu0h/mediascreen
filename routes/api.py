@@ -9,7 +9,7 @@ import socket
 import ipaddress
 from datetime import datetime
 from urllib.parse import urlparse
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, Response, stream_with_context
 from typing import Any
 
 from config import Config
@@ -1876,6 +1876,77 @@ def logs_clear():
     except Exception as e:
         log_error(action='清空日志失败', error=str(e))
         return error_response('清空日志失败，请稍后重试', 500)
+
+
+# ==================== 控制台实时输出接口 ====================
+
+
+@api_bp.route('/console/stream', methods=['GET'])
+def console_stream():
+    """
+    SSE 实时控制台输出流
+    参数：last_id - 从该 ID 之后开始推送（默认 0）
+    """
+    from models.console_log import console_manager
+    import json as json_module
+
+    last_id = request.args.get('last_id', 0, type=int)
+
+    def generate():
+        nonlocal last_id
+        while True:
+            lines = console_manager.get_lines_after(last_id)
+            if lines:
+                for line in lines:
+                    last_id = line['id']
+                    yield f"id: {line['id']}\nevent: log\ndata: {json_module.dumps(line, ensure_ascii=False)}\n\n"
+            else:
+                yield f"event: heartbeat\ndata: {{}}\n\n"
+                console_manager.wait_for_new_line(timeout=15.0)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive'
+        }
+    )
+
+
+@api_bp.route('/console/history', methods=['GET'])
+def console_history():
+    """
+    获取控制台历史输出
+    参数：lines - 返回最近 N 行（默认 200，最大 2000）
+    """
+    from models.console_log import console_manager
+
+    try:
+        lines = request.args.get('lines', 200, type=int)
+        lines = min(lines, 2000)
+        data = console_manager.get_history(lines)
+        return success_response({
+            'items': data,
+            'latest_id': console_manager.get_latest_id()
+        })
+    except Exception as e:
+        log_error(action='获取控制台历史失败', error=str(e))
+        return error_response('获取控制台历史失败', 500)
+
+
+@api_bp.route('/console/clear', methods=['POST'])
+def console_clear():
+    """清空控制台缓冲区"""
+    from models.console_log import console_manager
+
+    try:
+        console_manager.clear()
+        return success_response({'message': '控制台已清空'})
+    except Exception as e:
+        log_error(action='清空控制台失败', error=str(e))
+        return error_response('清空控制台失败', 500)
 
 
 # ==================== 成果展示接口 ====================

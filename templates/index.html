@@ -760,6 +760,14 @@
                 <button class="modal-close" onclick="closeLogsModal()">&times;</button>
             </div>
             <div class="modal-body">
+                <!-- Tab 切换栏 -->
+                <div class="logs-tab-bar">
+                    <button class="logs-tab active" data-tab="structured" onclick="switchLogsTab('structured')">结构日志</button>
+                    <button class="logs-tab" data-tab="console" onclick="switchLogsTab('console')">控制台</button>
+                </div>
+
+                <!-- 结构日志面板 -->
+                <div id="structuredLogsPanel" class="logs-panel active">
                 <!-- 日志统计 -->
                 <div class="logs-stats" id="logsStats">
                     <div class="log-stat-item">
@@ -826,6 +834,30 @@
                     <button class="btn btn-sm" onclick="loadLogsPage(logsCurrentPage - 1)" id="logsPrevBtn" disabled>上一页</button>
                     <span class="page-info">第 <span id="logsCurrentPageNum">1</span> 页</span>
                     <button class="btn btn-sm" onclick="loadLogsPage(logsCurrentPage + 1)" id="logsNextBtn">下一页</button>
+                </div>
+                </div>
+
+                <!-- 控制台面板 -->
+                <div id="consoleLogsPanel" class="logs-panel">
+                    <div class="console-toolbar">
+                        <div class="toolbar-left">
+                            <label class="console-checkbox">
+                                <input type="checkbox" id="consoleAutoScroll" checked onchange="toggleConsoleAutoScroll()">
+                                <span>自动滚动</span>
+                            </label>
+                        </div>
+                        <div class="toolbar-right">
+                            <span class="console-status" id="consoleStatus">未连接</span>
+                            <button class="btn btn-outline btn-sm" id="consolePauseBtn" onclick="toggleConsolePause()">暂停</button>
+                            <button class="btn btn-outline btn-sm btn-danger" onclick="clearConsole()">清空</button>
+                        </div>
+                    </div>
+                    <div class="console-output" id="consoleOutput">
+                        <div class="console-welcome">等待连接...</div>
+                    </div>
+                    <div class="console-footer">
+                        <span id="consoleLineCount">0 行</span>
+                    </div>
                 </div>
             </div>
         </div>

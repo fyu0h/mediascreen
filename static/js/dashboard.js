@@ -292,43 +292,187 @@ function openNewsPreview(url, articleEl) {
                 `;
             } else {
                 // ===== 正文模式（默认） =====
-                let html = '<div class="news-preview-article">';
-                if (d.title) {
-                    html += `<h1 class="preview-title">${escapeHtml(d.title)}</h1>`;
-                }
+                // 辅助函数：将 content blocks 渲染为 HTML
+                const renderContentBlocks = (title, contentBlocks) => {
+                    let html = '<div class="news-preview-article">';
+                    if (title) {
+                        html += `<h1 class="preview-title">${escapeHtml(title)}</h1>`;
+                    }
+                    if (contentBlocks && contentBlocks.length > 0) {
+                        contentBlocks.forEach(block => {
+                            switch (block.type) {
+                                case 'heading':
+                                    html += `<h${block.level} class="preview-heading">${escapeHtml(block.text)}</h${block.level}>`;
+                                    break;
+                                case 'paragraph':
+                                    html += `<p class="preview-paragraph">${escapeHtml(block.text)}</p>`;
+                                    break;
+                                case 'image':
+                                    html += `<div class="preview-image-wrap"><img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt)}" loading="lazy" onerror="this.style.display='none'"></div>`;
+                                    break;
+                                case 'blockquote':
+                                    html += `<blockquote class="preview-blockquote">${escapeHtml(block.text)}</blockquote>`;
+                                    break;
+                                case 'list':
+                                    const tag = block.ordered ? 'ol' : 'ul';
+                                    html += `<${tag} class="preview-list">`;
+                                    block.items.forEach(item => {
+                                        html += `<li>${escapeHtml(item)}</li>`;
+                                    });
+                                    html += `</${tag}>`;
+                                    break;
+                                case 'caption':
+                                    html += `<p class="preview-caption">${escapeHtml(block.text)}</p>`;
+                                    break;
+                            }
+                        });
+                    } else {
+                        html += '<p class="preview-paragraph" style="text-align:center;opacity:0.6;">未能提取到正文内容，请点击上方「访问原始链接」查看原文</p>';
+                    }
+                    html += '</div>';
+                    return html;
+                };
+
+                // 前端中文检测：合并标题和正文前200字符检测
+                const detectChinese = (text) => {
+                    if (!text) return false;
+                    const chinese = text.match(/[\u4e00-\u9fff]/g) || [];
+                    const nonSpace = text.replace(/\s/g, '');
+                    return nonSpace.length > 0 && chinese.length / nonSpace.length > 0.3;
+                };
+
+                let sampleText = (d.title || '');
                 if (d.content && d.content.length > 0) {
-                    d.content.forEach(block => {
-                        switch (block.type) {
-                            case 'heading':
-                                html += `<h${block.level} class="preview-heading">${escapeHtml(block.text)}</h${block.level}>`;
-                                break;
-                            case 'paragraph':
-                                html += `<p class="preview-paragraph">${escapeHtml(block.text)}</p>`;
-                                break;
-                            case 'image':
-                                html += `<div class="preview-image-wrap"><img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt)}" loading="lazy" onerror="this.style.display='none'"></div>`;
-                                break;
-                            case 'blockquote':
-                                html += `<blockquote class="preview-blockquote">${escapeHtml(block.text)}</blockquote>`;
-                                break;
-                            case 'list':
-                                const tag = block.ordered ? 'ol' : 'ul';
-                                html += `<${tag} class="preview-list">`;
-                                block.items.forEach(item => {
-                                    html += `<li>${escapeHtml(item)}</li>`;
-                                });
-                                html += `</${tag}>`;
-                                break;
-                            case 'caption':
-                                html += `<p class="preview-caption">${escapeHtml(block.text)}</p>`;
-                                break;
+                    for (const block of d.content.slice(0, 5)) {
+                        if (block.text) sampleText += block.text;
+                        if (sampleText.length > 200) break;
+                    }
+                }
+                const isChineseContent = detectChinese(sampleText);
+
+                if (isChineseContent) {
+                    // 中文内容 → 单栏显示，不翻译
+                    bodyEl.innerHTML = renderContentBlocks(d.title, d.content);
+                } else {
+                    // 非中文内容 → 双栏布局（左翻译 / 右原文）
+                    const originalHtml = renderContentBlocks(d.title, d.content);
+
+                    bodyEl.innerHTML = `
+                        <div class="preview-bilingual-container">
+                            <div class="preview-translation-pane">
+                                <div class="preview-pane-header">&#127468;&#127475; 中文翻译</div>
+                                <div class="preview-translation-content">
+                                    <div class="preview-translation-loading">
+                                        <div class="spinner"></div>
+                                        正在翻译...
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="preview-pane-divider"></div>
+                            <div class="preview-original-pane">
+                                <div class="preview-pane-header">&#127760; 原文</div>
+                                <div class="preview-original-content">${originalHtml}</div>
+                            </div>
+                        </div>
+                    `;
+
+                    // 双栏滚动同步
+                    const transContent = modal.querySelector('.preview-translation-content');
+                    const origContent = modal.querySelector('.preview-original-content');
+                    if (transContent && origContent) {
+                        let isSyncing = false;
+                        const syncScroll = (source, target) => {
+                            if (isSyncing) return;
+                            isSyncing = true;
+                            // 按滚动比例同步，适配两栏内容高度不同的情况
+                            const sourceMax = source.scrollHeight - source.clientHeight;
+                            const targetMax = target.scrollHeight - target.clientHeight;
+                            if (sourceMax > 0 && targetMax > 0) {
+                                target.scrollTop = (source.scrollTop / sourceMax) * targetMax;
+                            }
+                            isSyncing = false;
+                        };
+                        transContent.addEventListener('scroll', () => syncScroll(transContent, origContent));
+                        origContent.addEventListener('scroll', () => syncScroll(origContent, transContent));
+                    }
+
+                    // 在工具栏添加翻译切换按钮
+                    const toolbar = modal.querySelector('.news-preview-toolbar');
+                    if (toolbar) {
+                        const closeBtn = toolbar.querySelector('.preview-close-btn');
+                        const toggleBtn = document.createElement('button');
+                        toggleBtn.className = 'preview-btn preview-translate-toggle active';
+                        toggleBtn.innerHTML = '&#128257; 双栏翻译';
+                        toggleBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            const container = modal.querySelector('.preview-bilingual-container');
+                            const transPane = modal.querySelector('.preview-translation-pane');
+                            const divider = modal.querySelector('.preview-pane-divider');
+                            if (!container) return;
+
+                            const isActive = toggleBtn.classList.toggle('active');
+                            if (isActive) {
+                                transPane.style.display = '';
+                                divider.style.display = '';
+                                toggleBtn.innerHTML = '&#128257; 双栏翻译';
+                            } else {
+                                transPane.style.display = 'none';
+                                divider.style.display = 'none';
+                                toggleBtn.innerHTML = '&#128257; 显示翻译';
+                            }
+                        };
+                        if (closeBtn) {
+                            toolbar.insertBefore(toggleBtn, closeBtn);
+                        } else {
+                            toolbar.appendChild(toggleBtn);
+                        }
+                    }
+
+                    // 异步请求翻译
+                    fetch('/api/news/translate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: d.title || '', content: d.content || [] }),
+                        signal: currentPreviewController.signal
+                    })
+                    .then(res => res.json())
+                    .then(transData => {
+                        const transContentEl = modal.querySelector('.preview-translation-content');
+                        if (!transContentEl) return;
+
+                        if (transData.success) {
+                            const td = transData.data;
+                            if (td.all_chinese) {
+                                // 全是中文，切换回单栏
+                                bodyEl.innerHTML = renderContentBlocks(d.title, d.content);
+                                const toggleBtn = modal.querySelector('.preview-translate-toggle');
+                                if (toggleBtn) toggleBtn.remove();
+                            } else {
+                                transContentEl.innerHTML = renderContentBlocks(td.title, td.content);
+                            }
+                        } else {
+                            transContentEl.innerHTML = `
+                                <div class="preview-translation-error">
+                                    <div class="error-icon">&#9888;</div>
+                                    <div>翻译失败</div>
+                                    <div class="error-detail">${escapeHtml(transData.error || '请检查翻译 API 配置')}</div>
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(err => {
+                        if (err.name === 'AbortError') return;
+                        const transContentEl = modal.querySelector('.preview-translation-content');
+                        if (transContentEl) {
+                            transContentEl.innerHTML = `
+                                <div class="preview-translation-error">
+                                    <div class="error-icon">&#9888;</div>
+                                    <div>翻译请求失败</div>
+                                </div>
+                            `;
                         }
                     });
-                } else {
-                    html += '<p class="preview-paragraph" style="text-align:center;opacity:0.6;">未能提取到正文内容，请点击上方「访问原始链接」查看原文</p>';
                 }
-                html += '</div>';
-                bodyEl.innerHTML = html;
             }
         } else {
             bodyEl.innerHTML = `
@@ -3352,13 +3496,14 @@ let logsFilterDebounceTimer = null;
 
 function openLogsModal() {
     document.getElementById('logsModal').classList.add('active');
-    logsCurrentPage = 1;
-    loadLogsStats();
-    loadLogs();
+    // 默认显示结构日志 Tab
+    switchLogsTab('structured');
 }
 
 function closeLogsModal() {
     document.getElementById('logsModal').classList.remove('active');
+    // 关闭弹窗时断开 SSE 连接
+    disconnectConsoleSSE();
 }
 
 async function loadLogsStats() {
@@ -3614,6 +3759,194 @@ function renderLogDetail(log) {
     return html;
 }
 
+// ==================== 控制台实时输出功能 ====================
+
+let consoleEventSource = null;
+let consoleLastId = 0;
+let consolePaused = false;
+let consoleAutoScroll = true;
+let consolePausedBuffer = [];
+let consoleLineCount = 0;
+
+function switchLogsTab(tabName) {
+    // 更新 Tab 按钮状态
+    document.querySelectorAll('.logs-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+
+    // 切换面板
+    document.getElementById('structuredLogsPanel').classList.toggle('active', tabName === 'structured');
+    document.getElementById('consoleLogsPanel').classList.toggle('active', tabName === 'console');
+
+    if (tabName === 'structured') {
+        // 切到结构日志时，断开 SSE 并加载结构日志
+        disconnectConsoleSSE();
+        logsCurrentPage = 1;
+        loadLogsStats();
+        loadLogs();
+    } else if (tabName === 'console') {
+        // 切到控制台时，加载历史并建立 SSE 连接
+        loadConsoleHistory();
+    }
+}
+
+async function loadConsoleHistory() {
+    const outputEl = document.getElementById('consoleOutput');
+    outputEl.innerHTML = '<div class="console-welcome">加载历史中...</div>';
+    consoleLineCount = 0;
+
+    try {
+        const data = await fetchAPI('/console/history?lines=500');
+        if (!data) {
+            outputEl.innerHTML = '<div class="console-welcome">加载失败</div>';
+            return;
+        }
+
+        outputEl.innerHTML = '';
+        if (data.items && data.items.length > 0) {
+            data.items.forEach(line => {
+                appendConsoleLine(line);
+            });
+            consoleLastId = data.latest_id || 0;
+        }
+
+        // 加载完历史后建立 SSE 连接
+        connectConsoleSSE();
+    } catch (error) {
+        outputEl.innerHTML = '<div class="console-welcome">加载失败</div>';
+        console.error('加载控制台历史失败:', error);
+    }
+}
+
+function connectConsoleSSE() {
+    disconnectConsoleSSE();
+
+    const url = `/api/console/stream?last_id=${consoleLastId}`;
+    consoleEventSource = new EventSource(url);
+
+    consoleEventSource.addEventListener('log', function(e) {
+        try {
+            const line = JSON.parse(e.data);
+            consoleLastId = line.id;
+
+            if (consolePaused) {
+                consolePausedBuffer.push(line);
+            } else {
+                appendConsoleLine(line);
+            }
+        } catch (err) {
+            // 忽略解析错误
+        }
+    });
+
+    consoleEventSource.addEventListener('heartbeat', function(e) {
+        // 心跳，无需处理
+    });
+
+    consoleEventSource.onopen = function() {
+        updateConsoleStatus('connected', '已连接');
+    };
+
+    consoleEventSource.onerror = function() {
+        updateConsoleStatus('', '重连中...');
+        setTimeout(() => {
+            if (consoleEventSource && consoleEventSource.readyState === EventSource.CLOSED) {
+                connectConsoleSSE();
+            }
+        }, 3000);
+    };
+}
+
+function disconnectConsoleSSE() {
+    if (consoleEventSource) {
+        consoleEventSource.close();
+        consoleEventSource = null;
+    }
+    updateConsoleStatus('', '未连接');
+}
+
+function appendConsoleLine(line) {
+    const outputEl = document.getElementById('consoleOutput');
+    // 移除欢迎文字
+    const welcomeEl = outputEl.querySelector('.console-welcome');
+    if (welcomeEl) {
+        welcomeEl.remove();
+    }
+
+    const lineEl = document.createElement('div');
+    lineEl.className = `console-line ${line.stream}`;
+
+    // 只显示时分秒毫秒
+    const timePart = line.timestamp.split(' ')[1] || line.timestamp;
+    const tag = line.stream === 'stderr' ? 'ERR' : 'OUT';
+
+    lineEl.innerHTML =
+        `<span class="console-time">${escapeHtml(timePart)}</span>` +
+        `<span class="console-tag ${line.stream}">[${tag}]</span>` +
+        `<span class="console-text">${escapeHtml(line.text)}</span>`;
+
+    outputEl.appendChild(lineEl);
+
+    // 限制 DOM 节点数量（最多保留 1000 行）
+    while (outputEl.children.length > 1000) {
+        outputEl.removeChild(outputEl.firstChild);
+    }
+
+    // 更新行计数
+    consoleLineCount++;
+    document.getElementById('consoleLineCount').textContent = `${consoleLineCount} 行`;
+
+    // 自动滚动
+    if (consoleAutoScroll) {
+        outputEl.scrollTop = outputEl.scrollHeight;
+    }
+}
+
+function toggleConsoleAutoScroll() {
+    consoleAutoScroll = document.getElementById('consoleAutoScroll').checked;
+}
+
+function toggleConsolePause() {
+    consolePaused = !consolePaused;
+    const btn = document.getElementById('consolePauseBtn');
+
+    if (consolePaused) {
+        btn.textContent = '继续';
+        updateConsoleStatus('paused', '已暂停');
+    } else {
+        btn.textContent = '暂停';
+        updateConsoleStatus('connected', '已连接');
+
+        // 批量追加暂停期间缓存的消息
+        if (consolePausedBuffer.length > 0) {
+            consolePausedBuffer.forEach(line => appendConsoleLine(line));
+            consolePausedBuffer = [];
+        }
+    }
+}
+
+async function clearConsole() {
+    try {
+        const response = await fetch('/api/console/clear', { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('consoleOutput').innerHTML = '<div class="console-welcome">控制台已清空</div>';
+            consoleLineCount = 0;
+            document.getElementById('consoleLineCount').textContent = '0 行';
+            showToast('控制台已清空', 'success');
+        }
+    } catch (error) {
+        showToast('清空失败', 'error');
+    }
+}
+
+function updateConsoleStatus(className, text) {
+    const statusEl = document.getElementById('consoleStatus');
+    if (statusEl) {
+        statusEl.className = 'console-status ' + className;
+        statusEl.textContent = text;
+    }
+}
 
 // ==================== 新闻源文章列表功能 ====================
 
