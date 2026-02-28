@@ -86,37 +86,52 @@ def create_article(url: str, title: str, site: Dict[str, Any],
 
 def parse_takungpao(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    香港大公报专用解析器
-    URL格式: /news/232108/2025/0204/xxxxx.html
+    香港大公报（大公文匯網）专用解析器
+    数据源: https://www.tkww.hk/top_news
+    URL格式: /a/YYYYMM/DD/AP{hash}.html
     """
     articles = []
     seen_urls = set()
-    base_url = 'http://www.takungpao.com.hk'
+    base_url = 'https://www.tkww.hk'
+    article_pattern = re.compile(r'/a/\d{6}/\d{2}/AP[0-9a-fA-F]+\.html')
 
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 文章链接模式
-        article_pattern = re.compile(r'/news/\d+/\d{4}/\d{4}/\d+\.html')
-
-        for link in soup.find_all('a', href=True):
+        # 1) 列表区文章：<a class="common-column-list-unit-title-1">
+        for link in soup.find_all('a', class_=re.compile(r'common-column-list-unit-title-1')):
             href = link.get('href', '').strip()
             if not article_pattern.search(href):
                 continue
-
-            # 补全URL
-            if href.startswith('/'):
+            if not href.startswith('http'):
                 href = base_url + href
-
             if href in seen_urls:
                 continue
             seen_urls.add(href)
 
-            title = link.get_text(strip=True)
+            title = link.get('title', '').strip() or link.get_text(strip=True)
             if len(title) < 5:
                 continue
 
-            pub_date = extract_date_from_url(href) or datetime.now()
+            # 尝试从相邻时间元素提取日期
+            pub_date = _parse_tkww_date_from_context(link) or _parse_tkww_date_from_url(href) or datetime.now()
+            articles.append(create_article(href, title, site, pub_date, 'takungpao'))
+
+        # 2) 焦点头条区：<a class="img-box-shadow" title="...">
+        for link in soup.find_all('a', class_='img-box-shadow'):
+            href = link.get('href', '').strip()
+            title = link.get('title', '').strip()
+            if not href or not title or len(title) < 5:
+                continue
+            if not article_pattern.search(href):
+                continue
+            if not href.startswith('http'):
+                href = base_url + href
+            if href in seen_urls:
+                continue
+            seen_urls.add(href)
+
+            pub_date = _parse_tkww_date_from_url(href) or datetime.now()
             articles.append(create_article(href, title, site, pub_date, 'takungpao'))
 
     except Exception as e:
@@ -125,50 +140,127 @@ def parse_takungpao(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     return articles
 
 
+def _parse_tkww_date_from_context(element) -> Optional[datetime]:
+    """从文章列表项的相邻时间元素提取日期，格式：2026.02.28 22:16"""
+    try:
+        parent = element.find_parent('div', class_='common-column-list-unit-1')
+        if not parent:
+            parent = element.find_parent('div', class_=re.compile(r'common-column-list-unit'))
+        if parent:
+            time_span = parent.find('span', class_='common-column-list-unit-bottom-time1-1')
+            if time_span:
+                return datetime.strptime(time_span.get_text(strip=True), '%Y.%m.%d %H:%M')
+    except Exception:
+        pass
+    return None
+
+
+def _parse_tkww_date_from_url(url: str) -> Optional[datetime]:
+    """从 tkww URL 提取日期，格式：/a/YYYYMM/DD/..."""
+    try:
+        m = re.search(r'/a/(\d{4})(\d{2})/(\d{2})/', url)
+        if m:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except Exception:
+        pass
+    return None
+
+
 def parse_hkcna(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    香港中通社专用解析器
-    URL格式: /docxxx.htm 或 /content/2025/01/15/xxxxx.shtml
+    香港新闻网专用解析器
+    基于语义化HTML精准定位文章，覆盖轮播图、头条、实时新闻、分类栏目等区域
+    URL格式: docDetail.jsp?id={数字}&channel={数字}
     """
     articles = []
     seen_urls = set()
-    base_url = 'https://www.hkcna.hk'
+    base_url = 'http://hkcna.hk'
+
+    # 文章URL正则：匹配 docDetail.jsp?id=xxx&channel=xxx（兼容 &amp; 编码）
+    article_pattern = re.compile(r'docDetail\.jsp\?id=(\d+)(?:&amp;|&)channel=(\d+)')
+
+    def _add_article(href: str, title: str, date_str: str = None) -> bool:
+        """处理单个链接，成功添加返回True"""
+        if not article_pattern.search(href):
+            return False
+
+        # URL补全和规范化：统一 &amp; 为 &
+        href = href.replace('&amp;', '&')
+        if not href.startswith('http'):
+            href = urljoin(base_url, href)
+
+        if href in seen_urls:
+            return False
+        seen_urls.add(href)
+
+        # 清理标题：移除实时新闻末尾的时间（如 "　　22:11"）
+        title = re.sub(r'[\s\u3000]+\d{1,2}:\d{2}\s*$', '', title).strip()
+        if len(title) < 5:
+            return False
+
+        # 日期解析：优先使用列表中的日期（格式 MM-DD），回退到当前时间
+        pub_date = None
+        if date_str:
+            try:
+                month, day = map(int, date_str.split('-'))
+                pub_date = datetime(datetime.now().year, month, day)
+            except Exception:
+                pass
+        if not pub_date:
+            pub_date = datetime.now()
+
+        articles.append(create_article(href, title, site, pub_date, 'hkcna'))
+        return True
 
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 查找新闻列表区域的链接
-        article_patterns = [
-            re.compile(r'/content/\d{4}/\d{2}/\d{2}/\d+\.shtml'),
-            re.compile(r'/doc\d+\.htm')
-        ]
+        # 1. 轮播图区域：标题在 .black p 中
+        for slide_li in soup.select('.slideBox .bd ul li'):
+            link = slide_li.find('a', href=True)
+            title_p = slide_li.select_one('.black p')
+            if link and title_p:
+                _add_article(link['href'], title_p.get_text(strip=True))
 
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '').strip()
+        # 2. 头条焦点 + 头条列表
+        news_con = soup.select_one('.newsCon')
+        if news_con:
+            # 焦点标题
+            focus_link = news_con.select_one('h4 > a')
+            if focus_link:
+                _add_article(focus_link['href'], focus_link.get_text(strip=True))
+            # 列表
+            for li in news_con.select('.newsList li a'):
+                _add_article(li['href'], li.get_text(strip=True))
 
-            # 检查是否匹配文章模式
-            is_article = any(p.search(href) for p in article_patterns)
-            if not is_article:
-                continue
+        # 3. 实时新闻滚动区
+        for li_a in soup.select('.ssxw .infoList li a'):
+            _add_article(li_a['href'], li_a.get_text(strip=True))
 
-            if href.startswith('/'):
-                href = base_url + href
-            elif not href.startswith('http'):
-                href = base_url + '/' + href
+        # 4. 分类栏目（港澳/大湾区/台湾/内地/国际等）
+        for box in soup.select('.boxDiv'):
+            # 焦点文章
+            focus_link = box.select_one('.boxLeft h4 a')
+            if focus_link:
+                _add_article(focus_link['href'], focus_link.get_text(strip=True))
+            # 列表文章（含日期）
+            for li in box.select('.boxRight .boxList li'):
+                link = li.find('a', href=True)
+                date_span = li.find('span')
+                if link:
+                    date_str = date_span.get_text(strip=True) if date_span else None
+                    _add_article(link['href'], link.get_text(strip=True), date_str)
 
-            if href in seen_urls:
-                continue
-            seen_urls.add(href)
-
-            title = link.get_text(strip=True)
-            if len(title) < 5:
-                continue
-
-            pub_date = extract_date_from_url(href) or datetime.now()
-            articles.append(create_article(href, title, site, pub_date, 'hkcna'))
+        # 5. 兜底：如果语义化选择器未匹配到文章，回退到遍历所有链接
+        if not articles:
+            print("[香港新闻网解析器] 语义化选择器未匹配，启用兜底遍历模式")
+            for link in soup.find_all('a', href=True):
+                title = link.get_text(strip=True)
+                if title:
+                    _add_article(link['href'], title)
 
     except Exception as e:
-        print(f"[香港中通社解析器] 错误: {e}")
+        print(f"[香港新闻网解析器] 错误: {e}")
 
     return articles
 
@@ -176,7 +268,8 @@ def parse_hkcna(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
 def parse_mingpao(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     明报专用解析器
-    URL格式: /pns/xxx 或 /ins/xxx
+    新版URL格式: /(pns|ins)/{分类}/article/{YYYYMMDD}/s{编号}/{文章ID}/{标题slug}
+    示例: /pns/要聞/article/20260301/s00001/1772303190286/美以向伊朗開戰...
     """
     articles = []
     seen_urls = set()
@@ -185,26 +278,51 @@ def parse_mingpao(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 明报文章URL模式
-        article_pattern = re.compile(r'/(pns|ins|fin|ent|spc)/\d+/s\d+')
+        # 新版明报文章URL模式：包含 /article/ 路径段
+        article_pattern = re.compile(r'/(pns|ins)/[^/]+/article/(\d{8})/s\d+/')
 
         for link in soup.find_all('a', href=True):
             href = link.get('href', '').strip()
+            if not href:
+                continue
+
             if not article_pattern.search(href):
                 continue
 
+            # 补全相对路径
             if href.startswith('/'):
                 href = base_url + href
+
+            # 排除非 news.mingpao.com 的链接
+            if 'news.mingpao.com' not in href:
+                continue
 
             if href in seen_urls:
                 continue
             seen_urls.add(href)
 
-            title = link.get_text(strip=True)
+            # 提取标题：优先 title 属性，其次子元素 h5/h1/h2 文本，最后链接文本
+            title = link.get('title', '').strip()
+            if not title:
+                heading = link.find(['h5', 'h1', 'h2'])
+                if heading:
+                    title = heading.get_text(strip=True)
+            if not title:
+                title = link.get_text(strip=True)
+
             if len(title) < 5:
                 continue
 
-            articles.append(create_article(href, title, site, datetime.now(), 'mingpao'))
+            # 从URL中提取发布日期
+            pub_date = datetime.now()
+            date_match = article_pattern.search(href)
+            if date_match:
+                try:
+                    pub_date = datetime.strptime(date_match.group(2), '%Y%m%d')
+                except ValueError:
+                    pass
+
+            articles.append(create_article(href, title, site, pub_date, 'mingpao'))
 
     except Exception as e:
         print(f"[明报解析器] 错误: {e}")
@@ -427,57 +545,109 @@ def parse_sinchew(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def parse_kyodo_cn(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    共同社中文专用解析器
+    共同社中文（共同網）专用解析器
+    数据源: https://tchina.kyodonews.net/
+    URL格式: /articles/-/{数字}
+    注意：页面需滚动到底部才能加载全部内容，建议配合浏览器自动化抓取
     """
     articles = []
     seen_urls = set()
     base_url = 'https://tchina.kyodonews.net'
+    article_pattern = re.compile(r'/articles/-/\d+')
 
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 共同社文章URL模式
-        article_pattern = re.compile(r'/news/\d{4}/\d{2}/\d{2}/[a-z0-9-]+')
-
-        for link in soup.find_all('a', href=True):
+        # 1) 头条主图区：<a class="top-news-main__link">
+        for link in soup.find_all('a', class_='top-news-main__link'):
             href = link.get('href', '').strip()
             if not article_pattern.search(href):
                 continue
-
-            if href.startswith('/'):
+            if not href.startswith('http'):
                 href = base_url + href
-
             if href in seen_urls:
                 continue
             seen_urls.add(href)
+            h3 = link.find('h3', class_='top-news-main__ttl')
+            title = h3.get_text(strip=True) if h3 else link.get_text(strip=True)
+            if len(title) < 5:
+                continue
+            pub_date = _parse_kyodo_time(link) or datetime.now()
+            articles.append(create_article(href, title, site, pub_date, 'kyodo_cn'))
 
+        # 2) 副头条区：<a class="top-news-sub__link">
+        for link in soup.find_all('a', class_='top-news-sub__link'):
+            href = link.get('href', '').strip()
+            if not article_pattern.search(href):
+                continue
+            if not href.startswith('http'):
+                href = base_url + href
+            if href in seen_urls:
+                continue
+            seen_urls.add(href)
             title = link.get_text(strip=True)
             if len(title) < 5:
                 continue
+            pub_date = _parse_kyodo_time(link) or datetime.now()
+            articles.append(create_article(href, title, site, pub_date, 'kyodo_cn'))
 
-            pub_date = extract_date_from_url(href) or datetime.now()
+        # 3) 最新报道列表：<a class="m-article-item-ttl__link">
+        for link in soup.find_all('a', class_='m-article-item-ttl__link'):
+            href = link.get('href', '').strip()
+            if not article_pattern.search(href):
+                continue
+            if not href.startswith('http'):
+                href = base_url + href
+            if href in seen_urls:
+                continue
+            seen_urls.add(href)
+            title = link.get_text(strip=True)
+            if len(title) < 5:
+                continue
+            pub_date = _parse_kyodo_time(link) or datetime.now()
             articles.append(create_article(href, title, site, pub_date, 'kyodo_cn'))
 
     except Exception as e:
-        print(f"[共同社中文解析器] 错误: {e}")
+        print(f"[共同社解析器] 错误: {e}")
 
     return articles
+
+
+def _parse_kyodo_time(element) -> Optional[datetime]:
+    """从共同社文章元素的相邻 <time datetime="..."> 提取 ISO 时间"""
+    try:
+        # 在父级 article/div 容器中找 <time>
+        for parent_class in ['top-news-sub__item', 'top-news-main', 'm-article-item']:
+            parent = element.find_parent('article', class_=parent_class) or \
+                     element.find_parent('div', class_=parent_class)
+            if parent:
+                time_tag = parent.find('time')
+                if time_tag and time_tag.get('datetime'):
+                    return datetime.fromisoformat(time_tag['datetime'])
+        # 回退：在同级或父级中找任意 <time>
+        parent = element.find_parent(['article', 'div'])
+        if parent:
+            time_tag = parent.find('time')
+            if time_tag and time_tag.get('datetime'):
+                return datetime.fromisoformat(time_tag['datetime'])
+    except Exception:
+        pass
+    return None
 
 
 def parse_nhk_cn(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    NHK中文专用解析器
-    URL格式: /nhkworld/zh/news/xxxxx/
+    NHK新闻专用解析器
+    数据源: https://news.web.nhk/newsweb
+    URL格式: /newsweb/na/na-k{数字}
     """
     articles = []
     seen_urls = set()
-    base_url = 'https://www3.nhk.or.jp'
+    base_url = 'https://news.web.nhk'
+    article_pattern = re.compile(r'/newsweb/na/na-k\d+')
 
     try:
         soup = BeautifulSoup(html, 'html.parser')
-
-        # NHK中文文章URL模式
-        article_pattern = re.compile(r'/nhkworld/zh/news/\d+/')
 
         for link in soup.find_all('a', href=True):
             href = link.get('href', '').strip()
@@ -491,16 +661,39 @@ def parse_nhk_cn(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
                 continue
             seen_urls.add(href)
 
-            title = link.get_text(strip=True)
-            if len(title) < 5:
+            # 标题在 <strong> 或 <p> 子元素中
+            strong = link.find('strong')
+            title = strong.get_text(strip=True) if strong else link.get_text(strip=True)
+            if len(title) < 3:
                 continue
 
-            articles.append(create_article(href, title, site, datetime.now(), 'nhk_cn'))
+            # 从 <time datetime="..."> 提取日期
+            pub_date = _parse_nhk_time(link) or datetime.now()
+            articles.append(create_article(href, title, site, pub_date, 'nhk_cn'))
 
     except Exception as e:
-        print(f"[NHK中文解析器] 错误: {e}")
+        print(f"[NHK解析器] 错误: {e}")
 
     return articles
+
+
+def _parse_nhk_time(element) -> Optional[datetime]:
+    """从 NHK 文章元素中提取 <time datetime="..."> 的 ISO 时间"""
+    try:
+        # 先在链接内部找
+        time_tag = element.find('time')
+        # 再在父级容器中找
+        if not time_tag:
+            parent = element.find_parent('li') or element.find_parent('div')
+            if parent:
+                time_tag = parent.find('time')
+        if time_tag and time_tag.get('datetime'):
+            dt_str = time_tag['datetime']
+            # 格式: 2026-03-01T05:05:40+09:00
+            return datetime.fromisoformat(dt_str)
+    except Exception:
+        pass
+    return None
 
 
 def parse_cls(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -681,41 +874,93 @@ def parse_haiwaiwang_sitemap(xml_content: str) -> List[Dict[str, str]]:
 
 def parse_inform_kz(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    哈萨克斯坦国际通讯社专用解析器
-    URL格式: /cn/article/xxxxx
+    哈萨克斯坦国际通讯社（哈通社）专用解析器
+    数据源: https://cn.inform.kz/
+    URL格式: /news/{slug}/
     """
     articles = []
     seen_urls = set()
     base_url = 'https://cn.inform.kz'
+    article_pattern = re.compile(r'/news/[a-zA-Z0-9_-]+-[a-f0-9]+/')
 
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 文章URL模式
-        article_pattern = re.compile(r'/article/\d+')
-
-        for link in soup.find_all('a', href=True):
+        # 1) 最新新闻卡片：<div class="lastCard">
+        for card in soup.find_all('div', class_='lastCard'):
+            link = card.find('a', href=True)
+            if not link:
+                continue
             href = link.get('href', '').strip()
             if not article_pattern.search(href):
                 continue
-
-            if href.startswith('/'):
+            if not href.startswith('http'):
                 href = base_url + href
-
             if href in seen_urls:
                 continue
             seen_urls.add(href)
 
-            title = link.get_text(strip=True)
+            title_div = card.find('div', class_='lastCard__title')
+            title = title_div.get_text(strip=True) if title_div else ''
             if len(title) < 5:
                 continue
 
-            articles.append(create_article(href, title, site, datetime.now(), 'inform_kz'))
+            time_div = card.find('div', class_='lastCard__time')
+            pub_date = _parse_inform_time(time_div) if time_div else datetime.now()
+            articles.append(create_article(href, title, site, pub_date, 'inform_kz'))
+
+        # 2) 分类新闻卡片：<div class="categoryCard">
+        for card in soup.find_all('div', class_='categoryCard'):
+            link = card.find('a', href=True)
+            if not link:
+                continue
+            href = link.get('href', '').strip()
+            if not article_pattern.search(href):
+                continue
+            if not href.startswith('http'):
+                href = base_url + href
+            if href in seen_urls:
+                continue
+            seen_urls.add(href)
+
+            title_div = card.find('div', class_='categoryCard__title')
+            title = title_div.get_text(strip=True) if title_div else ''
+            if len(title) < 5:
+                continue
+
+            time_div = card.find('div', class_='categoryCard__time')
+            pub_date = _parse_inform_time(time_div) if time_div else datetime.now()
+            articles.append(create_article(href, title, site, pub_date, 'inform_kz'))
 
     except Exception as e:
-        print(f"[哈萨克斯坦通讯社解析器] 错误: {e}")
+        print(f"[哈通社解析器] 错误: {e}")
 
     return articles
+
+
+# 哈通社中文月份映射
+_INFORM_MONTHS = {
+    '一月': 1, '二月': 2, '三月': 3, '四月': 4,
+    '五月': 5, '六月': 6, '七月': 7, '八月': 8,
+    '九月': 9, '十月': 10, '十一月': 11, '十二月': 12,
+}
+
+
+def _parse_inform_time(time_div) -> Optional[datetime]:
+    """解析哈通社时间格式：'23:00, 28 二月 2026'"""
+    try:
+        text = time_div.get_text(strip=True)
+        # 格式: HH:MM, DD 月份 YYYY
+        m = re.match(r'(\d{1,2}):(\d{2}),\s*(\d{1,2})\s+(\S+)\s+(\d{4})', text)
+        if m:
+            hour, minute, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            month = _INFORM_MONTHS.get(m.group(4), 0)
+            year = int(m.group(5))
+            if month:
+                return datetime(year, month, day, hour, minute)
+    except Exception:
+        pass
+    return None
 
 
 def parse_udn_seoul(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -904,8 +1149,14 @@ def parse_foxnews(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
             if not article_pattern.search(href):
                 continue
 
-            if href.startswith('/'):
+            # 处理各种URL格式：协议相对、路径相对、完整URL
+            if href.startswith('//'):
+                href = 'https:' + href
+            elif href.startswith('/'):
                 href = base_url + href
+
+            # 规范化：去除域名重复（如 foxnews.com//www.foxnews.com/...）
+            href = re.sub(r'(https?://www\.foxnews\.com)/+www\.foxnews\.com/', r'\1/', href)
 
             if href in seen_urls:
                 continue
@@ -971,36 +1222,57 @@ def parse_thetimes(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
 def parse_rfi(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     法国国际广播电台中文版专用解析器
-    URL格式: /cn/xxx/xxxxxxxx-xxx
+    基于语义化HTML精准定位文章，支持多级分类和URL编码中文字符
+    URL格式: /cn/{分类}/YYYYMMDD-{slug} 或 /cn/{分类}/{子分类}/YYYYMMDD-{slug}
     """
     articles = []
     seen_urls = set()
     base_url = 'https://www.rfi.fr'
 
+    # 宽松正则：支持多级分类路径 + URL编码中文字符
+    article_pattern = re.compile(r'/cn/(?:[^/]+/)+\d{8}-\S+')
+
+    def _process_link(link_tag) -> bool:
+        """处理单个链接标签，成功添加返回True"""
+        href = link_tag.get('href', '').strip()
+        if not article_pattern.search(href):
+            return False
+
+        # URL补全
+        if href.startswith('/'):
+            href = base_url + href
+
+        if href in seen_urls:
+            return False
+        seen_urls.add(href)
+
+        # 提取标题：优先从父级h2获取，回退到链接文本
+        title = ''
+        parent_h2 = link_tag.find_parent('h2')
+        if parent_h2:
+            title = parent_h2.get_text(strip=True)
+        if not title:
+            title = link_tag.get_text(strip=True)
+        if len(title) < 5:
+            return False
+
+        pub_date = extract_date_from_url(href) or datetime.now()
+        articles.append(create_article(href, title, site, pub_date, 'rfi'))
+        return True
+
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # RFI文章URL模式
-        article_pattern = re.compile(r'/cn/[^/]+/\d{8}-[a-z0-9-]+')
+        # 主逻辑：语义化CSS选择器精准定位文章标题链接
+        title_links = soup.select('div.article__title a[data-article-item-link]')
+        for link in title_links:
+            _process_link(link)
 
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '').strip()
-            if not article_pattern.search(href):
-                continue
-
-            if href.startswith('/'):
-                href = base_url + href
-
-            if href in seen_urls:
-                continue
-            seen_urls.add(href)
-
-            title = link.get_text(strip=True)
-            if len(title) < 5:
-                continue
-
-            pub_date = extract_date_from_url(href) or datetime.now()
-            articles.append(create_article(href, title, site, pub_date, 'rfi'))
+        # 兜底：如果语义化选择器未匹配到文章（RFI改版），回退到遍历所有<a>标签
+        if not articles:
+            print("[RFI解析器] 语义化选择器未匹配，启用兜底遍历模式")
+            for link in soup.find_all('a', href=True):
+                _process_link(link)
 
     except Exception as e:
         print(f"[RFI解析器] 错误: {e}")
@@ -1093,7 +1365,8 @@ def parse_infobae(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
 def parse_us_state(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     美国国务院专用解析器
-    URL格式: /press-release/xxx
+    数据源: https://www.state.gov/press-releases/
+    URL格式: /releases/office-of-the-spokesperson/YYYY/MM/slug/
     """
     articles = []
     seen_urls = set()
@@ -1102,18 +1375,15 @@ def parse_us_state(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 美国国务院文章URL模式
-        article_patterns = [
-            re.compile(r'/(press-release|briefing|remarks|speeches)/[a-z0-9-]+'),
-        ]
-
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '').strip()
-
-            is_article = any(p.search(href) for p in article_patterns)
-            if not is_article:
+        # 文章列表项：<li class="collection-result">
+        for item in soup.find_all('li', class_='collection-result'):
+            link = item.find('a', class_='collection-result__link')
+            if not link:
                 continue
 
+            href = link.get('href', '').strip()
+            if not href or 'state.gov' not in href and not href.startswith('/'):
+                continue
             if href.startswith('/'):
                 href = base_url + href
 
@@ -1125,7 +1395,9 @@ def parse_us_state(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
             if len(title) < 10:
                 continue
 
-            articles.append(create_article(href, title, site, datetime.now(), 'us_state'))
+            # 日期：<div class="collection-result-meta"> 内的 <span dir="ltr">February 27, 2026</span>
+            pub_date = _parse_state_gov_date(item) or datetime.now()
+            articles.append(create_article(href, title, site, pub_date, 'us_state'))
 
     except Exception as e:
         print(f"[美国国务院解析器] 错误: {e}")
@@ -1133,10 +1405,28 @@ def parse_us_state(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     return articles
 
 
+def _parse_state_gov_date(item) -> Optional[datetime]:
+    """从 collection-result-meta 中提取日期，格式：February 27, 2026"""
+    try:
+        meta = item.find('div', class_='collection-result-meta')
+        if meta:
+            # 日期在 <span dir="ltr"> 中
+            for span in meta.find_all('span'):
+                text = span.get_text(strip=True)
+                try:
+                    return datetime.strptime(text, '%B %d, %Y')
+                except ValueError:
+                    continue
+    except Exception:
+        pass
+    return None
+
+
 def parse_uscis(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    美国移民局专用解析器
-    URL格式: /news/news-releases/xxx 或 /news/alerts/xxx
+    美国移民局（USCIS）专用解析器
+    数据源: https://www.uscis.gov/newsroom/all-news
+    URL格式: /newsroom/news-releases/slug 或 /newsroom/alerts/slug
     """
     articles = []
     seen_urls = set()
@@ -1145,14 +1435,19 @@ def parse_uscis(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # USCIS文章URL模式
-        article_pattern = re.compile(r'/news/(news-releases|alerts)/[a-z0-9-]+')
-
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '').strip()
-            if not article_pattern.search(href):
+        # 文章列表行：<div class="views-row">
+        for row in soup.find_all('div', class_='views-row'):
+            # 标题：<div class="views-field-title"> 内的 <a>
+            title_div = row.find('div', class_='views-field-title')
+            if not title_div:
+                continue
+            link = title_div.find('a', href=True)
+            if not link:
                 continue
 
+            href = link.get('href', '').strip()
+            if not href:
+                continue
             if href.startswith('/'):
                 href = base_url + href
 
@@ -1164,7 +1459,16 @@ def parse_uscis(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
             if len(title) < 10:
                 continue
 
-            articles.append(create_article(href, title, site, datetime.now(), 'uscis'))
+            # 日期：<time datetime="2026-02-26T22:04:30Z">
+            pub_date = datetime.now()
+            time_tag = row.find('time')
+            if time_tag and time_tag.get('datetime'):
+                try:
+                    pub_date = datetime.fromisoformat(time_tag['datetime'].replace('Z', '+00:00'))
+                except Exception:
+                    pass
+
+            articles.append(create_article(href, title, site, pub_date, 'uscis'))
 
     except Exception as e:
         print(f"[USCIS解析器] 错误: {e}")
@@ -1174,7 +1478,10 @@ def parse_uscis(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def parse_au_homeaffairs(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    澳大利亚移民局专用解析器
+    澳大利亚内政部（移民局）专用解析器
+    数据源: https://www.homeaffairs.gov.au/news-media/archive
+    URL格式: /news-media/archive/article?itemId={数字}
+    注意：页面由 Angular 动态渲染，建议配合浏览器自动化抓取
     """
     articles = []
     seen_urls = set()
@@ -1183,14 +1490,19 @@ def parse_au_homeaffairs(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]
     try:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # 澳大利亚内政部文章URL模式
-        article_pattern = re.compile(r'/news-media/archive/[a-z0-9-]+')
-
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '').strip()
-            if not article_pattern.search(href):
+        # 文章容器：<div class="news-article">
+        for article_div in soup.find_all('div', class_='news-article'):
+            # 标题：<h3 class="title"><a href="...">标题</a></h3>
+            h3 = article_div.find('h3', class_='title')
+            if not h3:
+                continue
+            link = h3.find('a', href=True)
+            if not link:
                 continue
 
+            href = link.get('href', '').strip()
+            if not href:
+                continue
             if href.startswith('/'):
                 href = base_url + href
 
@@ -1199,13 +1511,22 @@ def parse_au_homeaffairs(html: str, site: Dict[str, Any]) -> List[Dict[str, Any]
             seen_urls.add(href)
 
             title = link.get_text(strip=True)
-            if len(title) < 10:
+            if len(title) < 5:
                 continue
 
-            articles.append(create_article(href, title, site, datetime.now(), 'au_homeaffairs'))
+            # 日期：<div class="date">19 Feb 2026</div>
+            pub_date = datetime.now()
+            date_div = article_div.find('div', class_='date')
+            if date_div:
+                try:
+                    pub_date = datetime.strptime(date_div.get_text(strip=True), '%d %b %Y')
+                except Exception:
+                    pass
+
+            articles.append(create_article(href, title, site, pub_date, 'au_homeaffairs'))
 
     except Exception as e:
-        print(f"[澳大利亚移民局解析器] 错误: {e}")
+        print(f"[澳大利亚内政部解析器] 错误: {e}")
 
     return articles
 

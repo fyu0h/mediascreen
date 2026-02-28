@@ -21,14 +21,14 @@ class HKTWMediaPlugin(BasePlugin):
             {
                 "id": "hk_takungpao",
                 "name": "香港大公报",
-                "url": "http://www.takungpao.com.hk/",
-                "domain": "takungpao.com.hk",
+                "url": "https://www.tkww.hk/top_news",
+                "domain": "tkww.hk",
                 "country_code": "HK",
                 "coords": [114.1694, 22.3193],
                 "fetch_method": "special",
                 "parser": "takungpao",
                 "sitemap_url": None,
-                "description": "香港大公报（使用专用解析器）",
+                "description": "香港大公报（大公文匯網，使用专用解析器）",
                 "enabled_by_default": True
             },
             {

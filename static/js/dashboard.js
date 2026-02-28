@@ -211,6 +211,9 @@ function openNewsPreview(url, articleEl) {
                 <button class="preview-btn preview-open-btn" onclick="window.open('${escapeHtml(url)}', '_blank'); event.stopPropagation();">
                     &#128279; 访问原始链接
                 </button>
+                <button class="preview-btn preview-refresh-btn" onclick="openNewsPreview('${escapeHtml(url)}'); event.stopPropagation();">
+                    &#128260; 重新获取
+                </button>
                 <button class="preview-btn preview-close-btn" onclick="closeNewsPreview()">
                     &#10005; 关闭
                 </button>
@@ -286,8 +289,11 @@ function openNewsPreview(url, articleEl) {
                         <div class="preview-cached-divider"></div>
                         <div class="preview-cached-notice">
                             &#9888; 该页面无法在线预览，以上为数据库缓存信息。<br>
-                            请点击上方「访问原始链接」查看原文。
+                            请点击上方「访问原始链接」查看原文，或尝试重新获取。
                         </div>
+                        <button class="preview-btn preview-retry-inline" onclick="openNewsPreview('${escapeHtml(url)}'); event.stopPropagation();">
+                            &#128260; 重新获取
+                        </button>
                     </div>
                 `;
                 } else {
@@ -479,7 +485,10 @@ function openNewsPreview(url, articleEl) {
                 <div class="news-preview-error">
                     <div class="error-icon">&#9888;</div>
                     <div>无法加载预览内容</div>
-                    <div>请点击上方「访问原始链接」查看原文</div>
+                    <div>请点击上方「访问原始链接」查看原文，或尝试重新获取</div>
+                    <button class="preview-btn preview-retry-inline" onclick="openNewsPreview('${escapeHtml(url)}'); event.stopPropagation();">
+                        &#128260; 重新获取
+                    </button>
                 </div>
             `;
             }
@@ -492,7 +501,10 @@ function openNewsPreview(url, articleEl) {
                 <div class="news-preview-error">
                     <div class="error-icon">&#9888;</div>
                     <div>无法加载预览内容</div>
-                    <div>请点击上方「访问原始链接」查看原文</div>
+                    <div>请点击上方「访问原始链接」查看原文，或尝试重新获取</div>
+                    <button class="preview-btn preview-retry-inline" onclick="openNewsPreview('${escapeHtml(url)}'); event.stopPropagation();">
+                        &#128260; 重新获取
+                    </button>
                 </div>
             `;
             }

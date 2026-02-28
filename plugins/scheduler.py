@@ -99,6 +99,16 @@ class RSSScheduler:
                 ],
                 'use_homepage': False,
             },
+            {
+                'id': 'haiwaiwang',
+                'name': '海外家园网',
+                'country_code': 'US',
+                'coords': [-77.0369, 38.9072],
+                'rss_urls': [
+                    'https://haiwaiwang.org/feed/',
+                ],
+                'use_homepage': False,
+            },
         ]
 
         self.headers = {

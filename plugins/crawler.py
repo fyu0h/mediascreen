@@ -137,7 +137,17 @@ class PluginCrawler:
             try:
                 # 根据是否有代理动态构造浏览器配置
                 if proxy_url:
-                    browser_cfg = BrowserConfig(headless=True, verbose=False, proxy=proxy_url)
+                    # 解析代理 URL 为 proxy_config 字典格式（crawl4ai 新 API）
+                    from urllib.parse import urlparse as _urlparse
+                    _parsed_proxy = _urlparse(proxy_url)
+                    _proxy_config = {
+                        "server": f"{_parsed_proxy.scheme}://{_parsed_proxy.hostname}:{_parsed_proxy.port}",
+                    }
+                    if _parsed_proxy.username:
+                        _proxy_config["username"] = _parsed_proxy.username
+                    if _parsed_proxy.password:
+                        _proxy_config["password"] = _parsed_proxy.password
+                    browser_cfg = BrowserConfig(headless=True, verbose=False, proxy_config=_proxy_config)
                 else:
                     browser_cfg = self.browser_config
 
@@ -283,8 +293,13 @@ class PluginCrawler:
                 if proxy_url:
                     print(f"[PluginCrawler] 🔒 {name} 使用代理: {site.get('domain', '')}")
 
-            # 获取页面（传入代理参数）
-            html = await self.fetch_page(url, proxy_url=proxy_url)
+            # 获取页面
+            # 代理模式使用 requests（Playwright 代理隧道兼容性差，容易超时）
+            # 非代理模式使用 crawl4ai 无头浏览器（支持 JS 渲染）
+            if proxy_url:
+                html = self.fetch_url_simple(url, timeout=30, proxy_url=proxy_url)
+            else:
+                html = await self.fetch_page(url)
 
             if not html:
                 # 区分超时跳过和其他错误

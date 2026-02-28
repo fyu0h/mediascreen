@@ -201,6 +201,15 @@ def init_database():
     # 确保任务集合索引存在
     ensure_task_indexes()
 
+    # 清理上次运行残留的未完成任务（应用重启后这些任务实际已中断）
+    from models.tasks import get_tasks_collection
+    stale_result = get_tasks_collection().update_many(
+        {'status': {'$in': ['pending', 'running']}},
+        {'$set': {'status': 'failed', 'message': '应用重启，任务已中断'}}
+    )
+    if stale_result.modified_count > 0:
+        print(f"[任务清理] 已将 {stale_result.modified_count} 个残留任务标记为失败")
+
     # 确保日志集合索引存在（含 TTL 自动过期）
     ensure_log_indexes()
 

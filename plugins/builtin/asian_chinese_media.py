@@ -72,15 +72,15 @@ class AsianChineseMediaPlugin(BasePlugin):
             },
             {
                 "id": "jp_nhk_cn",
-                "name": "NHK中文",
-                "url": "https://www3.nhk.or.jp/nhkworld/zh/news/",
-                "domain": "nhk.or.jp",
+                "name": "NHK新闻",
+                "url": "https://news.web.nhk/newsweb",
+                "domain": "news.web.nhk",
                 "country_code": "JP",
                 "coords": [139.6917, 35.6895],
                 "fetch_method": "special",
                 "parser": "nhk_cn",
                 "sitemap_url": None,
-                "description": "日本放送协会中文新闻（使用专用解析器）",
+                "description": "NHK新闻速报（使用专用解析器）",
                 "enabled_by_default": True
             },
             {
@@ -116,10 +116,10 @@ class AsianChineseMediaPlugin(BasePlugin):
                 "domain": "haiwaiwang.org",
                 "country_code": "US",
                 "coords": [-77.0369, 38.9072],
-                "fetch_method": "special",
-                "parser": "haiwaiwang",
+                "fetch_method": "scheduler",
+                "parser": None,
                 "sitemap_url": None,
-                "description": "海外家园网（使用专用解析器）",
+                "description": "海外家园网（RSS定时更新）",
                 "enabled_by_default": True
             },
             {

@@ -6,6 +6,7 @@
 """
 
 import re
+import time
 import requests
 from typing import Optional, List, Dict, Any
 from collections import OrderedDict
@@ -13,14 +14,58 @@ from models.settings import get_translation_config, get_translation_prompt
 
 # 批量翻译配置
 BATCH_SIZE = 10  # 每批翻译的标题数量
+MAX_RETRIES = 3  # 最大重试次数
+RETRY_DELAY = 2  # 重试基础间隔（秒），实际间隔按指数递增
+
+
+def _request_with_retry(url: str, headers: dict, json_data: dict, timeout: int, label: str = "翻译") -> Optional[requests.Response]:
+    """
+    带自动重试的 HTTP POST 请求
+    遇到 SSL 错误、连接错误时自动重试，最多 MAX_RETRIES 次
+
+    参数:
+        url: 请求地址
+        headers: 请求头
+        json_data: 请求体
+        timeout: 超时时间（秒）
+        label: 日志标签
+
+    返回:
+        Response 对象，所有重试都失败则返回 None
+    """
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = requests.post(url, headers=headers, json=json_data, timeout=timeout)
+            return response
+        except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+            if attempt < MAX_RETRIES:
+                wait = RETRY_DELAY * (2 ** (attempt - 1))  # 2s, 4s
+                print(f"[{label}] 连接失败（第{attempt}次），{wait}秒后重试: {e}")
+                time.sleep(wait)
+            else:
+                print(f"[{label}] 连接失败，已重试{MAX_RETRIES}次仍失败: {e}")
+                return None
+        except requests.exceptions.Timeout:
+            if attempt < MAX_RETRIES:
+                print(f"[{label}] 请求超时（第{attempt}次），重试中...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print(f"[{label}] 请求超时，已重试{MAX_RETRIES}次仍失败")
+                return None
+    return None
 
 
 def is_chinese(text: str) -> bool:
     """
-    检测文本是否主要为中文
-    如果中文字符占比超过30%，认为是中文
+    检测文本是否主要为中文（排除日文）
+    日文含有平假名/片假名，即使包含汉字也不算中文
     """
     if not text:
+        return False
+
+    # 日文专属字符：平假名（ぁ-ん）和片假名（ァ-ヶ）
+    japanese_count = len(re.findall(r'[\u3040-\u309f\u30a0-\u30ff]', text))
+    if japanese_count > 0:
         return False
 
     chinese_count = len(re.findall(r'[\u4e00-\u9fff]', text))
@@ -98,13 +143,13 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
     prompt = prompt_template.replace('{text}', title)
 
     try:
-        response = requests.post(
+        response = _request_with_retry(
             api_config['api_url'],
             headers={
                 'Authorization': f'Bearer {api_config["api_key"]}',
                 'Content-Type': 'application/json'
             },
-            json={
+            json_data={
                 'model': api_config['model'],
                 'messages': [
                     {'role': 'user', 'content': prompt}
@@ -112,8 +157,12 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
                 'max_tokens': 200,
                 'temperature': 0.1
             },
-            timeout=60
+            timeout=60,
+            label="翻译"
         )
+
+        if response is None:
+            return None
 
         if response.status_code == 200:
             result = response.json()
@@ -124,9 +173,6 @@ def translate_title(title: str, source_lang: str = 'auto') -> Optional[str]:
             print(f"[翻译] API 请求失败: {response.status_code} - {response.text[:100]}")
             return None
 
-    except requests.exceptions.Timeout:
-        print("[翻译] API 请求超时")
-        return None
     except Exception as e:
         print(f"[翻译] 翻译失败: {e}")
         return None
@@ -172,13 +218,13 @@ def _translate_batch_api(titles: List[str]) -> List[Optional[str]]:
     )
 
     try:
-        response = requests.post(
+        response = _request_with_retry(
             api_config['api_url'],
             headers={
                 'Authorization': f'Bearer {api_config["api_key"]}',
                 'Content-Type': 'application/json'
             },
-            json={
+            json_data={
                 'model': api_config['model'],
                 'messages': [
                     {'role': 'system', 'content': system_prompt},
@@ -187,8 +233,12 @@ def _translate_batch_api(titles: List[str]) -> List[Optional[str]]:
                 'max_tokens': 100 * len(titles),  # 每条标题预留约100 token
                 'temperature': 0.1
             },
-            timeout=90
+            timeout=90,
+            label="批量翻译"
         )
+
+        if response is None:
+            return [None] * len(titles)
 
         if response.status_code != 200:
             print(f"[批量翻译] API 请求失败: {response.status_code} - {response.text[:100]}")
@@ -200,9 +250,6 @@ def _translate_batch_api(titles: List[str]) -> List[Optional[str]]:
         # 解析编号格式的返回结果
         return _parse_batch_response(content, len(titles))
 
-    except requests.exceptions.Timeout:
-        print("[批量翻译] API 请求超时")
-        return [None] * len(titles)
     except Exception as e:
         print(f"[批量翻译] 翻译失败: {e}")
         return [None] * len(titles)

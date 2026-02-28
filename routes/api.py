@@ -80,8 +80,12 @@ def _is_private_url(url: str) -> bool:
                 return True
 
         return False
-    except (socket.gaierror, ValueError, OSError):
-        # DNS 解析失败或 IP 解析失败，视为不安全
+    except socket.gaierror:
+        # DNS 解析失败（如被墙站点），不等于内网地址，放行
+        # 实际 HTTP 请求会自行处理连接失败
+        return False
+    except (ValueError, OSError):
+        # IP 格式异常或其他系统错误，视为不安全
         return True
 
 
@@ -1872,10 +1876,13 @@ def crawl_single_site_api():
         if not is_site_enabled(plugin_id, site_id):
             return error_response('该站点未启用', 400)
 
+        # 复制站点配置，注入 plugin_id（代理判断需要）
+        site = dict(site)
+        site['plugin_id'] = plugin_id
+
         # 检查是否有自定义抓取方式
         custom_method = get_site_fetch_method(plugin_id, site_id)
         if custom_method:
-            site = dict(site)  # 避免修改原始配置
             site['fetch_method'] = custom_method
 
         # 执行爬取
@@ -3997,6 +4004,31 @@ def _get_cached_article_info(target_url: str) -> dict:
 
 # ==================== 新闻预览端点 ====================
 
+
+def _get_global_proxy_url() -> str:
+    """
+    读取全局代理配置，返回代理 URL。
+    全局开关关闭或配置不完整时返回空串。
+    """
+    try:
+        settings = load_settings()
+        proxy_cfg = settings.get('crawler', {}).get('proxy', {})
+        if not proxy_cfg.get('enabled'):
+            return ''
+        host = proxy_cfg.get('host', '')
+        if not host:
+            return ''
+        port = proxy_cfg.get('port', 9000)
+        username = proxy_cfg.get('username', '')
+        password = proxy_cfg.get('password', '')
+        protocol = proxy_cfg.get('protocol', 'http')
+        if username and password:
+            return f"{protocol}://{username}:{password}@{host}:{port}"
+        return f"{protocol}://{host}:{port}"
+    except Exception:
+        return ''
+
+
 @api_bp.route('/news/preview', methods=['GET'])
 def news_preview():
     """获取新闻预览内容 — 智能回退链（正文提取 → 无头浏览器 → 截图 → 缓存摘要）"""
@@ -4031,6 +4063,9 @@ def news_preview():
     cf_markers = ['Just a moment...', 'Checking your browser', 'cf-browser-verification',
                   'challenges.cloudflare.com', '_cf_chl_opt', 'Attention Required']
 
+    # 检查全局代理配置
+    proxy_url = _get_global_proxy_url()
+
     try:
         # ===== Level 1: requests.get() + 正文提取 =====
         html = None
@@ -4041,7 +4076,8 @@ def news_preview():
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
             }
-            resp = http_requests.get(url, headers=headers, timeout=15, verify=False)
+            proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+            resp = http_requests.get(url, headers=headers, timeout=15, verify=False, proxies=proxies)
             resp.encoding = resp.apparent_encoding or 'utf-8'
             html = resp.text
         except Exception:
@@ -4060,46 +4096,50 @@ def news_preview():
                 })
 
         # ===== Level 2: 无头浏览器 (crawl4ai) + 正文提取 =====
-        try:
-            import asyncio
-            import os
-            from plugins.crawler import get_crawler
-            old_env = os.environ.get('PYTHONIOENCODING')
-            os.environ['PYTHONIOENCODING'] = 'utf-8'
-            crawler = get_crawler()
-            loop = asyncio.new_event_loop()
+        # 代理模式跳过 crawl4ai（Playwright 代理隧道兼容性差，必定超时）
+        if not proxy_url:
             try:
-                crawler_html = loop.run_until_complete(crawler.fetch_page(url, timeout=20))
-            finally:
-                loop.close()
-                if old_env is None:
-                    os.environ.pop('PYTHONIOENCODING', None)
-                else:
-                    os.environ['PYTHONIOENCODING'] = old_env
+                import asyncio
+                import os
+                from plugins.crawler import get_crawler
+                old_env = os.environ.get('PYTHONIOENCODING')
+                os.environ['PYTHONIOENCODING'] = 'utf-8'
+                crawler = get_crawler()
+                loop = asyncio.new_event_loop()
+                try:
+                    crawler_html = loop.run_until_complete(crawler.fetch_page(url, timeout=20))
+                finally:
+                    loop.close()
+                    if old_env is None:
+                        os.environ.pop('PYTHONIOENCODING', None)
+                    else:
+                        os.environ['PYTHONIOENCODING'] = old_env
 
-            if crawler_html:
-                title, blocks = _extract_content_blocks(crawler_html, base_url)
-                if _content_quality_ok(blocks):
-                    return success_response({
-                        'type': 'content',
-                        'title': title,
-                        'url': url,
-                        'content': blocks
-                    })
-        except Exception as l2_err:
-            log_error(f"Level 2 无头浏览器抓取失败: {url}", str(l2_err))
+                if crawler_html:
+                    title, blocks = _extract_content_blocks(crawler_html, base_url)
+                    if _content_quality_ok(blocks):
+                        return success_response({
+                            'type': 'content',
+                            'title': title,
+                            'url': url,
+                            'content': blocks
+                        })
+            except Exception as l2_err:
+                log_error(f"Level 2 无头浏览器抓取失败: {url}", str(l2_err))
 
         # ===== Level 3: Playwright 全页截图 =====
-        try:
-            screenshot_b64 = _take_page_screenshot(url)
-            if screenshot_b64:
-                return success_response({
-                    'type': 'screenshot',
-                    'image': f'data:image/png;base64,{screenshot_b64}',
-                    'url': url
-                })
-        except Exception as l3_err:
-            log_error(f"Level 3 截图失败: {url}", str(l3_err))
+        # 代理模式跳过 Playwright 截图（同样不兼容代理隧道）
+        if not proxy_url:
+            try:
+                screenshot_b64 = _take_page_screenshot(url)
+                if screenshot_b64:
+                    return success_response({
+                        'type': 'screenshot',
+                        'image': f'data:image/png;base64,{screenshot_b64}',
+                        'url': url
+                    })
+            except Exception as l3_err:
+                log_error(f"Level 3 截图失败: {url}", str(l3_err))
 
         # ===== Level 4: 数据库缓存摘要 =====
         cached = _get_cached_article_info(url)

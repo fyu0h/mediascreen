@@ -7371,6 +7371,36 @@ body.resizing .chart-container-sm {
     color: var(--text-primary);
 }
 
+.news-preview-toolbar .preview-refresh-btn {
+    color: #f0ad4e;
+}
+
+.news-preview-toolbar .preview-refresh-btn:hover {
+    background: rgba(240, 173, 78, 0.15);
+    border-color: #f0ad4e;
+}
+
+.preview-retry-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 8px 24px;
+    border: 1px solid #f0ad4e;
+    border-radius: 4px;
+    background: rgba(240, 173, 78, 0.1);
+    color: #f0ad4e;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.preview-retry-inline:hover {
+    background: rgba(240, 173, 78, 0.25);
+    border-color: #f5c36e;
+    color: #f5c36e;
+}
+
 .news-preview-body {
     flex: 1;
     overflow-y: auto;

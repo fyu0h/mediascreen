@@ -41,16 +41,30 @@
     "timeout": 30,
     "max_articles": 500,
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "auto_crawl_enabled": true,
-    "auto_crawl_interval": 15
+    "auto_crawl_enabled": false,
+    "auto_crawl_interval": 15,
+    "proxy": {
+      "enabled": true,
+      "host": "proxy.geonode.io",
+      "port": 9000,
+      "username": "geonode_pzDMwtR0xl-type-residential",
+      "password": "5c614bb3-07fc-4380-b34b-94af665dfa1c",
+      "protocol": "http",
+      "password_masked": "",
+      "password_set": false,
+      "username_masked": "",
+      "username_set": false
+    }
   },
   "duty": {
     "leaders": [],
-    "officers": [],
+    "officers": [
+      "陈祺阳"
+    ],
     "person_name": ""
   },
   "summary": {
-    "custom_prompt": ""
+    "custom_prompt": "你是一名资深的舆情分析师，专职服务于中国移民局深圳边检总站皇岗边检站情报研判中心。你具备极高的政治敏锐度，擅长从复杂的国际新闻中捕捉涉边、涉外、涉移民管理的风险动向。你提出的意见建议、策略分析、工作措施建议只能从皇岗边检站职权范围和能力影响范围内考虑。\n\n现在是 {date}。\n\n我将为你提供今日获取的 {count} 条新闻，每条新闻包含标题和原始链接。请根据这些信息完成深度舆情分析，并提取结构化数据。\n\n【今日新闻列表】\n{news_list}\n\n请严格按照以下 PART 1 (文本报告) 和 PART 2 (数据输出) 两部分进行输出：\n\n---\n\n## PART 1: 舆情分析报告（供决策参考）\n\n### 一、今日舆情态势总结\n简要概述今日全球舆情对中国出入境管理和边境安全的影响态势：\n\n* **国际冲突与安全形势**: [分析主要冲突区域对人口非法流动、难民外溢的潜在影响]\n* **重大外交与政策变动**: [大国签证政策、双边互免协定、或针对华人的出入境政策调整]\n* **全球经济与人员流动**: [经济波动引起的劳动力移民倾向、高新人才流动趋势等]\n* **移民管理专业领域**: [各国边境管控新技术、反偷渡行动、遣返政策等最新动态]\n* **社会热点与涉外舆论**: [涉及国门形象、外籍人员在华管理、种族/身份政治等议题]\n\n### 二、关键热点 TOP5\n从移民管理警察工作视角出发，筛选最具价值的5条新闻并排序。\n\n1. [新闻标题] —— 【研判理由】: [用一句话说明该新闻对中国移民管理工作的直接或间接影响]\n2. ...（以此类推至第5条）\n\n### 三、专业风险研判与预警建议\n基于今日舆情，从专业角度分析以下风险点：\n\n* **非法出入境风险**：是否出现特定地区人员偷渡、骗办签证、逾期滞留的新趋势？\n* **边境维稳风险**：周边国家动荡是否可能导致边境压力增大或跨境犯罪上升？\n* **涉外管理舆论风险**：是否有涉及出入境执法、外籍人员服务管理的负面舆情苗头？\n* **口岸公共安全风险**：是否存在流行病输入、违禁品走私等突发安全威胁？\n\n**【应对建议】** (请从情报研判角度提出2-3条具体、皇岗边检站职权范围内可操作的管理对策)\n\n---\n\n## PART 2: 结构化数据（供系统解析，严禁省略）\n\n请输出标准的 JSON 代码块。注意：category_news 必须包含你在分析过程中分类的所有新闻标题，严禁漏掉任何一条已处理的新闻。\n\n```json\n{{\n  \"news_data\": {{\n    \"category_news\": {{\n      \"international_conflict\": [\n        {{\"title\": \"新闻标题1\"}},\n        {{\"title\": \"新闻标题2\"}}\n      ],\n      \"international_relations\": [\n        {{\"title\": \"新闻标题3\"}}\n      ],\n      \"economy_tech\": [],\n      \"immigration_border\": [\n        {{\"title\": \"新闻标题4\"}}\n      ],\n      \"society_culture\": []\n    }},\n    \"top_5_news\": [\n      {{\"rank\": 1, \"title\": \"新闻标题1\"}},\n      {{\"rank\": 2, \"title\": \"新闻标题2\"}},\n      {{\"rank\": 3, \"title\": \"新闻标题3\"}},\n      {{\"rank\": 4, \"title\": \"新闻标题4\"}},\n      {{\"rank\": 5, \"title\": \"新闻标题5\"}}\n    ]\n  }}\n}}\n```\n\n**输出约束：**\n1. **全量归档**：category_news 必须包含所有提供的新闻中被你判定为有参考价值的标题\n2. **严禁省略**：始终输出完整的 JSON 结构，不允许使用 `...` 或 `(此处略)`\n3. **字段精简**：JSON 中绝对不可以出现 url 字段，仅保留 title\n4. **格式一致**：title 必须与输入列表原始文字完全匹配\n5. **代码块格式**：必须使用 ```json 和 ``` 包裹 JSON 数据"
   },
   "telegram": {
     "webhook_url": "",
@@ -92,14 +106,14 @@
       }
     }
   },
-  "updated_at": "2026-02-08 17:35:18",
+  "updated_at": "2026-03-01 06:12:02",
   "layout": {
     "panels": {
       "panel-left": {
-        "width": "21.74%"
+        "width": "21.40%"
       },
       "panel-right": {
-        "width": "24.71%"
+        "width": "24.32%"
       }
     },
     "cards": {
@@ -113,6 +127,14 @@
       },
       "telegram": {
         "flex": "0.43 1 0%",
+        "height": null
+      },
+      "keyword-chart": {
+        "flex": "0.4571 1 0%",
+        "height": null
+      },
+      "risk-alerts": {
+        "flex": "0.5429 1 0%",
         "height": null
       }
     }
