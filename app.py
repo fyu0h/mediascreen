@@ -79,8 +79,10 @@ def create_app() -> Flask:
     @app.after_request
     def after_request_logging(response):
         """请求完成后记录日志"""
-        # 跳过静态资源和健康检查
+        # 跳过静态资源、健康检查和 SSE 流
         if request.path.startswith('/static') or request.path == '/favicon.ico':
+            return response
+        if response.content_type and 'text/event-stream' in response.content_type:
             return response
 
         # 计算耗时

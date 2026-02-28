@@ -81,7 +81,7 @@ class ConsoleLogManager:
         self._buffer: deque = deque(maxlen=2000)
         self._line_id: int = 0
         self._buffer_lock = threading.Lock()
-        self._new_line_event = threading.Event()
+        self._condition = threading.Condition()
         self._installed = False
         self._original_stdout = None
         self._original_stderr = None
@@ -124,8 +124,9 @@ class ConsoleLogManager:
             }
             self._buffer.append(entry)
 
-        self._new_line_event.set()
-        self._new_line_event.clear()
+        # 使用 Condition 通知所有等待的 SSE 连接
+        with self._condition:
+            self._condition.notify_all()
 
     def get_lines_after(self, last_id: int = 0) -> List[Dict[str, Any]]:
         """获取指定 ID 之后的所有行"""
@@ -150,7 +151,8 @@ class ConsoleLogManager:
 
     def wait_for_new_line(self, timeout: float = 15.0) -> bool:
         """等待新行到达，返回是否有新行"""
-        return self._new_line_event.wait(timeout=timeout)
+        with self._condition:
+            return self._condition.wait(timeout=timeout)
 
 
 # 全局单例
