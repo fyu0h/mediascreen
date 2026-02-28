@@ -1773,6 +1773,14 @@ function renderPlugins() {
                         <option value="1440" ${intervalMinutes === 1440 ? 'selected' : ''}>24小时</option>
                     </select>
                 </div>
+                <div class="site-proxy ${site.enabled ? '' : 'hidden'}">
+                    <label class="proxy-toggle-label" title="使用代理抓取">
+                        <input type="checkbox" ${site.use_proxy ? 'checked' : ''}
+                               onchange="toggleSiteProxy('${plugin.id}', '${site.id}', this.checked)"
+                               ${site.enabled ? '' : 'disabled'}>
+                        <span class="proxy-toggle-text">代理</span>
+                    </label>
+                </div>
                 <div class="site-crawl-btn ${site.enabled ? '' : 'hidden'}">
                     <button class="btn-icon crawl-site-btn" id="crawl-btn-${site.id}"
                             onclick="crawlSingleSite('${plugin.id}', '${site.id}', '${escapeHtml(site.name)}')" title="立即更新此站点">
@@ -1869,6 +1877,26 @@ async function toggleSite(pluginId, siteId, enabled) {
     } catch (error) {
         showToast('网络错误', 'error');
         loadPlugins();
+    }
+}
+
+async function toggleSiteProxy(pluginId, siteId, useProxy) {
+    try {
+        const response = await fetch(`/api/plugins/${pluginId}/sites/${siteId}/proxy`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ use_proxy: useProxy })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(`站点代理已${useProxy ? '启用' : '禁用'}`, 'success');
+        } else {
+            showToast(data.error || '操作失败', 'error');
+            await loadPlugins();
+        }
+    } catch (e) {
+        showToast('网络错误', 'error');
+        await loadPlugins();
     }
 }
 

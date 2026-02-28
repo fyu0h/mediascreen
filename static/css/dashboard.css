@@ -4699,6 +4699,49 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     cursor: not-allowed;
 }
 
+/* 站点手动刷新按钮 */
+.site-crawl-btn {
+    flex-shrink: 0;
+}
+
+.site-crawl-btn.hidden {
+    display: none;
+}
+
+.crawl-site-btn {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 4px 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.crawl-site-btn:hover {
+    background: rgba(0, 240, 255, 0.1);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.crawl-site-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.crawl-site-btn .btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(0, 240, 255, 0.3);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
 .site-toggle {
     flex-shrink: 0;
 }
@@ -8447,5 +8490,35 @@ body.resizing .chart-container-sm {
         -webkit-user-select: none;
         user-select: none;
     }
+}
+
+/* 站点代理开关 */
+.site-proxy {
+    display: flex;
+    align-items: center;
+    margin-right: 8px;
+}
+
+.proxy-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary, #8b95a5);
+}
+
+.proxy-toggle-label input[type="checkbox"] {
+    accent-color: #f59e0b;
+    width: 14px;
+    height: 14px;
+}
+
+.proxy-toggle-label input[type="checkbox"]:checked + .proxy-toggle-text {
+    color: #f59e0b;
+}
+
+.proxy-toggle-text {
+    white-space: nowrap;
 }
 
