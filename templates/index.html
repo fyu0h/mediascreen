@@ -565,6 +565,70 @@
                     </div>
                 </div>
 
+                <!-- 代理设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <span class="section-title">代理设置</span>
+                        <span class="section-status" id="proxyStatus"></span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">全局代理开关</label>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="proxyEnabled">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="form-hint" style="margin:0;">开启后，勾选了「使用代理」的站点将通过代理抓取</span>
+                        </div>
+                    </div>
+                    <div id="proxyFields">
+                        <div style="display:flex;gap:12px;">
+                            <div class="form-group" style="flex:1">
+                                <label class="form-label">协议</label>
+                                <select id="proxyProtocol" class="form-select">
+                                    <option value="http">HTTP</option>
+                                    <option value="https">HTTPS</option>
+                                    <option value="socks5">SOCKS5</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex:3">
+                                <label class="form-label">主机地址</label>
+                                <input type="text" id="proxyHost" class="form-input" placeholder="us.proxy.geonode.io">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label class="form-label">端口</label>
+                                <input type="number" id="proxyPort" class="form-input" placeholder="9000" value="9000">
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:12px;">
+                            <div class="form-group" style="flex:1">
+                                <label class="form-label">用户名</label>
+                                <input type="text" id="proxyUsername" class="form-input" placeholder="用户名（可选）">
+                                <div class="form-hint" id="proxyUsernameHint"></div>
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label class="form-label">密码</label>
+                                <div class="input-with-btn">
+                                    <input type="password" id="proxyPassword" class="form-input" placeholder="密码（可选）">
+                                    <button class="btn-icon" onclick="togglePasswordVisibility('proxyPassword')" title="显示/隐藏">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="form-hint" id="proxyPasswordHint"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-outline btn-sm" onclick="testProxyConnection()" id="btnTestProxy">
+                                <span class="btn-text">测试代理</span>
+                                <span class="btn-loading" style="display:none;">测试中...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- AI总结提示词设置 -->
                 <div class="settings-section">
                     <div class="settings-section-header">

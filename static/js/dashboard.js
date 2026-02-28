@@ -244,30 +244,30 @@ function openNewsPreview(url, articleEl) {
     fetch(`/api/news/preview?url=${encodeURIComponent(url)}`, {
         signal: currentPreviewController.signal
     })
-    .then(res => res.json())
-    .then(data => {
-        const bodyEl = modal.querySelector('.news-preview-body');
-        if (!bodyEl) return;
+        .then(res => res.json())
+        .then(data => {
+            const bodyEl = modal.querySelector('.news-preview-body');
+            if (!bodyEl) return;
 
-        if (data.success) {
-            const d = data.data;
-            const previewType = d.type || 'content';
+            if (data.success) {
+                const d = data.data;
+                const previewType = d.type || 'content';
 
-            // 更新工具栏模式标识
-            const toolbar = modal.querySelector('.news-preview-toolbar');
-            if (toolbar && previewType !== 'content') {
-                const openBtn = toolbar.querySelector('.preview-open-btn');
-                if (openBtn) {
-                    const badgeClass = previewType === 'screenshot' ? 'mode-screenshot' : 'mode-cached';
-                    const badgeText = previewType === 'screenshot' ? '&#128247; 截图模式' : '&#128203; 缓存模式';
-                    openBtn.insertAdjacentHTML('afterend',
-                        `<span class="preview-mode-badge ${badgeClass}">${badgeText}</span>`);
+                // 更新工具栏模式标识
+                const toolbar = modal.querySelector('.news-preview-toolbar');
+                if (toolbar && previewType !== 'content') {
+                    const openBtn = toolbar.querySelector('.preview-open-btn');
+                    if (openBtn) {
+                        const badgeClass = previewType === 'screenshot' ? 'mode-screenshot' : 'mode-cached';
+                        const badgeText = previewType === 'screenshot' ? '&#128247; 截图模式' : '&#128203; 缓存模式';
+                        openBtn.insertAdjacentHTML('afterend',
+                            `<span class="preview-mode-badge ${badgeClass}">${badgeText}</span>`);
+                    }
                 }
-            }
 
-            if (previewType === 'screenshot') {
-                // ===== 截图模式 =====
-                bodyEl.innerHTML = `
+                if (previewType === 'screenshot') {
+                    // ===== 截图模式 =====
+                    bodyEl.innerHTML = `
                     <div class="preview-screenshot-container">
                         <div class="preview-screenshot-hint">&#9888; 该页面无法提取正文，已自动截图展示</div>
                         <div class="preview-screenshot-scroll">
@@ -275,9 +275,9 @@ function openNewsPreview(url, articleEl) {
                         </div>
                     </div>
                 `;
-            } else if (previewType === 'cached') {
-                // ===== 缓存模式 =====
-                bodyEl.innerHTML = `
+                } else if (previewType === 'cached') {
+                    // ===== 缓存模式 =====
+                    bodyEl.innerHTML = `
                     <div class="preview-cached-container">
                         <div class="preview-cached-icon">&#128203;</div>
                         <div class="preview-cached-title">${escapeHtml(d.title || '未知标题')}</div>
@@ -290,74 +290,74 @@ function openNewsPreview(url, articleEl) {
                         </div>
                     </div>
                 `;
-            } else {
-                // ===== 正文模式（默认） =====
-                // 辅助函数：将 content blocks 渲染为 HTML
-                const renderContentBlocks = (title, contentBlocks) => {
-                    let html = '<div class="news-preview-article">';
-                    if (title) {
-                        html += `<h1 class="preview-title">${escapeHtml(title)}</h1>`;
-                    }
-                    if (contentBlocks && contentBlocks.length > 0) {
-                        contentBlocks.forEach(block => {
-                            switch (block.type) {
-                                case 'heading':
-                                    html += `<h${block.level} class="preview-heading">${escapeHtml(block.text)}</h${block.level}>`;
-                                    break;
-                                case 'paragraph':
-                                    html += `<p class="preview-paragraph">${escapeHtml(block.text)}</p>`;
-                                    break;
-                                case 'image':
-                                    html += `<div class="preview-image-wrap"><img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt)}" loading="lazy" onerror="this.style.display='none'"></div>`;
-                                    break;
-                                case 'blockquote':
-                                    html += `<blockquote class="preview-blockquote">${escapeHtml(block.text)}</blockquote>`;
-                                    break;
-                                case 'list':
-                                    const tag = block.ordered ? 'ol' : 'ul';
-                                    html += `<${tag} class="preview-list">`;
-                                    block.items.forEach(item => {
-                                        html += `<li>${escapeHtml(item)}</li>`;
-                                    });
-                                    html += `</${tag}>`;
-                                    break;
-                                case 'caption':
-                                    html += `<p class="preview-caption">${escapeHtml(block.text)}</p>`;
-                                    break;
-                            }
-                        });
-                    } else {
-                        html += '<p class="preview-paragraph" style="text-align:center;opacity:0.6;">未能提取到正文内容，请点击上方「访问原始链接」查看原文</p>';
-                    }
-                    html += '</div>';
-                    return html;
-                };
-
-                // 前端中文检测：合并标题和正文前200字符检测
-                const detectChinese = (text) => {
-                    if (!text) return false;
-                    const chinese = text.match(/[\u4e00-\u9fff]/g) || [];
-                    const nonSpace = text.replace(/\s/g, '');
-                    return nonSpace.length > 0 && chinese.length / nonSpace.length > 0.3;
-                };
-
-                let sampleText = (d.title || '');
-                if (d.content && d.content.length > 0) {
-                    for (const block of d.content.slice(0, 5)) {
-                        if (block.text) sampleText += block.text;
-                        if (sampleText.length > 200) break;
-                    }
-                }
-                const isChineseContent = detectChinese(sampleText);
-
-                if (isChineseContent) {
-                    // 中文内容 → 单栏显示，不翻译
-                    bodyEl.innerHTML = renderContentBlocks(d.title, d.content);
                 } else {
-                    // 非中文内容 → 双栏布局（左翻译 / 右原文）
-                    const originalHtml = renderContentBlocks(d.title, d.content);
+                    // ===== 正文模式（默认） =====
+                    // 辅助函数：将 content blocks 渲染为 HTML
+                    const renderContentBlocks = (title, contentBlocks) => {
+                        let html = '<div class="news-preview-article">';
+                        if (title) {
+                            html += `<h1 class="preview-title">${escapeHtml(title)}</h1>`;
+                        }
+                        if (contentBlocks && contentBlocks.length > 0) {
+                            contentBlocks.forEach(block => {
+                                switch (block.type) {
+                                    case 'heading':
+                                        html += `<h${block.level} class="preview-heading">${escapeHtml(block.text)}</h${block.level}>`;
+                                        break;
+                                    case 'paragraph':
+                                        html += `<p class="preview-paragraph">${escapeHtml(block.text)}</p>`;
+                                        break;
+                                    case 'image':
+                                        html += `<div class="preview-image-wrap"><img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt)}" loading="lazy" onerror="this.style.display='none'"></div>`;
+                                        break;
+                                    case 'blockquote':
+                                        html += `<blockquote class="preview-blockquote">${escapeHtml(block.text)}</blockquote>`;
+                                        break;
+                                    case 'list':
+                                        const tag = block.ordered ? 'ol' : 'ul';
+                                        html += `<${tag} class="preview-list">`;
+                                        block.items.forEach(item => {
+                                            html += `<li>${escapeHtml(item)}</li>`;
+                                        });
+                                        html += `</${tag}>`;
+                                        break;
+                                    case 'caption':
+                                        html += `<p class="preview-caption">${escapeHtml(block.text)}</p>`;
+                                        break;
+                                }
+                            });
+                        } else {
+                            html += '<p class="preview-paragraph" style="text-align:center;opacity:0.6;">未能提取到正文内容，请点击上方「访问原始链接」查看原文</p>';
+                        }
+                        html += '</div>';
+                        return html;
+                    };
 
-                    bodyEl.innerHTML = `
+                    // 前端中文检测：合并标题和正文前200字符检测
+                    const detectChinese = (text) => {
+                        if (!text) return false;
+                        const chinese = text.match(/[\u4e00-\u9fff]/g) || [];
+                        const nonSpace = text.replace(/\s/g, '');
+                        return nonSpace.length > 0 && chinese.length / nonSpace.length > 0.3;
+                    };
+
+                    let sampleText = (d.title || '');
+                    if (d.content && d.content.length > 0) {
+                        for (const block of d.content.slice(0, 5)) {
+                            if (block.text) sampleText += block.text;
+                            if (sampleText.length > 200) break;
+                        }
+                    }
+                    const isChineseContent = detectChinese(sampleText);
+
+                    if (isChineseContent) {
+                        // 中文内容 → 单栏显示，不翻译
+                        bodyEl.innerHTML = renderContentBlocks(d.title, d.content);
+                    } else {
+                        // 非中文内容 → 双栏布局（左翻译 / 右原文）
+                        const originalHtml = renderContentBlocks(d.title, d.content);
+
+                        bodyEl.innerHTML = `
                         <div class="preview-bilingual-container">
                             <div class="preview-translation-pane">
                                 <div class="preview-pane-header">&#127468;&#127475; 中文翻译</div>
@@ -376,127 +376,127 @@ function openNewsPreview(url, articleEl) {
                         </div>
                     `;
 
-                    // 双栏滚动同步
-                    const transContent = modal.querySelector('.preview-translation-content');
-                    const origContent = modal.querySelector('.preview-original-content');
-                    if (transContent && origContent) {
-                        let isSyncing = false;
-                        const syncScroll = (source, target) => {
-                            if (isSyncing) return;
-                            isSyncing = true;
-                            // 按滚动比例同步，适配两栏内容高度不同的情况
-                            const sourceMax = source.scrollHeight - source.clientHeight;
-                            const targetMax = target.scrollHeight - target.clientHeight;
-                            if (sourceMax > 0 && targetMax > 0) {
-                                target.scrollTop = (source.scrollTop / sourceMax) * targetMax;
-                            }
-                            isSyncing = false;
-                        };
-                        transContent.addEventListener('scroll', () => syncScroll(transContent, origContent));
-                        origContent.addEventListener('scroll', () => syncScroll(origContent, transContent));
-                    }
-
-                    // 在工具栏添加翻译切换按钮
-                    const toolbar = modal.querySelector('.news-preview-toolbar');
-                    if (toolbar) {
-                        const closeBtn = toolbar.querySelector('.preview-close-btn');
-                        const toggleBtn = document.createElement('button');
-                        toggleBtn.className = 'preview-btn preview-translate-toggle active';
-                        toggleBtn.innerHTML = '&#128257; 双栏翻译';
-                        toggleBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            const container = modal.querySelector('.preview-bilingual-container');
-                            const transPane = modal.querySelector('.preview-translation-pane');
-                            const divider = modal.querySelector('.preview-pane-divider');
-                            if (!container) return;
-
-                            const isActive = toggleBtn.classList.toggle('active');
-                            if (isActive) {
-                                transPane.style.display = '';
-                                divider.style.display = '';
-                                toggleBtn.innerHTML = '&#128257; 双栏翻译';
-                            } else {
-                                transPane.style.display = 'none';
-                                divider.style.display = 'none';
-                                toggleBtn.innerHTML = '&#128257; 显示翻译';
-                            }
-                        };
-                        if (closeBtn) {
-                            toolbar.insertBefore(toggleBtn, closeBtn);
-                        } else {
-                            toolbar.appendChild(toggleBtn);
+                        // 双栏滚动同步
+                        const transContent = modal.querySelector('.preview-translation-content');
+                        const origContent = modal.querySelector('.preview-original-content');
+                        if (transContent && origContent) {
+                            let isSyncing = false;
+                            const syncScroll = (source, target) => {
+                                if (isSyncing) return;
+                                isSyncing = true;
+                                // 按滚动比例同步，适配两栏内容高度不同的情况
+                                const sourceMax = source.scrollHeight - source.clientHeight;
+                                const targetMax = target.scrollHeight - target.clientHeight;
+                                if (sourceMax > 0 && targetMax > 0) {
+                                    target.scrollTop = (source.scrollTop / sourceMax) * targetMax;
+                                }
+                                isSyncing = false;
+                            };
+                            transContent.addEventListener('scroll', () => syncScroll(transContent, origContent));
+                            origContent.addEventListener('scroll', () => syncScroll(origContent, transContent));
                         }
-                    }
 
-                    // 异步请求翻译
-                    fetch('/api/news/translate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title: d.title || '', content: d.content || [] }),
-                        signal: currentPreviewController.signal
-                    })
-                    .then(res => res.json())
-                    .then(transData => {
-                        const transContentEl = modal.querySelector('.preview-translation-content');
-                        if (!transContentEl) return;
+                        // 在工具栏添加翻译切换按钮
+                        const toolbar = modal.querySelector('.news-preview-toolbar');
+                        if (toolbar) {
+                            const closeBtn = toolbar.querySelector('.preview-close-btn');
+                            const toggleBtn = document.createElement('button');
+                            toggleBtn.className = 'preview-btn preview-translate-toggle active';
+                            toggleBtn.innerHTML = '&#128257; 双栏翻译';
+                            toggleBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                const container = modal.querySelector('.preview-bilingual-container');
+                                const transPane = modal.querySelector('.preview-translation-pane');
+                                const divider = modal.querySelector('.preview-pane-divider');
+                                if (!container) return;
 
-                        if (transData.success) {
-                            const td = transData.data;
-                            if (td.all_chinese) {
-                                // 全是中文，切换回单栏
-                                bodyEl.innerHTML = renderContentBlocks(d.title, d.content);
-                                const toggleBtn = modal.querySelector('.preview-translate-toggle');
-                                if (toggleBtn) toggleBtn.remove();
+                                const isActive = toggleBtn.classList.toggle('active');
+                                if (isActive) {
+                                    transPane.style.display = '';
+                                    divider.style.display = '';
+                                    toggleBtn.innerHTML = '&#128257; 双栏翻译';
+                                } else {
+                                    transPane.style.display = 'none';
+                                    divider.style.display = 'none';
+                                    toggleBtn.innerHTML = '&#128257; 显示翻译';
+                                }
+                            };
+                            if (closeBtn) {
+                                toolbar.insertBefore(toggleBtn, closeBtn);
                             } else {
-                                transContentEl.innerHTML = renderContentBlocks(td.title, td.content);
+                                toolbar.appendChild(toggleBtn);
                             }
-                        } else {
-                            transContentEl.innerHTML = `
+                        }
+
+                        // 异步请求翻译
+                        fetch('/api/news/translate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ title: d.title || '', content: d.content || [] }),
+                            signal: currentPreviewController.signal
+                        })
+                            .then(res => res.json())
+                            .then(transData => {
+                                const transContentEl = modal.querySelector('.preview-translation-content');
+                                if (!transContentEl) return;
+
+                                if (transData.success) {
+                                    const td = transData.data;
+                                    if (td.all_chinese) {
+                                        // 全是中文，切换回单栏
+                                        bodyEl.innerHTML = renderContentBlocks(d.title, d.content);
+                                        const toggleBtn = modal.querySelector('.preview-translate-toggle');
+                                        if (toggleBtn) toggleBtn.remove();
+                                    } else {
+                                        transContentEl.innerHTML = renderContentBlocks(td.title, td.content);
+                                    }
+                                } else {
+                                    transContentEl.innerHTML = `
                                 <div class="preview-translation-error">
                                     <div class="error-icon">&#9888;</div>
                                     <div>翻译失败</div>
                                     <div class="error-detail">${escapeHtml(transData.error || '请检查翻译 API 配置')}</div>
                                 </div>
                             `;
-                        }
-                    })
-                    .catch(err => {
-                        if (err.name === 'AbortError') return;
-                        const transContentEl = modal.querySelector('.preview-translation-content');
-                        if (transContentEl) {
-                            transContentEl.innerHTML = `
+                                }
+                            })
+                            .catch(err => {
+                                if (err.name === 'AbortError') return;
+                                const transContentEl = modal.querySelector('.preview-translation-content');
+                                if (transContentEl) {
+                                    transContentEl.innerHTML = `
                                 <div class="preview-translation-error">
                                     <div class="error-icon">&#9888;</div>
                                     <div>翻译请求失败</div>
                                 </div>
                             `;
-                        }
-                    });
+                                }
+                            });
+                    }
                 }
+            } else {
+                bodyEl.innerHTML = `
+                <div class="news-preview-error">
+                    <div class="error-icon">&#9888;</div>
+                    <div>无法加载预览内容</div>
+                    <div>请点击上方「访问原始链接」查看原文</div>
+                </div>
+            `;
             }
-        } else {
-            bodyEl.innerHTML = `
+        })
+        .catch(err => {
+            if (err.name === 'AbortError') return;
+            const bodyEl = modal.querySelector('.news-preview-body');
+            if (bodyEl) {
+                bodyEl.innerHTML = `
                 <div class="news-preview-error">
                     <div class="error-icon">&#9888;</div>
                     <div>无法加载预览内容</div>
                     <div>请点击上方「访问原始链接」查看原文</div>
                 </div>
             `;
-        }
-    })
-    .catch(err => {
-        if (err.name === 'AbortError') return;
-        const bodyEl = modal.querySelector('.news-preview-body');
-        if (bodyEl) {
-            bodyEl.innerHTML = `
-                <div class="news-preview-error">
-                    <div class="error-icon">&#9888;</div>
-                    <div>无法加载预览内容</div>
-                    <div>请点击上方「访问原始链接」查看原文</div>
-                </div>
-            `;
-        }
-    });
+            }
+        });
 }
 
 /**
@@ -962,11 +962,11 @@ async function loadWorldMap() {
         });
 
         // 鼠标悬停效果
-        marker.on('mouseover', function() {
+        marker.on('mouseover', function () {
             const el = this.getElement().querySelector('.map-marker, .map-marker-risk');
             if (el) el.classList.add('marker-hover');
         });
-        marker.on('mouseout', function() {
+        marker.on('mouseout', function () {
             const el = this.getElement().querySelector('.map-marker, .map-marker-risk');
             if (el) el.classList.remove('marker-hover');
         });
@@ -1272,8 +1272,8 @@ function renderFilteredAlerts() {
                 </span>
                 <div class="alert-keywords">
                     ${alert.matched_keywords.slice(0, 2).map(kw =>
-                        `<span class="keyword-tag ${alert.risk_level} ${currentFilterKeyword && kw.toLowerCase().includes(currentFilterKeyword.toLowerCase()) ? 'active' : ''}">${escapeHtml(kw)}</span>`
-                    ).join('')}
+            `<span class="keyword-tag ${alert.risk_level} ${currentFilterKeyword && kw.toLowerCase().includes(currentFilterKeyword.toLowerCase()) ? 'active' : ''}">${escapeHtml(kw)}</span>`
+        ).join('')}
                 </div>
             </div>
         </div>
@@ -1773,6 +1773,15 @@ function renderPlugins() {
                         <option value="1440" ${intervalMinutes === 1440 ? 'selected' : ''}>24小时</option>
                     </select>
                 </div>
+                <div class="site-crawl-btn ${site.enabled ? '' : 'hidden'}">
+                    <button class="btn-icon crawl-site-btn" id="crawl-btn-${site.id}"
+                            onclick="crawlSingleSite('${plugin.id}', '${site.id}', '${escapeHtml(site.name)}')" title="立即更新此站点">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
             `;
         }).join('');
@@ -1949,6 +1958,44 @@ async function setUpdateInterval(pluginId, siteId, minutes) {
     } catch (error) {
         showToast('网络错误', 'error');
         loadPlugins();
+    }
+}
+
+async function crawlSingleSite(pluginId, siteId, siteName) {
+    const btn = document.getElementById(`crawl-btn-${siteId}`);
+    if (!btn || btn.disabled) return;
+
+    // 禁用按钮，显示 loading
+    btn.disabled = true;
+    btn.classList.add('loading');
+    const originalSvg = btn.innerHTML;
+    btn.innerHTML = '<span class="btn-spinner"></span>';
+
+    showToast(`正在更新: ${siteName}...`, 'info');
+
+    try {
+        const response = await fetch('/api/crawl/site', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin_id: pluginId, site_id: siteId })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            const d = result.data;
+            showToast(`${d.site_name}: 获取 ${d.fetched} 篇, 新增 ${d.saved} 篇`, 'success');
+            // 刷新数据
+            loadAllData(true);
+        } else {
+            showToast(`${siteName}: ${result.error || '更新失败'}`, 'error');
+        }
+    } catch (error) {
+        showToast(`${siteName}: 网络错误`, 'error');
+    } finally {
+        // 恢复按钮
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        btn.innerHTML = originalSvg;
     }
 }
 
@@ -2504,8 +2551,8 @@ function renderFullAlerts() {
                     <span class="alert-source-tag">${escapeHtml(alert.source)}</span>
                     <span class="alert-risk-tag ${alert.risk_level}">${riskText}</span>
                     ${alert.matched_keywords.map(kw =>
-                        `<span class="keyword-tag ${alert.risk_level}">${escapeHtml(kw)}</span>`
-                    ).join('')}
+            `<span class="keyword-tag ${alert.risk_level}">${escapeHtml(kw)}</span>`
+        ).join('')}
                 </div>
             </div>
         </div>
@@ -2931,6 +2978,34 @@ async function loadSettings() {
         }
     }
 
+    // 加载代理设置
+    const proxyCfg = data.crawler?.proxy || {};
+    document.getElementById('proxyEnabled').checked = proxyCfg.enabled || false;
+    document.getElementById('proxyProtocol').value = proxyCfg.protocol || 'http';
+    document.getElementById('proxyHost').value = proxyCfg.host || '';
+    document.getElementById('proxyPort').value = proxyCfg.port || 9000;
+    document.getElementById('proxyUsername').value = '';
+    document.getElementById('proxyUsername').placeholder = proxyCfg.username_set ? '已配置（输入新值覆盖）' : '用户名（可选）';
+    document.getElementById('proxyPassword').value = '';
+    document.getElementById('proxyPassword').placeholder = proxyCfg.password_set ? '已配置（输入新值覆盖）' : '密码（可选）';
+
+    const proxyUsernameHint = document.getElementById('proxyUsernameHint');
+    proxyUsernameHint.textContent = proxyCfg.username_masked ? `当前: ${proxyCfg.username_masked}` : '';
+    const proxyPasswordHint = document.getElementById('proxyPasswordHint');
+    proxyPasswordHint.textContent = proxyCfg.password_masked ? `当前: ${proxyCfg.password_masked}` : '';
+
+    const proxyStatus = document.getElementById('proxyStatus');
+    if (proxyCfg.enabled && proxyCfg.host) {
+        proxyStatus.textContent = '已启用';
+        proxyStatus.className = 'section-status configured';
+    } else if (proxyCfg.host) {
+        proxyStatus.textContent = '已配置（未启用）';
+        proxyStatus.className = 'section-status not-configured';
+    } else {
+        proxyStatus.textContent = '未配置';
+        proxyStatus.className = 'section-status not-configured';
+    }
+
     // 加载 AI 总结提示词
     await loadSummaryPrompt();
 
@@ -3058,6 +3133,14 @@ async function saveSettings() {
             provider: document.getElementById('llmProvider').value,
             api_url: document.getElementById('llmApiUrl').value.trim(),
             model: document.getElementById('llmModel').value
+        },
+        crawler: {
+            proxy: {
+                enabled: document.getElementById('proxyEnabled').checked,
+                protocol: document.getElementById('proxyProtocol').value,
+                host: document.getElementById('proxyHost').value.trim(),
+                port: parseInt(document.getElementById('proxyPort').value) || 9000
+            }
         }
     };
 
@@ -3066,6 +3149,12 @@ async function saveSettings() {
     if (apiKey) {
         settings.llm.api_key = apiKey;
     }
+
+    // 代理用户名和密码只在输入了新值时才提交
+    const proxyUsername = document.getElementById('proxyUsername').value.trim();
+    if (proxyUsername) settings.crawler.proxy.username = proxyUsername;
+    const proxyPassword = document.getElementById('proxyPassword').value.trim();
+    if (proxyPassword) settings.crawler.proxy.password = proxyPassword;
 
     try {
         // 保存 LLM 设置
@@ -3179,6 +3268,29 @@ async function testLLMConnection() {
         btn.disabled = false;
         btnText.style.display = 'inline';
         btnLoading.style.display = 'none';
+    }
+}
+
+async function testProxyConnection() {
+    const btn = document.getElementById('btnTestProxy');
+    btn.querySelector('.btn-text').style.display = 'none';
+    btn.querySelector('.btn-loading').style.display = 'inline';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/settings/test-proxy', { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+            showToast(`代理连接成功，出口IP: ${data.data.origin_ip}`, 'success');
+        } else {
+            showToast(data.error || '代理连接失败', 'error');
+        }
+    } catch (e) {
+        showToast('网络错误', 'error');
+    } finally {
+        btn.querySelector('.btn-text').style.display = 'inline';
+        btn.querySelector('.btn-loading').style.display = 'none';
+        btn.disabled = false;
     }
 }
 
@@ -3824,7 +3936,7 @@ function connectConsoleSSE() {
     const url = `/api/console/stream?last_id=${consoleLastId}`;
     consoleEventSource = new EventSource(url);
 
-    consoleEventSource.addEventListener('log', function(e) {
+    consoleEventSource.addEventListener('log', function (e) {
         try {
             const line = JSON.parse(e.data);
             consoleLastId = line.id;
@@ -3839,15 +3951,15 @@ function connectConsoleSSE() {
         }
     });
 
-    consoleEventSource.addEventListener('heartbeat', function(e) {
+    consoleEventSource.addEventListener('heartbeat', function (e) {
         // 心跳，无需处理
     });
 
-    consoleEventSource.onopen = function() {
+    consoleEventSource.onopen = function () {
         updateConsoleStatus('connected', '已连接');
     };
 
-    consoleEventSource.onerror = function() {
+    consoleEventSource.onerror = function () {
         updateConsoleStatus('', '重连中...');
         setTimeout(() => {
             if (consoleEventSource && consoleEventSource.readyState === EventSource.CLOSED) {
@@ -4480,7 +4592,7 @@ function previewAchievementImage(input) {
         selectedImageFile = input.files[0];
 
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             document.getElementById('uploadPlaceholder').style.display = 'none';
             const preview = document.getElementById('imagePreview');
             preview.src = e.target.result;
@@ -5318,13 +5430,13 @@ async function openDutyModal() {
     document.getElementById('dutyModal').classList.add('active');
 
     // 绑定回车事件
-    document.getElementById('leaderNameInput').onkeypress = function(e) {
+    document.getElementById('leaderNameInput').onkeypress = function (e) {
         if (e.key === 'Enter') {
             e.preventDefault();
             addDutyPerson('leader');
         }
     };
-    document.getElementById('officerNameInput').onkeypress = function(e) {
+    document.getElementById('officerNameInput').onkeypress = function (e) {
         if (e.key === 'Enter') {
             e.preventDefault();
             addDutyPerson('officer');
@@ -5668,7 +5780,7 @@ function loadMoreSearchResults() {
 }
 
 // 全局键盘事件监听
-document.addEventListener('keydown', function(e) {
+document.addEventListener('keydown', function (e) {
     // Ctrl+F 或 Cmd+F 打开全局搜索
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();  // 阻止浏览器默认搜索
@@ -5685,13 +5797,13 @@ document.addEventListener('keydown', function(e) {
 });
 
 // 搜索输入框事件绑定
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('globalSearchInput');
     if (searchInput) {
         searchInput.addEventListener('input', handleGlobalSearchInput);
 
         // 回车键打开第一个结果
-        searchInput.addEventListener('keydown', function(e) {
+        searchInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
                 const firstResult = document.querySelector('.search-result-item');
                 if (firstResult) {
@@ -5739,7 +5851,7 @@ function loadTgOverviewStats() {
                 document.getElementById('tgGroupCount').textContent = d.total_groups || 0;
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 // ---------- 最新报警列表 ----------
@@ -5752,7 +5864,7 @@ function loadTgRecentAlerts() {
                 renderTgAlertList(res.data.items);
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 function renderTgAlertList(items) {
@@ -5792,7 +5904,7 @@ function markTgAlertRead(alertId, el) {
                 loadTgOverviewStats();
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 // ---------- 监控状态 ----------
@@ -5815,7 +5927,7 @@ function loadTgMonitorStatus() {
                 }
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 function toggleTgMonitor() {
@@ -5886,7 +5998,7 @@ function loadTgAccounts() {
                 }
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 function renderTgAccountList(accounts) {
@@ -5933,17 +6045,17 @@ function saveTgAccount() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            showToast('账号已添加', 'success');
-            hideAddAccountForm();
-            loadTgAccounts();
-        } else {
-            showToast(res.error || '添加失败', 'error');
-        }
-    })
-    .catch(() => showToast('请求失败', 'error'));
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('账号已添加', 'success');
+                hideAddAccountForm();
+                loadTgAccounts();
+            } else {
+                showToast(res.error || '添加失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
 }
 
 function connectTgAccount(accountId) {
@@ -6011,22 +6123,22 @@ function submitTgVerify() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, password: password || undefined })
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            if (res.data.status === 'need_password') {
-                document.getElementById('tgPasswordGroup').style.display = 'block';
-                showToast('需要两步验证密码', 'warning');
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                if (res.data.status === 'need_password') {
+                    document.getElementById('tgPasswordGroup').style.display = 'block';
+                    showToast('需要两步验证密码', 'warning');
+                } else {
+                    showToast('登录成功', 'success');
+                    closeTgVerifyModal();
+                    loadTgAccounts();
+                }
             } else {
-                showToast('登录成功', 'success');
-                closeTgVerifyModal();
-                loadTgAccounts();
+                showToast(res.error || '验证失败', 'error');
             }
-        } else {
-            showToast(res.error || '验证失败', 'error');
-        }
-    })
-    .catch(() => showToast('请求失败', 'error'));
+        })
+        .catch(() => showToast('请求失败', 'error'));
 }
 
 // ---------- 群组管理 ----------
@@ -6039,7 +6151,7 @@ function loadTgSubscribedGroups() {
                 renderTgSubscribedList(res.data);
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 function renderTgSubscribedList(groups) {
@@ -6087,20 +6199,20 @@ function searchTgGroups() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_id: accountId, query })
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            const results = res.data;
-            const container = document.getElementById('tgGroupSearchList');
-            const section = document.getElementById('tgSearchResults');
-            section.style.display = 'block';
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                const results = res.data;
+                const container = document.getElementById('tgGroupSearchList');
+                const section = document.getElementById('tgSearchResults');
+                section.style.display = 'block';
 
-            if (results.length === 0) {
-                container.innerHTML = '<div class="tg-empty-hint">未找到群组</div>';
-                return;
-            }
+                if (results.length === 0) {
+                    container.innerHTML = '<div class="tg-empty-hint">未找到群组</div>';
+                    return;
+                }
 
-            container.innerHTML = results.map(g => `
+                container.innerHTML = results.map(g => `
                 <div class="tg-group-item">
                     <div class="tg-group-info">
                         <div class="tg-group-title">${escapeHtml(g.group_title)}</div>
@@ -6109,11 +6221,11 @@ function searchTgGroups() {
                     <button class="btn btn-primary btn-sm" onclick="subscribeTgGroup('${document.getElementById('tgSearchAccount').value}', ${g.group_id}, '${escapeHtml(g.group_title)}', '${escapeHtml(g.group_link || '')}')">订阅</button>
                 </div>
             `).join('');
-        } else {
-            showToast(res.error || '搜索失败', 'error');
-        }
-    })
-    .catch(() => showToast('请求失败', 'error'));
+            } else {
+                showToast(res.error || '搜索失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
 }
 
 function subscribeTgGroup(accountId, groupId, title, link) {
@@ -6127,16 +6239,16 @@ function subscribeTgGroup(accountId, groupId, title, link) {
             group_link: link,
         })
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            showToast('订阅成功', 'success');
-            loadTgSubscribedGroups();
-        } else {
-            showToast(res.error || '订阅失败', 'error');
-        }
-    })
-    .catch(() => showToast('请求失败', 'error'));
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('订阅成功', 'success');
+                loadTgSubscribedGroups();
+            } else {
+                showToast(res.error || '订阅失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
 }
 
 function unsubscribeTgGroup(groupDbId) {
@@ -6165,7 +6277,7 @@ function toggleTgGroup(groupDbId, el) {
                 }
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 // ---------- 关键词管理 ----------
@@ -6182,7 +6294,7 @@ function loadTgKeywords() {
                 renderTgKeywordList();
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 function switchTgKwTab(level) {
@@ -6228,17 +6340,17 @@ function addTgKeyword() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword, level })
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            showToast('关键词已添加', 'success');
-            document.getElementById('tgNewKeyword').value = '';
-            loadTgKeywords();
-        } else {
-            showToast(res.error || '添加失败', 'error');
-        }
-    })
-    .catch(() => showToast('请求失败', 'error'));
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('关键词已添加', 'success');
+                document.getElementById('tgNewKeyword').value = '';
+                loadTgKeywords();
+            } else {
+                showToast(res.error || '添加失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
 }
 
 function deleteTgKeyword(keywordId) {
@@ -6264,7 +6376,7 @@ function loadTgWebhookSettings() {
                 document.getElementById('tgWebhookEnabled').checked = res.data.webhook_enabled || false;
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 function saveTgWebhookSettings() {
@@ -6278,15 +6390,15 @@ function saveTgWebhookSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            showToast('配置已保存', 'success');
-        } else {
-            showToast(res.error || '保存失败', 'error');
-        }
-    })
-    .catch(() => showToast('请求失败', 'error'));
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('配置已保存', 'success');
+            } else {
+                showToast(res.error || '保存失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
 }
 
 function testTgWebhook() {
@@ -6301,15 +6413,15 @@ function testTgWebhook() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ webhook_url: url })
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            showToast('推送成功', 'success');
-        } else {
-            showToast(res.error || '推送失败', 'error');
-        }
-    })
-    .catch(() => showToast('请求失败', 'error'));
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('推送成功', 'success');
+            } else {
+                showToast(res.error || '推送失败', 'error');
+            }
+        })
+        .catch(() => showToast('请求失败', 'error'));
 }
 
 // ---------- 全部报警弹窗 ----------
@@ -6354,7 +6466,7 @@ function loadTgAlertsPage(page) {
                 renderTgFullAlertList(data.items);
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 function renderTgFullAlertList(items) {
@@ -6375,7 +6487,7 @@ function renderTgFullAlertList(items) {
                 <div class="tg-full-alert-header">
                     <div class="tg-full-alert-meta">
                         <span class="tg-full-alert-level ${item.highest_level}">
-                            ${{high:'高风险', medium:'中风险', low:'关注'}[item.highest_level] || ''}
+                            ${{ high: '高风险', medium: '中风险', low: '关注' }[item.highest_level] || ''}
                         </span>
                         <span class="tg-full-alert-group">${escapeHtml(item.group_title)}</span>
                         <span class="tg-full-alert-sender">${escapeHtml(item.sender_name)}</span>
@@ -6406,7 +6518,7 @@ function markTgAlertReadFull(alertId, btn) {
                 loadTgRecentAlerts();
             }
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 // ---------- 统计分析弹窗 ----------
@@ -6427,7 +6539,7 @@ function loadTgStatsCharts() {
         .then(res => {
             if (res.success) renderTgAlertTrendChart(res.data);
         })
-        .catch(() => {});
+        .catch(() => { });
 
     // 关键词热度
     fetch('/api/telegram/stats/keyword-hotness?limit=10')
@@ -6435,7 +6547,7 @@ function loadTgStatsCharts() {
         .then(res => {
             if (res.success) renderTgKeywordHotnessChart(res.data);
         })
-        .catch(() => {});
+        .catch(() => { });
 
     // 群组活跃度
     fetch('/api/telegram/stats/group-activity?days=7')
@@ -6443,7 +6555,7 @@ function loadTgStatsCharts() {
         .then(res => {
             if (res.success) renderTgGroupActivityChart(res.data);
         })
-        .catch(() => {});
+        .catch(() => { });
 }
 
 function renderTgAlertTrendChart(data) {
@@ -7073,7 +7185,7 @@ function openMobileMoreMenu() {
  */
 const _originalHandleResize = handleResize;
 // 覆盖原有的handleResize，增加移动端延迟resize
-window.handleResize = function() {
+window.handleResize = function () {
     _originalHandleResize();
     // 移动端延迟再次resize，确保布局稳定后图表正确渲染
     if (isMobileView()) {
@@ -7088,7 +7200,7 @@ window.handleResize = function() {
 /**
  * 移动端弹窗关闭 - 支持返回键
  */
-window.addEventListener('popstate', function() {
+window.addEventListener('popstate', function () {
     if (!isMobileView()) return;
     // 查找当前打开的弹窗并关闭
     const activeModal = document.querySelector('.modal-overlay.active');
@@ -7100,7 +7212,7 @@ window.addEventListener('popstate', function() {
 /**
  * 移动端弹窗打开时禁止背景滚动
  */
-const _mobileModalObserver = new MutationObserver(function(mutations) {
+const _mobileModalObserver = new MutationObserver(function (mutations) {
     if (!isMobileView()) return;
     const anyModalActive = document.querySelector('.modal-overlay.active');
     if (anyModalActive) {
@@ -7111,8 +7223,8 @@ const _mobileModalObserver = new MutationObserver(function(mutations) {
 });
 
 // 监听所有modal-overlay的class变化
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.modal-overlay').forEach(function(modal) {
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.modal-overlay').forEach(function (modal) {
         _mobileModalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
     });
 });
