@@ -3807,6 +3807,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(255, 82, 82, 0.05);
 }
 
+.console-line.syslog {
+    color: #90a4ae;
+}
+
+.console-tag.syslog {
+    color: #78909c;
+}
+
 .console-welcome {
     color: rgba(224, 224, 224, 0.3);
     text-align: center;

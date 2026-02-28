@@ -3873,16 +3873,32 @@ function appendConsoleLine(line) {
         welcomeEl.remove();
     }
 
+    // 智能分类 stderr 输出：Werkzeug 请求日志和启动信息不算错误
+    let lineClass = line.stream;
+    let tag = 'OUT';
+    if (line.stream === 'stderr') {
+        const text = line.text;
+        // 真正的错误关键词
+        const isRealError = /\b(Error|Exception|Traceback|CRITICAL|FATAL)\b/i.test(text)
+            && !/HTTP\/\d/.test(text);  // 排除 HTTP 请求日志中的误匹配
+        if (isRealError) {
+            tag = 'ERR';
+            lineClass = 'stderr';
+        } else {
+            tag = 'SYS';
+            lineClass = 'syslog';
+        }
+    }
+
     const lineEl = document.createElement('div');
-    lineEl.className = `console-line ${line.stream}`;
+    lineEl.className = `console-line ${lineClass}`;
 
     // 只显示时分秒毫秒
     const timePart = line.timestamp.split(' ')[1] || line.timestamp;
-    const tag = line.stream === 'stderr' ? 'ERR' : 'OUT';
 
     lineEl.innerHTML =
         `<span class="console-time">${escapeHtml(timePart)}</span>` +
-        `<span class="console-tag ${line.stream}">[${tag}]</span>` +
+        `<span class="console-tag ${lineClass}">[${tag}]</span>` +
         `<span class="console-text">${escapeHtml(line.text)}</span>`;
 
     outputEl.appendChild(lineEl);
