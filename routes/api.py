@@ -3556,21 +3556,25 @@ def _take_page_screenshot(target_url: str) -> str:
     import asyncio
     import base64
     import os
+    import shutil
 
     async def _do_screenshot():
         from playwright.async_api import async_playwright
         from playwright_stealth import stealth_async
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=False,
-                channel='chrome',
-                args=[
+            # 优先使用系统 Chrome，不存在则回退到 Playwright 内置 Chromium
+            has_chrome = shutil.which('google-chrome') or shutil.which('chrome') or shutil.which('chromium')
+            launch_kwargs = {
+                'headless': True,
+                'args': [
                     '--disable-blink-features=AutomationControlled',
                     '--no-sandbox',
                     '--disable-dev-shm-usage',
-                    '--start-minimized',
-                ]
-            )
+                ],
+            }
+            if has_chrome:
+                launch_kwargs['channel'] = 'chrome'
+            browser = await p.chromium.launch(**launch_kwargs)
             context = await browser.new_context(
                 viewport={'width': 1280, 'height': 720},
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -3621,21 +3625,25 @@ def _resolve_redirect_url(target_url: str) -> str:
     try:
         import asyncio
         import os
+        import shutil
 
         async def _follow_redirect():
             from playwright.async_api import async_playwright
             from playwright_stealth import stealth_async
             async with async_playwright() as p:
-                browser = await p.chromium.launch(
-                    headless=False,
-                    channel='chrome',
-                    args=[
+                # 优先使用系统 Chrome，不存在则回退到 Playwright 内置 Chromium
+                has_chrome = shutil.which('google-chrome') or shutil.which('chrome') or shutil.which('chromium')
+                launch_kwargs = {
+                    'headless': True,
+                    'args': [
                         '--disable-blink-features=AutomationControlled',
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
-                        '--start-minimized',
-                    ]
-                )
+                    ],
+                }
+                if has_chrome:
+                    launch_kwargs['channel'] = 'chrome'
+                browser = await p.chromium.launch(**launch_kwargs)
                 context = await browser.new_context(
                     user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                     locale='en-US',
