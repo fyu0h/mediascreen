@@ -862,6 +862,43 @@ def plugins_set_auto_update(plugin_id: str, site_id: str):
         return error_response('设置定时更新失败，请稍后重试', 500)
 
 
+@api_bp.route('/plugins/<plugin_id>/sites/<site_id>/proxy', methods=['PUT'])
+def plugins_set_proxy(plugin_id: str, site_id: str):
+    """设置站点是否使用代理"""
+    try:
+        data = request.get_json()
+        if data is None:
+            return error_response('请求体不能为空', 400)
+
+        use_proxy = data.get('use_proxy')
+        if use_proxy is None:
+            return error_response('缺少 use_proxy 参数', 400)
+
+        from plugins.registry import plugin_registry
+        site = plugin_registry.get_site(plugin_id, site_id)
+        if not site:
+            return error_response('站点不存在', 404)
+
+        from models.plugins import set_use_proxy
+        result = set_use_proxy(plugin_id, site_id, bool(use_proxy))
+
+        log_operation(
+            action=f'{"启用" if use_proxy else "禁用"}站点代理: {site.get("name")}',
+            details={'plugin_id': plugin_id, 'site_id': site_id, 'use_proxy': use_proxy},
+            status='success'
+        )
+
+        return success_response({
+            'plugin_id': plugin_id,
+            'site_id': site_id,
+            'use_proxy': use_proxy,
+            'message': f'站点代理已{"启用" if use_proxy else "禁用"}'
+        })
+    except Exception as e:
+        log_error(action='设置站点代理失败', error=str(e))
+        return error_response('设置站点代理失败，请稍后重试', 500)
+
+
 @api_bp.route('/plugins/auto-update-sites', methods=['GET'])
 def plugins_auto_update_sites():
     """
@@ -951,6 +988,24 @@ def get_settings():
         # 添加 API 提供商列表
         settings['providers'] = API_PROVIDERS
 
+        # 遮蔽代理敏感信息
+        proxy_cfg = settings.get('crawler', {}).get('proxy', {})
+        if proxy_cfg:
+            if proxy_cfg.get('password'):
+                proxy_cfg['password_masked'] = mask_api_key(proxy_cfg['password'])
+                proxy_cfg['password_set'] = True
+                proxy_cfg['password'] = ''
+            else:
+                proxy_cfg['password_masked'] = ''
+                proxy_cfg['password_set'] = False
+            if proxy_cfg.get('username'):
+                proxy_cfg['username_masked'] = mask_api_key(proxy_cfg['username'])
+                proxy_cfg['username_set'] = True
+                proxy_cfg['username'] = ''
+            else:
+                proxy_cfg['username_masked'] = ''
+                proxy_cfg['username_set'] = False
+
         return success_response(settings)
     except Exception as e:
         log_error(action='获取设置失败', error=str(e))
@@ -1009,6 +1064,27 @@ def update_settings():
                 current_settings['crawler']['timeout'] = int(cr['timeout'])
             if 'max_articles' in cr:
                 current_settings['crawler']['max_articles'] = int(cr['max_articles'])
+
+            # 更新代理设置
+            if 'proxy' in cr:
+                proxy = cr['proxy']
+                if 'proxy' not in current_settings['crawler']:
+                    current_settings['crawler']['proxy'] = {}
+                proxy_cfg = current_settings['crawler']['proxy']
+
+                if 'enabled' in proxy:
+                    proxy_cfg['enabled'] = bool(proxy['enabled'])
+                if 'host' in proxy:
+                    proxy_cfg['host'] = proxy['host'].strip()
+                if 'port' in proxy:
+                    proxy_cfg['port'] = int(proxy['port'])
+                if 'protocol' in proxy:
+                    proxy_cfg['protocol'] = proxy['protocol'].strip()
+                # 用户名和密码只在非空时才更新
+                if 'username' in proxy and proxy['username']:
+                    proxy_cfg['username'] = proxy['username'].strip()
+                if 'password' in proxy and proxy['password']:
+                    proxy_cfg['password'] = proxy['password'].strip()
 
         # 更新值班人员设置
         if 'duty' in data:
@@ -1104,6 +1180,55 @@ def test_api_connection():
     except Exception as e:
         log_error(action='测试失败', error=str(e))
         return error_response('测试失败，请稍后重试', 500)
+
+
+@api_bp.route('/settings/test-proxy', methods=['POST'])
+def test_proxy_connection():
+    """测试代理连接"""
+    try:
+        from models.settings import load_settings
+        settings = load_settings()
+        proxy_cfg = settings.get('crawler', {}).get('proxy', {})
+
+        host = proxy_cfg.get('host', '')
+        port = proxy_cfg.get('port', 9000)
+        username = proxy_cfg.get('username', '')
+        password = proxy_cfg.get('password', '')
+        protocol = proxy_cfg.get('protocol', 'http')
+
+        if not host:
+            return error_response('未配置代理地址', 400)
+
+        if username and password:
+            proxy_url = f"{protocol}://{username}:{password}@{host}:{port}"
+        else:
+            proxy_url = f"{protocol}://{host}:{port}"
+
+        proxies = {"http": proxy_url, "https": proxy_url}
+
+        import requests as http_requests
+        resp = http_requests.get(
+            'https://httpbin.org/ip',
+            proxies=proxies,
+            timeout=15
+        )
+
+        if resp.status_code == 200:
+            ip_info = resp.json()
+            return success_response({
+                'message': '代理连接成功',
+                'origin_ip': ip_info.get('origin', '未知')
+            })
+        else:
+            return error_response(f'代理返回状态码 {resp.status_code}', 502)
+
+    except Exception as e:
+        error_msg = str(e)
+        if 'ProxyError' in error_msg or 'proxy' in error_msg.lower():
+            return error_response('代理连接失败: 认证错误或代理不可用', 502)
+        if 'Timeout' in error_msg or 'timeout' in error_msg.lower():
+            return error_response('代理连接超时', 504)
+        return error_response(f'代理测试失败: {error_msg}', 500)
 
 
 @api_bp.route('/layout', methods=['GET'])
@@ -1713,6 +1838,102 @@ def crawl_history():
             task['finished_at'] = task['finished_at'].strftime('%Y-%m-%d %H:%M:%S')
 
     return success_response(tasks)
+
+
+@api_bp.route('/crawl/site', methods=['POST'])
+def crawl_single_site_api():
+    """
+    爬取单个站点
+    请求体: { plugin_id: "xxx", site_id: "xxx" }
+    返回: { fetched: 数量, saved: 数量 }
+    """
+    from plugins.registry import plugin_registry
+    from plugins.crawler import get_crawler
+
+    try:
+        data = request.get_json() or {}
+        plugin_id = data.get('plugin_id')
+        site_id = data.get('site_id')
+
+        if not plugin_id or not site_id:
+            return error_response('缺少 plugin_id 或 site_id 参数', 400)
+
+        # 从插件注册表查找站点配置
+        plugin = plugin_registry.get_plugin(plugin_id)
+        if not plugin:
+            return error_response(f'未找到插件: {plugin_id}', 404)
+
+        site = plugin.get_site_by_id(site_id)
+        if not site:
+            return error_response(f'未找到站点: {site_id}', 404)
+
+        # 检查站点是否已启用
+        from models.plugins import is_site_enabled, get_site_fetch_method
+        if not is_site_enabled(plugin_id, site_id):
+            return error_response('该站点未启用', 400)
+
+        # 检查是否有自定义抓取方式
+        custom_method = get_site_fetch_method(plugin_id, site_id)
+        if custom_method:
+            site = dict(site)  # 避免修改原始配置
+            site['fetch_method'] = custom_method
+
+        # 执行爬取
+        crawler = get_crawler()
+        result = crawler.crawl_site(site, max_articles=100)
+
+        site_name = site.get('name', '')
+        print(f"[单站点更新] 开始爬取: {site_name}")
+
+        if result['success']:
+            articles = result.get('articles', [])
+            saved_count = save_articles(articles) if articles else 0
+
+            print(f"[单站点更新] {site_name}: 抓取 {len(articles)} 篇, 新增 {saved_count} 篇")
+
+            log_operation(
+                action='单站点爬取完成',
+                details={
+                    'plugin_id': plugin_id,
+                    'site_id': site_id,
+                    'site_name': site_name,
+                    'fetched': len(articles),
+                    'saved': saved_count
+                },
+                status='success'
+            )
+
+            return success_response({
+                'site_name': site_name,
+                'fetched': len(articles),
+                'saved': saved_count
+            })
+        else:
+            error_msg = result.get('error', '爬取失败')
+            skipped = result.get('skipped', False)
+
+            print(f"[单站点更新] {site_name}: {'超时跳过' if skipped else '失败'} - {error_msg}")
+
+            log_operation(
+                action='单站点爬取失败',
+                details={
+                    'plugin_id': plugin_id,
+                    'site_id': site_id,
+                    'site_name': site_name,
+                    'error': error_msg,
+                    'skipped': skipped
+                },
+                status='warning' if skipped else 'error'
+            )
+
+            return error_response(
+                f'{"超时跳过" if skipped else error_msg}',
+                500
+            )
+
+    except Exception as e:
+        log_error(action='单站点爬取异常', error=str(e))
+        return error_response(f'爬取失败: {str(e)[:100]}', 500)
 
 
 # ==================== 调度器接口 ====================
