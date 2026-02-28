@@ -257,7 +257,7 @@ class RSSScheduler:
                     try:
                         from email.utils import parsedate_to_datetime
                         pub_date = parsedate_to_datetime(pub_date_el.text)
-                    except:
+                    except Exception:
                         pass
 
                 articles.append({

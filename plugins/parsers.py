@@ -62,7 +62,7 @@ def extract_date_from_url(url: str) -> Optional[datetime]:
             try:
                 year, month, day = map(int, match.groups())
                 return datetime(year, month, day)
-            except:
+            except Exception:
                 pass
     return None
 

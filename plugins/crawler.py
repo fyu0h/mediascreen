@@ -61,7 +61,7 @@ class PluginCrawler:
             for site_domain, timeout in self.SITE_TIMEOUTS.items():
                 if site_domain in domain:
                     return timeout
-        except:
+        except Exception:
             pass
         return self.DEFAULT_TIMEOUT
 
@@ -120,7 +120,7 @@ class PluginCrawler:
                 if attempt < self.MAX_RETRIES and self._is_retryable_error(e):
                     delay = self.RETRY_DELAYS[attempt] if attempt < len(self.RETRY_DELAYS) else 2
                     print(f"[PluginCrawler] 重试 {attempt + 1}/{self.MAX_RETRIES} ({delay}秒后): {url}")
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)  # 异步函数中使用异步睡眠，避免阻塞事件循环
                     continue
                 print(f"[PluginCrawler] 获取页面失败 {url}: {e}")
                 return ""
@@ -191,7 +191,7 @@ class PluginCrawler:
                     # 允许子域名
                     if not (link_domain == base_domain or link_domain.endswith('.' + base_domain) or base_domain.endswith('.' + link_domain)):
                         continue
-                except:
+                except Exception:
                     continue
 
                 # 去重
@@ -256,7 +256,7 @@ class PluginCrawler:
                         mod_time = mod_time.replace(tzinfo=None)  # 移除时区
                         if mod_time >= two_days_ago:
                             recent_items.append(item)
-                    except:
+                    except Exception:
                         # 解析失败则包含
                         recent_items.append(item)
                 else:
@@ -295,7 +295,7 @@ class PluginCrawler:
                                     item['lastmod'].replace(' +00:00', '+00:00').replace(' ', 'T')
                                 ).replace(tzinfo=None)
                                 article['pub_date'] = pub_date
-                            except:
+                            except Exception:
                                 pass
                         articles.append(article)
                         print(f"[海外家园网] 获取到: {article['title'][:30]}...")

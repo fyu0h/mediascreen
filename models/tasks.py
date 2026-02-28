@@ -21,6 +21,45 @@ def get_tasks_collection():
     return get_db()['crawl_tasks']
 
 
+def ensure_task_indexes() -> None:
+    """
+    创建 crawl_tasks 集合的索引
+    在应用启动时调用，提升任务查询性能
+    """
+    collection = get_tasks_collection()
+
+    try:
+        # 获取现有索引名称
+        existing_indexes = set(collection.index_information().keys())
+
+        indexes_to_create = []
+
+        # 1. task_id 唯一索引（任务唯一标识）
+        if 'task_id_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel(
+                [('task_id', ASCENDING)],
+                unique=True,
+                name='task_id_1'
+            ))
+
+        # 2. status 普通索引（按状态查询任务）
+        if 'status_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel(
+                [('status', ASCENDING)],
+                name='status_1'
+            ))
+
+        # 批量创建索引
+        if indexes_to_create:
+            collection.create_indexes(indexes_to_create)
+            print(f"[MongoDB] 已为 crawl_tasks 创建 {len(indexes_to_create)} 个索引")
+
+    except Exception as e:
+        print(f"[MongoDB] 创建 crawl_tasks 索引时出错: {e}")
+
+
 def create_task(task_type: str = 'crawl', sites: List[dict] = None) -> str:
     """
     创建新任务

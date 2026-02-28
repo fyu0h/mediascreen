@@ -107,6 +107,15 @@ def ensure_articles_indexes() -> None:
                 name='pub_date_-1_source_name_1'
             ))
 
+        # 7. title 文本索引（加速关键词搜索）
+        if 'title_text' not in existing_indexes:
+            from pymongo import IndexModel, TEXT
+            indexes_to_create.append(IndexModel(
+                [('title', TEXT)],
+                name='title_text',
+                default_language='none'  # 禁用语言分词，兼容中文
+            ))
+
         # 批量创建索引
         if indexes_to_create:
             collection.create_indexes(indexes_to_create)
@@ -222,7 +231,9 @@ def get_overview_stats() -> Dict[str, Any]:
     """
     articles = get_articles_collection()
 
-    total_articles = articles.count_documents({})
+    # 使用 estimated_document_count() 替代 count_documents({})
+    # 前者基于集合元数据返回近似总数，无需全表扫描，性能远优于后者
+    total_articles = articles.estimated_document_count()
 
     # 从插件系统获取已启用的站点数和国家数
     try:
@@ -1070,3 +1081,34 @@ def is_alert_read(article_url: str) -> bool:
     """
     collection = get_alert_reads_collection()
     return collection.find_one({'article_url': article_url}, {'_id': 1}) is not None
+
+
+def ensure_alert_reads_indexes() -> None:
+    """
+    创建 alert_reads 集合的索引
+    在应用启动时调用，提升告警已读查询性能
+    """
+    collection = get_alert_reads_collection()
+
+    try:
+        # 获取现有索引名称
+        existing_indexes = set(collection.index_information().keys())
+
+        indexes_to_create = []
+
+        # article_url 唯一索引（每篇文章只有一条已读记录）
+        if 'article_url_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel(
+                [('article_url', ASCENDING)],
+                unique=True,
+                name='article_url_1'
+            ))
+
+        # 批量创建索引
+        if indexes_to_create:
+            collection.create_indexes(indexes_to_create)
+            print(f"[MongoDB] 已为 alert_reads 创建 {len(indexes_to_create)} 个索引")
+
+    except Exception as e:
+        print(f"[MongoDB] 创建 alert_reads 索引时出错: {e}")

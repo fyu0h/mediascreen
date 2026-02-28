@@ -5,6 +5,7 @@
 """
 
 import json
+import re
 import threading
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -21,9 +22,62 @@ def get_logs_collection():
 def ensure_indexes():
     """确保必要的索引存在"""
     collection = get_logs_collection()
-    collection.create_index([("timestamp", -1)])
-    collection.create_index([("log_type", 1)])
-    collection.create_index([("status", 1)])
+
+    try:
+        # 获取现有索引名称
+        existing_indexes = set(collection.index_information().keys())
+
+        indexes_to_create = []
+
+        # 1. timestamp 降序索引（日志时间线查询）
+        if 'timestamp_-1' not in existing_indexes:
+            from pymongo import IndexModel, DESCENDING
+            indexes_to_create.append(IndexModel(
+                [('timestamp', DESCENDING)],
+                name='timestamp_-1'
+            ))
+
+        # 2. log_type 索引（按日志类型筛选）
+        if 'log_type_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel(
+                [('log_type', ASCENDING)],
+                name='log_type_1'
+            ))
+
+        # 3. status 索引（按状态筛选）
+        if 'status_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel(
+                [('status', ASCENDING)],
+                name='status_1'
+            ))
+
+        # 4. timestamp TTL 索引（30天自动过期，清理旧日志）
+        if 'timestamp_ttl' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel(
+                [('timestamp', ASCENDING)],
+                name='timestamp_ttl',
+                expireAfterSeconds=30 * 24 * 3600  # 30天
+            ))
+
+        # 5. log_id 唯一索引（日志唯一标识，加速单条查询）
+        if 'log_id_1' not in existing_indexes:
+            from pymongo import IndexModel, ASCENDING
+            indexes_to_create.append(IndexModel(
+                [('log_id', ASCENDING)],
+                unique=True,
+                name='log_id_1'
+            ))
+
+        # 批量创建索引
+        if indexes_to_create:
+            collection.create_indexes(indexes_to_create)
+            print(f"[MongoDB] 已为 system_logs 创建 {len(indexes_to_create)} 个索引")
+
+    except Exception as e:
+        print(f"[MongoDB] 创建 system_logs 索引时出错: {e}")
 
 
 class BackendLogger:
@@ -163,9 +217,11 @@ class BackendLogger:
             if status:
                 query['status'] = status
             if search:
+                # 转义用户输入的特殊正则字符，防止 ReDoS 攻击
+                safe_search = re.escape(search)
                 query['$or'] = [
-                    {'action': {'$regex': search, '$options': 'i'}},
-                    {'error': {'$regex': search, '$options': 'i'}}
+                    {'action': {'$regex': safe_search, '$options': 'i'}},
+                    {'error': {'$regex': safe_search, '$options': 'i'}}
                 ]
 
             # 获取总数
@@ -282,13 +338,13 @@ class BackendLogger:
             elif isinstance(data, bytes):
                 try:
                     return data.decode('utf-8')
-                except:
+                except Exception:
                     return f'<binary data: {len(data)} bytes>'
             elif isinstance(data, str):
                 return data
             else:
                 return str(data)
-        except:
+        except Exception:
             return f'<无法序列化: {type(data).__name__}>'
 
     def _truncate_body(self, body: Any, max_length: int = 10000) -> Any:

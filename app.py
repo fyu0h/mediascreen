@@ -5,6 +5,7 @@ Flask 应用入口
 访问地址: http://localhost:5000
 """
 
+import os
 import time
 from datetime import timedelta
 from flask import Flask, request, g
@@ -52,13 +53,15 @@ def create_app() -> Flask:
             'headers': dict(request.headers),
             'remote_addr': request.remote_addr
         }
-        # 保存请求体（仅对 POST/PUT/PATCH）
+        # 保存请求体（仅对 POST/PUT/PATCH），并对敏感字段脱敏
         if request.method in ['POST', 'PUT', 'PATCH']:
             try:
                 if request.is_json:
-                    g.request_data['body'] = request.get_json(silent=True)
+                    body = request.get_json(silent=True)
+                    g.request_data['body'] = _filter_sensitive_body(body)
                 elif request.form:
-                    g.request_data['body'] = dict(request.form)
+                    body = dict(request.form)
+                    g.request_data['body'] = _filter_sensitive_body(body)
                 else:
                     # 尝试获取原始数据（限制大小）
                     raw_data = request.get_data(as_text=True)
@@ -146,11 +149,34 @@ def _filter_sensitive_headers(headers: dict) -> dict:
     return filtered
 
 
+def _filter_sensitive_body(body) -> any:
+    """过滤请求体中的敏感字段（如密码、API 密钥等）"""
+    if not isinstance(body, dict):
+        # 非字典类型直接返回原值
+        return body
+
+    # 敏感字段关键词列表
+    sensitive_keywords = ['password', 'api_key', 'secret', 'token', 'apikey', 'api_secret']
+    filtered = {}
+    for key, value in body.items():
+        # 递归处理嵌套字典
+        if isinstance(value, dict):
+            filtered[key] = _filter_sensitive_body(value)
+        elif any(keyword in key.lower() for keyword in sensitive_keywords):
+            # 键名包含敏感关键词，隐藏值
+            filtered[key] = '***已隐藏***'
+        else:
+            filtered[key] = value
+    return filtered
+
+
 def init_database():
     """初始化数据库（迁移和索引）"""
     from models.sites import migrate_from_json, ensure_indexes
     from models.users import ensure_admin_user
-    from models.mongo import ensure_articles_indexes
+    from models.mongo import ensure_articles_indexes, ensure_alert_reads_indexes
+    from models.tasks import ensure_task_indexes
+    from models.logger import ensure_indexes as ensure_log_indexes
 
     # 迁移 sites.json 到 MongoDB（兼容旧数据）
     migrated = migrate_from_json()
@@ -162,6 +188,15 @@ def init_database():
 
     # 确保文章集合索引存在（性能优化）
     ensure_articles_indexes()
+
+    # 确保告警已读集合索引存在
+    ensure_alert_reads_indexes()
+
+    # 确保任务集合索引存在
+    ensure_task_indexes()
+
+    # 确保日志集合索引存在（含 TTL 自动过期）
+    ensure_log_indexes()
 
     # 确保默认管理员账号存在
     ensure_admin_user()
@@ -227,7 +262,8 @@ if __name__ == '__main__':
     print("=" * 50)
     print("皇岗边检站全球舆情态势感知平台")
     print("=" * 50)
-    print(f"访问地址: http://localhost:5000")
+    flask_host = os.environ.get('FLASK_HOST', '127.0.0.1')
+    print(f"访问地址: http://{flask_host}:5000")
     print(f"MongoDB: {Config.MONGO_HOST}:{Config.MONGO_PORT}/{Config.MONGO_DB}")
     print("=" * 50)
 
@@ -250,7 +286,7 @@ if __name__ == '__main__':
     log_system(
         action='系统启动',
         details={
-            'host': '0.0.0.0',
+            'host': flask_host,
             'port': 5000,
             'debug': Config.DEBUG,
             'mongo': f'{Config.MONGO_HOST}:{Config.MONGO_PORT}/{Config.MONGO_DB}'
@@ -261,8 +297,9 @@ if __name__ == '__main__':
     # 启动 Flask 开发服务器
     # 启用多线程模式，确保爬虫任务不会阻塞前端请求
     # 注意：Windows 上 debug+threaded 模式下热重载可能报 socket 错误，不影响功能
+    # 开发模式默认绑定 localhost，通过环境变量 FLASK_HOST 可覆盖
     app.run(
-        host='0.0.0.0',
+        host=flask_host,
         port=5000,
         debug=Config.DEBUG,
         threaded=True,           # 启用多线程处理请求

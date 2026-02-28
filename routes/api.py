@@ -5,6 +5,8 @@ REST API 路由
 """
 
 import time
+import socket
+import ipaddress
 from datetime import datetime
 from urllib.parse import urlparse
 from flask import Blueprint, request, jsonify, session
@@ -51,11 +53,47 @@ def error_response(message: str, code: int = 400) -> tuple:
     return jsonify({'success': False, 'error': message}), code
 
 
+def _is_private_url(url: str) -> bool:
+    """
+    检查 URL 是否指向内网/私有地址，防止 SSRF 攻击。
+    阻止访问：127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12,
+              192.168.0.0/16, 169.254.0.0/16, localhost, ::1 等
+    """
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return True  # 无法解析主机名，视为不安全
+
+        # 检查 localhost 等常见内网主机名
+        blocked_hostnames = {'localhost', 'localhost.localdomain', '0.0.0.0'}
+        if hostname.lower() in blocked_hostnames:
+            return True
+
+        # 将主机名解析为 IP 地址并检查是否为私有地址
+        # 使用 getaddrinfo 同时支持 IPv4 和 IPv6
+        addr_infos = socket.getaddrinfo(hostname, None)
+        for addr_info in addr_infos:
+            ip_str = addr_info[4][0]
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return True
+
+        return False
+    except (socket.gaierror, ValueError, OSError):
+        # DNS 解析失败或 IP 解析失败，视为不安全
+        return True
+
+
 # ==================== 认证中间件 ====================
 
 @api_bp.before_request
 def check_auth():
     """API 请求认证检查"""
+    # 免认证白名单：这些路径无需登录即可访问
+    exempt_paths = ['/api/auth/status', '/api/health']
+    if request.path in exempt_paths:
+        return None
     if 'user' not in session:
         return jsonify({'success': False, 'error': '未登录，请先登录'}), 401
 
@@ -73,6 +111,22 @@ def auth_status():
             'role': user.get('role', 'admin')
         })
     return success_response({'logged_in': False})
+
+
+@api_bp.route('/health', methods=['GET'])
+def health_check():
+    """健康检查端点（免认证），返回应用和数据库状态"""
+    status = {'app': 'ok', 'mongodb': 'unknown'}
+    http_code = 200
+    try:
+        from models.mongo import get_db
+        db = get_db()
+        db.command('ping')
+        status['mongodb'] = 'ok'
+    except Exception as e:
+        status['mongodb'] = f'error: {str(e)[:100]}'
+        http_code = 503
+    return jsonify({'success': http_code == 200, 'data': status}), http_code
 
 
 @api_bp.route('/auth/change-password', methods=['POST'])
@@ -1012,6 +1066,10 @@ def test_api_connection():
         # 确保 URL 格式正确
         if not api_url.endswith('/chat/completions'):
             api_url = api_url.rstrip('/') + '/v1/chat/completions' if '/v1' not in api_url else api_url
+
+        # SSRF 防护：禁止访问内网地址
+        if _is_private_url(api_url):
+            return error_response('不允许访问内网地址', 403)
 
         # 测试连接
         import requests as req
@@ -2916,6 +2974,10 @@ def test_translation_api():
             else:
                 api_url = api_url.rstrip('/') + '/v1/chat/completions'
 
+        # SSRF 防护：禁止访问内网地址
+        if _is_private_url(api_url):
+            return error_response('不允许访问内网地址', 403)
+
         if not model:
             model = 'Pro/Qwen/Qwen2.5-7B-Instruct'
 
@@ -3500,16 +3562,18 @@ def _take_page_screenshot(target_url: str) -> str:
         from playwright_stealth import stealth_async
         async with async_playwright() as p:
             browser = await p.chromium.launch(
-                headless=True,
+                headless=False,
+                channel='chrome',
                 args=[
                     '--disable-blink-features=AutomationControlled',
                     '--no-sandbox',
                     '--disable-dev-shm-usage',
+                    '--start-minimized',
                 ]
             )
             context = await browser.new_context(
                 viewport={'width': 1280, 'height': 720},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                 locale='en-US',
                 timezone_id='America/New_York',
             )
@@ -3563,15 +3627,17 @@ def _resolve_redirect_url(target_url: str) -> str:
             from playwright_stealth import stealth_async
             async with async_playwright() as p:
                 browser = await p.chromium.launch(
-                    headless=True,
+                    headless=False,
+                    channel='chrome',
                     args=[
                         '--disable-blink-features=AutomationControlled',
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
+                        '--start-minimized',
                     ]
                 )
                 context = await browser.new_context(
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                     locale='en-US',
                     timezone_id='America/New_York',
                 )
@@ -3646,11 +3712,18 @@ def news_preview():
     if parsed.scheme not in ('http', 'https'):
         return error_response('URL 必须以 http 或 https 开头', 400)
 
+    # SSRF 防护：禁止访问内网地址
+    if _is_private_url(url):
+        return error_response('不允许访问内网地址', 403)
+
     # 解析中间跳转 URL（如 Google News RSS 链接）
     original_url = url
     url = _resolve_redirect_url(url)
     if url != original_url:
         parsed = urlparse(url)
+        # 跳转后再次检查 SSRF
+        if _is_private_url(url):
+            return error_response('不允许访问内网地址', 403)
 
     base_url = f"{parsed.scheme}://{parsed.netloc}"
 
@@ -3747,6 +3820,151 @@ def news_preview():
         return error_response(f'预览失败: {str(e)}', 502)
 
 
+# ==================== 新闻翻译端点 ====================
+
+@api_bp.route('/news/translate', methods=['POST'])
+def news_translate():
+    """翻译新闻正文内容块 — 接收 content blocks，返回翻译后的 content blocks"""
+    if 'user' not in session:
+        return error_response('未登录', 401)
+
+    data = request.get_json(silent=True)
+    if not data:
+        return error_response('请求格式错误', 400)
+
+    title = data.get('title', '')
+    content = data.get('content', [])
+
+    if not content and not title:
+        return error_response('缺少翻译内容', 400)
+
+    try:
+        from plugins.translator import is_chinese, _get_translation_api_config, _clean_translated_text
+        import requests as http_requests
+
+        api_config = _get_translation_api_config()
+        if not api_config:
+            return error_response('翻译服务未配置，请在系统设置中配置翻译 API', 503)
+
+        # 收集所有需要翻译的文本块（编号 → 文本映射）
+        texts_to_translate = []  # [(index_label, text)]
+        text_sources = []  # [('title',) | ('content', idx, field)]
+
+        # 标题
+        if title and not is_chinese(title):
+            texts_to_translate.append(title)
+            text_sources.append(('title',))
+
+        # 正文块
+        for i, block in enumerate(content):
+            block_type = block.get('type', '')
+            text = ''
+            if block_type in ('paragraph', 'heading', 'blockquote', 'caption'):
+                text = block.get('text', '')
+            elif block_type == 'list':
+                # 列表项合并为一个翻译单元，用 | 分隔
+                items = block.get('items', [])
+                if items:
+                    text = ' | '.join(items)
+
+            if text and not is_chinese(text):
+                texts_to_translate.append(text)
+                text_sources.append(('content', i, block_type))
+
+        # 如果没有需要翻译的内容（全是中文）
+        if not texts_to_translate:
+            return success_response({
+                'title': title,
+                'content': content,
+                'all_chinese': True
+            })
+
+        # 构建编号列表，单次 LLM 调用批量翻译
+        numbered_text = '\n'.join(f'{i+1}. {t}' for i, t in enumerate(texts_to_translate))
+
+        system_prompt = (
+            '你是专业翻译助手。将用户提供的编号文本逐条翻译为中文。'
+            '严格保持编号格式，每行一条，只输出翻译结果，不要解释。'
+            '保持原文的语气和风格。如果文本中包含 | 分隔符，翻译后也保持 | 分隔。'
+        )
+
+        response = http_requests.post(
+            api_config['api_url'],
+            headers={
+                'Authorization': f'Bearer {api_config["api_key"]}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': api_config['model'],
+                'messages': [
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': numbered_text}
+                ],
+                'max_tokens': 200 * len(texts_to_translate),
+                'temperature': 0.1
+            },
+            timeout=120
+        )
+
+        if response.status_code != 200:
+            return error_response(f'翻译 API 请求失败: {response.status_code}', 502)
+
+        result = response.json()
+        resp_content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+        # 解析编号格式的返回结果
+        import re
+        translated_map = {}
+        for line in resp_content.strip().split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            match = re.match(r'^(\d+)\s*[.、）)]\s*(.+)', line)
+            if match:
+                idx = int(match.group(1))
+                text = _clean_translated_text(match.group(2))
+                if 1 <= idx <= len(texts_to_translate) and text:
+                    translated_map[idx] = text
+
+        # 组装翻译结果
+        translated_title = title
+        translated_content = []
+
+        for content_block in content:
+            translated_content.append(dict(content_block))  # 浅拷贝
+
+        trans_idx = 0
+        for src in text_sources:
+            trans_idx += 1
+            translated_text = translated_map.get(trans_idx)
+            if not translated_text:
+                continue
+
+            if src[0] == 'title':
+                translated_title = translated_text
+            elif src[0] == 'content':
+                content_idx = src[1]
+                block_type = src[2]
+                if content_idx < len(translated_content):
+                    if block_type == 'list':
+                        # 还原 | 分隔的列表项
+                        translated_content[content_idx]['items'] = [
+                            item.strip() for item in translated_text.split('|')
+                        ]
+                    else:
+                        translated_content[content_idx]['text'] = translated_text
+
+        return success_response({
+            'title': translated_title,
+            'content': translated_content,
+            'all_chinese': False
+        })
+
+    except Exception as e:
+        log_error(f"新闻翻译失败", str(e))
+        return error_response(f'翻译失败: {str(e)}', 500)
+
+
 @api_bp.route('/proxy/image', methods=['GET'])
 def proxy_image():
     """代理外部图片 — 使服务器中转图片请求，绕过客户端网络限制"""
@@ -3756,6 +3974,10 @@ def proxy_image():
     image_url = request.args.get('url', '').strip()
     if not image_url:
         return error_response('缺少 url 参数', 400)
+
+    # SSRF 防护：禁止访问内网地址
+    if _is_private_url(image_url):
+        return error_response('不允许访问内网地址', 403)
 
     try:
         import requests as http_requests

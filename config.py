@@ -9,14 +9,38 @@ MongoDB 配置方式：
 """
 
 import os
+import hashlib
+import warnings
+
+
+# 生成基于机器特征的固定 fallback 密钥（项目路径 + 主机名）
+# 避免每次重启时 os.urandom() 产生不同密钥导致 Session 全部失效
+_FALLBACK_SECRET_KEY = hashlib.sha256(
+    f"{os.path.abspath(__file__)}:{os.name}:{os.path.expanduser('~')}".encode()
+).hexdigest()
+
+if not os.environ.get('SECRET_KEY'):
+    warnings.warn(
+        "\n[安全警告] 未设置 SECRET_KEY 环境变量，当前使用基于项目路径的默认密钥。\n"
+        "生产环境请务必设置环境变量 SECRET_KEY，例如：\n"
+        "  Linux/macOS: export SECRET_KEY='your-random-secret-key'\n"
+        "  Windows:     set SECRET_KEY=your-random-secret-key\n",
+        stacklevel=1
+    )
 
 
 class Config:
     """应用配置类"""
 
     # Flask 配置
-    SECRET_KEY = os.environ.get('SECRET_KEY', os.urandom(24).hex())
+    # 优先使用环境变量 SECRET_KEY；未设置时使用基于机器特征的固定密钥，确保重启后 Session 不失效
+    SECRET_KEY = os.environ.get('SECRET_KEY', _FALLBACK_SECRET_KEY)
     DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+
+    # Session Cookie 安全属性
+    SESSION_COOKIE_HTTPONLY = True  # 禁止 JavaScript 访问 Session Cookie，防止 XSS 窃取会话
+    SESSION_COOKIE_SAMESITE = 'Lax'  # 限制跨站请求携带 Cookie，防止 CSRF 攻击
+    SESSION_COOKIE_SECURE = os.environ.get('FLASK_ENV') == 'production'  # 生产环境仅通过 HTTPS 传输 Cookie；开发环境允许 HTTP
 
     # 上传文件大小限制（5MB）
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024
