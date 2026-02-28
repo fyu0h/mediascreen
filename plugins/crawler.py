@@ -24,7 +24,7 @@ try:
     CRAWL4AI_AVAILABLE = True
 except ImportError:
     CRAWL4AI_AVAILABLE = False
-    print("[警告] crawl4ai 未安装，爬取功能将不可用")
+    print("[PluginCrawler] crawl4ai 未安装，将使用 requests 降级模式（不支持 JS 渲染）")
 
 
 # HTTP 请求头
@@ -49,9 +49,11 @@ class PluginCrawler:
     RETRY_DELAYS = [1, 2]  # 重试间隔（秒）
 
     def __init__(self):
-        if not CRAWL4AI_AVAILABLE:
-            raise ImportError("crawl4ai 未安装，请运行: pip install crawl4ai")
-        self.browser_config = BrowserConfig(headless=True, verbose=False)
+        if CRAWL4AI_AVAILABLE:
+            self.browser_config = BrowserConfig(headless=True, verbose=False)
+        else:
+            self.browser_config = None
+            print("[PluginCrawler] 降级模式: 使用 requests 获取页面，不支持 JS 动态渲染")
 
     def _build_proxy_url(self) -> str:
         """根据 settings.json 构造代理 URL，配置不完整返回空串"""
@@ -118,17 +120,24 @@ class PluginCrawler:
 
     async def fetch_page(self, url: str, timeout: int = None, proxy_url: str = '') -> str:
         """
-        异步获取页面内容（模拟正常浏览器），带重试机制
+        异步获取页面内容
+        - crawl4ai 可用时：使用无头浏览器（支持 JS 渲染），带重试机制
+        - crawl4ai 不可用时：降级为 requests.get()（纯 HTML）
 
         Args:
             url: 要抓取的URL
             timeout: 超时时间（秒），None则使用默认配置
+            proxy_url: 代理地址
 
         Returns:
             页面HTML内容，失败或超时返回空字符串
         """
         if timeout is None:
             timeout = self._get_timeout_for_url(url)
+
+        # crawl4ai 不可用时，降级为 requests
+        if not CRAWL4AI_AVAILABLE:
+            return self.fetch_url_simple(url, timeout=timeout, proxy_url=proxy_url)
 
         timeout_ms = timeout * 1000
         last_error = None
@@ -185,11 +194,17 @@ class PluginCrawler:
         return ""
 
     def fetch_url_simple(self, url: str, timeout: int = 30, proxy_url: str = '') -> str:
-        """简单HTTP请求获取页面（用于sitemap等不需要渲染的页面）"""
+        """简单HTTP请求获取页面（降级模式 / sitemap 等不需要渲染的页面）"""
         try:
+            headers = {
+                **DEFAULT_HEADERS,
+                'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,ko;q=0.5'
+            }
             proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-            response = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout, proxies=proxies)
+            response = requests.get(url, headers=headers, timeout=timeout, proxies=proxies)
             if response.status_code == 200:
+                # 自动检测编码，避免中日韩文乱码
+                response.encoding = response.apparent_encoding or response.encoding
                 return response.text
             return ""
         except Exception as e:
@@ -294,9 +309,8 @@ class PluginCrawler:
                     print(f"[PluginCrawler] 🔒 {name} 使用代理: {site.get('domain', '')}")
 
             # 获取页面
-            # 代理模式使用 requests（Playwright 代理隧道兼容性差，容易超时）
-            # 非代理模式使用 crawl4ai 无头浏览器（支持 JS 渲染）
-            if proxy_url:
+            # 优先级: 代理模式 → requests | crawl4ai不可用 → requests | 否则 → crawl4ai
+            if proxy_url or not CRAWL4AI_AVAILABLE:
                 html = self.fetch_url_simple(url, timeout=30, proxy_url=proxy_url)
             else:
                 html = await self.fetch_page(url)
