@@ -39,7 +39,8 @@ def get_subscription(plugin_id: str, site_id: str) -> Optional[Dict[str, Any]]:
 def set_subscription(plugin_id: str, site_id: str, enabled: bool,
                      fetch_method_override: Optional[str] = None,
                      auto_update: bool = False,
-                     update_interval: int = 300) -> Dict[str, Any]:
+                     update_interval: int = 300,
+                     use_proxy: bool = None) -> Dict[str, Any]:
     """
     设置站点订阅配置
 
@@ -50,6 +51,7 @@ def set_subscription(plugin_id: str, site_id: str, enabled: bool,
         fetch_method_override: 覆盖的抓取方式（None 表示使用默认）
         auto_update: 是否启用定时更新
         update_interval: 更新间隔（秒），默认300秒（5分钟）
+        use_proxy: 是否使用代理抓取（None 表示不修改）
     """
     collection = get_subscriptions_collection()
     now = datetime.now()
@@ -63,6 +65,10 @@ def set_subscription(plugin_id: str, site_id: str, enabled: bool,
         "update_interval": update_interval,
         "updated_at": now
     }
+
+    # 仅当显式传入时才写入 use_proxy 字段
+    if use_proxy is not None:
+        doc["use_proxy"] = use_proxy
 
     result = collection.find_one_and_update(
         {"plugin_id": plugin_id, "site_id": site_id},
@@ -134,6 +140,24 @@ def set_auto_update(plugin_id: str, site_id: str, auto_update: bool, update_inte
             update_interval = 300
 
     return set_subscription(plugin_id, site_id, enabled, fetch_method_override, auto_update, update_interval)
+
+
+def set_use_proxy(plugin_id: str, site_id: str, use_proxy: bool) -> Optional[Dict[str, Any]]:
+    """
+    设置站点是否使用代理
+
+    参数：
+        plugin_id: 插件ID
+        site_id: 站点ID
+        use_proxy: 是否使用代理抓取
+    """
+    collection = get_subscriptions_collection()
+    result = collection.find_one_and_update(
+        {"plugin_id": plugin_id, "site_id": site_id},
+        {"$set": {"use_proxy": use_proxy, "updated_at": datetime.now()}},
+        return_document=True
+    )
+    return result
 
 
 def get_auto_update_sites() -> List[Dict[str, Any]]:
@@ -305,7 +329,8 @@ def get_plugins_with_status() -> List[Dict[str, Any]]:
                 "enabled": enabled,
                 "has_custom_config": has_custom_config,
                 "auto_update": auto_update,
-                "update_interval": update_interval
+                "update_interval": update_interval,
+                "use_proxy": sub.get('use_proxy', False) if sub else False,
             })
 
         plugin_data["sites"] = sites_with_status
