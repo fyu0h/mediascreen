@@ -1005,16 +1005,23 @@ function loadKeywordChart(stats) {
     if (!keywordChart) {
         keywordChart = echarts.init(chartDom);
 
-        // 添加点击事件
+        // 添加点击事件（柱形点击）
+        let _barClickHandled = false;
         keywordChart.on('click', (params) => {
             if (params.componentType === 'series') {
                 const keyword = params.name;
+                _barClickHandled = true;
                 filterAlertsByKeyword(keyword);
             }
         });
 
-        // Y轴标签也可点击
+        // Y轴标签也可点击（ZRender 底层事件）
+        // 注意：点击柱形时 ZRender 也会触发，需用 _barClickHandled 防止双重触发
         keywordChart.getZr().on('click', (params) => {
+            if (_barClickHandled) {
+                _barClickHandled = false;
+                return;
+            }
             const pointInPixel = [params.offsetX, params.offsetY];
             if (keywordChart.containPixel('grid', pointInPixel)) {
                 const yIndex = keywordChart.convertFromPixel({ seriesIndex: 0 }, pointInPixel)[1];

@@ -7,7 +7,11 @@ Flask 应用入口
 
 import os
 import time
+import urllib3
 from datetime import timedelta
+
+# 禁用代理请求的 SSL 证书验证警告（verify=False 时触发）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from flask import Flask, request, g
 from flask_cors import CORS
 
