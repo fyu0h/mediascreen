@@ -53,6 +53,46 @@ class PluginCrawler:
             raise ImportError("crawl4ai 未安装，请运行: pip install crawl4ai")
         self.browser_config = BrowserConfig(headless=True, verbose=False)
 
+    def _build_proxy_url(self) -> str:
+        """根据 settings.json 构造代理 URL，配置不完整返回空串"""
+        from models.settings import load_settings
+        settings = load_settings()
+        proxy_cfg = settings.get('crawler', {}).get('proxy', {})
+
+        if not proxy_cfg.get('enabled'):
+            return ''
+
+        host = proxy_cfg.get('host', '')
+        port = proxy_cfg.get('port', 9000)
+        username = proxy_cfg.get('username', '')
+        password = proxy_cfg.get('password', '')
+        protocol = proxy_cfg.get('protocol', 'http')
+
+        if not host:
+            return ''
+
+        if username and password:
+            return f"{protocol}://{username}:{password}@{host}:{port}"
+        return f"{protocol}://{host}:{port}"
+
+    def _should_use_proxy(self, site: dict) -> bool:
+        """判断该站点是否应使用代理（全局开关 + 站点开关均为 True）"""
+        from models.settings import load_settings
+        settings = load_settings()
+        proxy_cfg = settings.get('crawler', {}).get('proxy', {})
+
+        if not proxy_cfg.get('enabled'):
+            return False
+
+        from models.plugins import get_subscription
+        plugin_id = site.get('plugin_id', '')
+        site_id = site.get('id', '')
+        if plugin_id and site_id:
+            sub = get_subscription(plugin_id, site_id)
+            if sub and sub.get('use_proxy'):
+                return True
+        return False
+
     def _get_timeout_for_url(self, url: str) -> int:
         """根据URL获取对应的超时时间（秒）"""
         try:
@@ -76,7 +116,7 @@ class PluginCrawler:
         retryable = ['connection', 'network', 'reset', 'refused', 'temporary', 'eof']
         return any(x in error_msg for x in retryable)
 
-    async def fetch_page(self, url: str, timeout: int = None) -> str:
+    async def fetch_page(self, url: str, timeout: int = None, proxy_url: str = '') -> str:
         """
         异步获取页面内容（模拟正常浏览器），带重试机制
 
@@ -95,12 +135,18 @@ class PluginCrawler:
 
         for attempt in range(self.MAX_RETRIES + 1):
             try:
+                # 根据是否有代理动态构造浏览器配置
+                if proxy_url:
+                    browser_cfg = BrowserConfig(headless=True, verbose=False, proxy=proxy_url)
+                else:
+                    browser_cfg = self.browser_config
+
                 config = CrawlerRunConfig(
                     wait_until="domcontentloaded",
                     page_timeout=timeout_ms,
                     cache_mode=CacheMode.BYPASS
                 )
-                async with AsyncWebCrawler(config=self.browser_config) as crawler:
+                async with AsyncWebCrawler(config=browser_cfg) as crawler:
                     result = await crawler.arun(url, config=config)
                     if result.success:
                         return result.html
@@ -128,10 +174,11 @@ class PluginCrawler:
         print(f"[PluginCrawler] 重试耗尽 {url}: {last_error}")
         return ""
 
-    def fetch_url_simple(self, url: str, timeout: int = 30) -> str:
+    def fetch_url_simple(self, url: str, timeout: int = 30, proxy_url: str = '') -> str:
         """简单HTTP请求获取页面（用于sitemap等不需要渲染的页面）"""
         try:
-            response = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
+            proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+            response = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout, proxies=proxies)
             if response.status_code == 200:
                 return response.text
             return ""
@@ -215,104 +262,6 @@ class PluginCrawler:
 
         return articles
 
-    async def crawl_haiwaiwang_sitemap(self, site: Dict[str, Any], max_articles: int = 50) -> Dict[str, Any]:
-        """
-        海外家园网专用 sitemap 爬取
-        1. 获取 sitemap1.xml
-        2. 筛选最近2天的文章
-        3. 遍历每个URL获取标题
-        """
-        from plugins.parsers import parse_haiwaiwang_sitemap, parse_haiwaiwang
-
-        sitemap_url = 'https://haiwaiwang.org/post-sitemap1.xml'
-        articles = []
-
-        try:
-            # 1. 获取 sitemap
-            print(f"[海外家园网] 获取 sitemap: {sitemap_url}")
-            sitemap_content = self.fetch_url_simple(sitemap_url)
-
-            if not sitemap_content:
-                return {'success': False, 'articles': [], 'error': '无法获取sitemap'}
-
-            # 2. 解析 sitemap
-            sitemap_items = parse_haiwaiwang_sitemap(sitemap_content)
-            print(f"[海外家园网] sitemap 包含 {len(sitemap_items)} 个URL")
-
-            if not sitemap_items:
-                return {'success': False, 'articles': [], 'error': 'sitemap为空或解析失败'}
-
-            # 3. 筛选最近2天的文章
-            now = datetime.now()
-            two_days_ago = now - timedelta(days=2)
-            recent_items = []
-
-            for item in sitemap_items:
-                lastmod = item.get('lastmod', '')
-                if lastmod:
-                    try:
-                        # 解析时间格式: 2026-02-04 06:40 +00:00
-                        mod_time = datetime.fromisoformat(lastmod.replace(' +00:00', '+00:00').replace(' ', 'T'))
-                        mod_time = mod_time.replace(tzinfo=None)  # 移除时区
-                        if mod_time >= two_days_ago:
-                            recent_items.append(item)
-                    except Exception:
-                        # 解析失败则包含
-                        recent_items.append(item)
-                else:
-                    recent_items.append(item)
-
-            # 限制数量
-            recent_items = recent_items[:max_articles]
-            print(f"[海外家园网] 筛选出 {len(recent_items)} 篇最近文章")
-
-            # 4. 遍历获取标题
-            for item in recent_items:
-                url = item['url']
-                try:
-                    # 获取文章页面
-                    html = await self.fetch_page(url)
-                    if not html:
-                        continue
-
-                    # 解析标题
-                    site_config = {
-                        'name': site.get('name', '海外家园网'),
-                        'url': url,
-                        'current_url': url,
-                        'country_code': site.get('country_code', 'US'),
-                        'coords': site.get('coords', [-77.0369, 38.9072])
-                    }
-                    article_list = parse_haiwaiwang(html, site_config)
-
-                    if article_list:
-                        article = article_list[0]
-                        article['loc'] = url
-                        # 解析 lastmod 作为发布日期
-                        if item.get('lastmod'):
-                            try:
-                                pub_date = datetime.fromisoformat(
-                                    item['lastmod'].replace(' +00:00', '+00:00').replace(' ', 'T')
-                                ).replace(tzinfo=None)
-                                article['pub_date'] = pub_date
-                            except Exception:
-                                pass
-                        articles.append(article)
-                        print(f"[海外家园网] 获取到: {article['title'][:30]}...")
-
-                except Exception as e:
-                    print(f"[海外家园网] 获取文章失败 {url}: {e}")
-                    continue
-
-            return {
-                'success': True,
-                'articles': articles,
-                'error': None
-            }
-
-        except Exception as e:
-            return {'success': False, 'articles': [], 'error': str(e)}
-
     async def crawl_site_async(self, site: Dict[str, Any], max_articles: int = 100) -> Dict[str, Any]:
         """
         异步爬取单个站点
@@ -326,13 +275,16 @@ class PluginCrawler:
         if not url:
             return {'success': False, 'articles': [], 'error': '站点 URL 为空', 'skipped': False}
 
-        # 海外家园网使用专用 sitemap 爬取
-        if parser_name == 'haiwaiwang':
-            return await self.crawl_haiwaiwang_sitemap(site, max_articles)
-
         try:
-            # 获取页面
-            html = await self.fetch_page(url)
+            # 判断是否使用代理
+            proxy_url = ''
+            if self._should_use_proxy(site):
+                proxy_url = self._build_proxy_url()
+                if proxy_url:
+                    print(f"[PluginCrawler] 🔒 {name} 使用代理: {site.get('domain', '')}")
+
+            # 获取页面（传入代理参数）
+            html = await self.fetch_page(url, proxy_url=proxy_url)
 
             if not html:
                 # 区分超时跳过和其他错误
