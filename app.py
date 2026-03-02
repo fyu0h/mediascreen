@@ -184,7 +184,7 @@ def init_database():
     """初始化数据库（迁移和索引）"""
     from models.sites import migrate_from_json, ensure_indexes
     from models.users import ensure_admin_user
-    from models.mongo import ensure_articles_indexes, ensure_alert_reads_indexes
+    from models.mongo import ensure_articles_indexes, ensure_alert_reads_indexes, init_preview_cache_index
     from models.tasks import ensure_task_indexes
     from models.logger import ensure_indexes as ensure_log_indexes
 
@@ -201,6 +201,9 @@ def init_database():
 
     # 确保告警已读集合索引存在
     ensure_alert_reads_indexes()
+
+    # 确保预览缓存 TTL 索引存在
+    init_preview_cache_index()
 
     # 确保任务集合索引存在
     ensure_task_indexes()

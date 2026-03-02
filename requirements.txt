@@ -19,6 +19,12 @@ beautifulsoup4>=4.12.0
 # Crawl4AI（可选，用于动态页面爬取）
 # crawl4ai>=0.2.0
 
+# TLS 指纹伪装 HTTP 客户端（可选，用于绕过反爬）
+# curl_cffi>=0.7.0
+
+# 专业网页正文提取（可选，提升预览正文质量）
+# trafilatura>=1.8.0
+
 # 生产环境 WSGI 服务器（Windows 使用 waitress）
 waitress>=2.1.0
 

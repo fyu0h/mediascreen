@@ -3745,7 +3745,78 @@ def telegram_monitor_stop():
         return error_response('停止失败，请稍后重试', 500)
 
 
+# ==================== 站点健康度 API ====================
+
+
+@api_bp.route('/sites/health', methods=['GET'])
+def sites_health():
+    """获取所有站点健康度"""
+    if 'user' not in session:
+        return error_response('未登录', 401)
+    from models.mongo import get_sites_health
+    health_list = get_sites_health()
+    return success_response(health_list)
+
+
 # ==================== 新闻预览辅助函数 ====================
+
+
+def _extract_with_trafilatura(html: str, url: str) -> tuple:
+    """使用 trafilatura 提取正文，返回 (title, content_blocks) 或 (None, None)"""
+    try:
+        import trafilatura
+        # 提取结构化数据（含标题）
+        result = trafilatura.extract(
+            html,
+            url=url,
+            include_comments=False,
+            include_tables=True,
+            include_images=False,
+            favor_precision=True,
+            deduplicate=True,
+        )
+        if not result or len(result) < 50:
+            return None, None
+
+        # 提取标题
+        metadata = trafilatura.extract(
+            html, url=url, output_format='xmltei',
+            include_comments=False, favor_precision=True
+        )
+        title = ''
+        if metadata:
+            from bs4 import BeautifulSoup
+            tei_soup = BeautifulSoup(metadata, 'html.parser')
+            title_tag = tei_soup.find('title')
+            if title_tag:
+                title = title_tag.get_text(strip=True)
+        if not title:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, 'html.parser')
+            t = soup.find('title')
+            if t:
+                title = t.get_text(strip=True)
+
+        # 将纯文本转换为 content blocks 格式
+        blocks = []
+        for para in result.split('\n'):
+            para = para.strip()
+            if not para:
+                continue
+            # 简单启发式：全大写或较短的文本可能是标题
+            if len(para) < 80 and para == para.upper() and len(para) > 5:
+                blocks.append({'type': 'heading', 'level': 3, 'text': para})
+            else:
+                blocks.append({'type': 'paragraph', 'text': para})
+
+        if blocks:
+            return title, blocks
+    except ImportError:
+        pass  # trafilatura 未安装
+    except Exception:
+        pass
+    return None, None
+
 
 def _extract_content_blocks(html: str, base_url: str) -> tuple:
     """从 HTML 提取正文内容块，返回 (title, content_blocks)"""
@@ -3842,12 +3913,29 @@ def _extract_content_blocks(html: str, base_url: str) -> tuple:
 
 
 def _content_quality_ok(content_blocks: list) -> bool:
-    """检查提取内容质量是否足够（至少3个文本块且总文本≥100字符）"""
-    text_blocks = [b for b in content_blocks if b['type'] in ('paragraph', 'heading', 'blockquote')]
-    if len(text_blocks) < 3:
+    """自适应质量检查 — 根据内容特征动态调整门槛"""
+    if not content_blocks:
         return False
+
+    text_blocks = [b for b in content_blocks if b['type'] in ('paragraph', 'heading', 'blockquote')]
+    if not text_blocks:
+        return False
+
     total_text = sum(len(b.get('text', '')) for b in text_blocks)
-    return total_text >= 100
+    block_count = len(text_blocks)
+
+    # 宽松标准：有标题 + 正文，且总文本 ≥ 50 字符（快讯类新闻）
+    has_heading = any(b.get('type') == 'heading' for b in text_blocks)
+    has_paragraph = any(b.get('type') == 'paragraph' for b in text_blocks)
+    if has_heading and has_paragraph and total_text >= 50:
+        return True
+
+    # 长文本标准：单段长文（某些站点全文放在一个 <p> 中）
+    if total_text >= 200:
+        return True
+
+    # 原始标准：至少 3 个文本块，总字符 ≥ 100
+    return block_count >= 3 and total_text >= 100
 
 
 def _take_page_screenshot(target_url: str) -> str:
@@ -4005,6 +4093,97 @@ def _get_cached_article_info(target_url: str) -> dict:
 # ==================== 新闻预览端点 ====================
 
 
+def _get_preview_cache(url: str) -> dict:
+    """查询预览缓存"""
+    try:
+        from models.mongo import get_preview_cache_collection
+        col = get_preview_cache_collection()
+        cache = col.find_one({'url': url})
+        if cache:
+            return cache.get('result')
+    except Exception:
+        pass
+    return None
+
+
+def _set_preview_cache(url: str, result: dict):
+    """写入预览缓存"""
+    try:
+        from models.mongo import get_preview_cache_collection
+        from datetime import datetime
+        col = get_preview_cache_collection()
+        col.update_one(
+            {'url': url},
+            {'$set': {
+                'url': url,
+                'result': result,
+                'cached_at': datetime.utcnow()
+            }},
+            upsert=True
+        )
+    except Exception:
+        pass
+
+
+def _enhanced_fetch(url: str, proxy_url: str = '') -> str:
+    """增强 HTTP 抓取 — 尝试 curl_cffi（TLS 指纹伪装），回退到 requests Session"""
+    import requests as http_requests
+
+    # 增强请求头（模拟真实浏览器完整 headers）
+    enhanced_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Sec-Ch-Ua': '"Chromium";v="120", "Google Chrome";v="120", "Not-A.Brand";v="99"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+    }
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+
+    # 尝试 curl_cffi（模拟浏览器 TLS 指纹）
+    try:
+        from curl_cffi import requests as curl_requests
+        from models.settings import load_settings
+        settings = load_settings()
+        impersonate = settings.get('crawler', {}).get('curl_cffi_impersonate', 'chrome120')
+        resp = curl_requests.get(
+            url,
+            headers=enhanced_headers,
+            timeout=15,
+            verify=False,
+            proxies=proxies,
+            impersonate=impersonate
+        )
+        if resp.status_code == 200:
+            resp.encoding = resp.apparent_encoding or 'utf-8'
+            return resp.text
+    except ImportError:
+        pass  # curl_cffi 未安装，回退
+    except Exception:
+        pass  # curl_cffi 请求失败，回退
+
+    # 回退：使用 requests Session（复用 TCP 连接和 Cookie）
+    try:
+        s = http_requests.Session()
+        s.headers.update(enhanced_headers)
+        resp = s.get(url, timeout=15, verify=False, proxies=proxies)
+        if resp.status_code == 200:
+            resp.encoding = resp.apparent_encoding or 'utf-8'
+            return resp.text
+    except Exception:
+        pass
+
+    return ''
+
+
 def _get_global_proxy_url() -> str:
     """
     读取全局代理配置，返回代理 URL。
@@ -4066,6 +4245,11 @@ def news_preview():
     # 检查全局代理配置
     proxy_url = _get_global_proxy_url()
 
+    # 查询预览缓存
+    cached_preview = _get_preview_cache(url)
+    if cached_preview:
+        return success_response(cached_preview)
+
     try:
         # ===== Level 1: requests.get() + 正文提取 =====
         html = None
@@ -4086,66 +4270,90 @@ def news_preview():
         is_cf = html and any(m in html for m in cf_markers)
 
         if html and not is_cf:
-            title, blocks = _extract_content_blocks(html, base_url)
+            # 优先使用 trafilatura 提取（精度更高）
+            title, blocks = _extract_with_trafilatura(html, url)
+            if not blocks:
+                # 回退到 BeautifulSoup 自研提取器
+                title, blocks = _extract_content_blocks(html, base_url)
             if _content_quality_ok(blocks):
-                return success_response({
+                result_data = {
                     'type': 'content',
+                    'quality': 'full',
                     'title': title,
                     'url': url,
                     'content': blocks
-                })
+                }
+                _set_preview_cache(url, result_data)
+                return success_response(result_data)
 
-        # ===== Level 2: 无头浏览器 (crawl4ai) + 正文提取 =====
-        # 代理模式跳过 crawl4ai（Playwright 代理隧道兼容性差，必定超时）
-        if not proxy_url:
-            try:
-                import asyncio
-                import os
-                from plugins.crawler import get_crawler
-                old_env = os.environ.get('PYTHONIOENCODING')
-                os.environ['PYTHONIOENCODING'] = 'utf-8'
-                crawler = get_crawler()
-                loop = asyncio.new_event_loop()
+        # ===== Level 2: 增强抓取 + 正文提取 =====
+        # 无代理 → crawl4ai 无头浏览器 | 有代理 → curl_cffi/requests 增强请求头
+        try:
+            crawler_html = ''
+            if not proxy_url:
+                # 无代理：尝试 crawl4ai 无头浏览器（支持 JS 渲染）
                 try:
-                    crawler_html = loop.run_until_complete(crawler.fetch_page(url, timeout=20))
-                finally:
-                    loop.close()
-                    if old_env is None:
-                        os.environ.pop('PYTHONIOENCODING', None)
-                    else:
-                        os.environ['PYTHONIOENCODING'] = old_env
+                    import asyncio
+                    import os
+                    from plugins.crawler import get_crawler
+                    old_env = os.environ.get('PYTHONIOENCODING')
+                    os.environ['PYTHONIOENCODING'] = 'utf-8'
+                    crawler = get_crawler()
+                    loop = asyncio.new_event_loop()
+                    try:
+                        crawler_html = loop.run_until_complete(crawler.fetch_page(url, timeout=20))
+                    finally:
+                        loop.close()
+                        if old_env is None:
+                            os.environ.pop('PYTHONIOENCODING', None)
+                        else:
+                            os.environ['PYTHONIOENCODING'] = old_env
+                except Exception:
+                    crawler_html = ''
+            else:
+                # 有代理：使用 curl_cffi 模拟浏览器 TLS 指纹（如果可用），否则用增强 requests
+                crawler_html = _enhanced_fetch(url, proxy_url)
 
-                if crawler_html:
+            if crawler_html:
+                # 优先使用 trafilatura 提取
+                title, blocks = _extract_with_trafilatura(crawler_html, url)
+                if not blocks:
                     title, blocks = _extract_content_blocks(crawler_html, base_url)
-                    if _content_quality_ok(blocks):
-                        return success_response({
-                            'type': 'content',
-                            'title': title,
-                            'url': url,
-                            'content': blocks
-                        })
-            except Exception as l2_err:
-                log_error(f"Level 2 无头浏览器抓取失败: {url}", str(l2_err))
+                if _content_quality_ok(blocks):
+                    result_data = {
+                        'type': 'content',
+                        'quality': 'full',
+                        'title': title,
+                        'url': url,
+                        'content': blocks
+                    }
+                    _set_preview_cache(url, result_data)
+                    return success_response(result_data)
+        except Exception as l2_err:
+            log_error(f"Level 2 增强抓取失败: {url}", str(l2_err))
 
         # ===== Level 3: Playwright 全页截图 =====
-        # 代理模式跳过 Playwright 截图（同样不兼容代理隧道）
-        if not proxy_url:
-            try:
-                screenshot_b64 = _take_page_screenshot(url)
-                if screenshot_b64:
-                    return success_response({
-                        'type': 'screenshot',
-                        'image': f'data:image/png;base64,{screenshot_b64}',
-                        'url': url
-                    })
-            except Exception as l3_err:
-                log_error(f"Level 3 截图失败: {url}", str(l3_err))
+        # 无论是否有代理都尝试截图（Playwright 自身支持代理参数）
+        try:
+            screenshot_b64 = _take_page_screenshot(url)
+            if screenshot_b64:
+                result_data = {
+                    'type': 'screenshot',
+                    'quality': 'screenshot',
+                    'image': f'data:image/png;base64,{screenshot_b64}',
+                    'url': url
+                }
+                _set_preview_cache(url, result_data)
+                return success_response(result_data)
+        except Exception as l3_err:
+            log_error(f"Level 3 截图失败: {url}", str(l3_err))
 
         # ===== Level 4: 数据库缓存摘要 =====
         cached = _get_cached_article_info(url)
         if cached:
             return success_response({
                 'type': 'cached',
+                'quality': 'summary',
                 'title': cached['title'],
                 'source': cached['source'],
                 'pub_date': cached['pub_date'],

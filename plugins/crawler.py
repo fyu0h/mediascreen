@@ -201,14 +201,43 @@ class PluginCrawler:
                 'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,ko;q=0.5'
             }
             proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-            response = requests.get(url, headers=headers, timeout=timeout, proxies=proxies)
+            response = requests.get(url, headers=headers, timeout=timeout, proxies=proxies, verify=False)
             if response.status_code == 200:
                 # 自动检测编码，避免中日韩文乱码
                 response.encoding = response.apparent_encoding or response.encoding
                 return response.text
+            # 记录具体的 HTTP 状态码，便于诊断
+            status = response.status_code
+            if status == 403:
+                print(f"[PluginCrawler] ⛔ HTTP 403 被拒绝（可能需要代理或被反爬）: {url}")
+            elif status == 404:
+                print(f"[PluginCrawler] ❌ HTTP 404 页面不存在: {url}")
+            elif status == 429:
+                print(f"[PluginCrawler] ⚠️ HTTP 429 请求频率过高: {url}")
+            elif status == 503:
+                print(f"[PluginCrawler] ⚠️ HTTP 503 服务不可用（可能是 Cloudflare 拦截）: {url}")
+            elif status >= 500:
+                print(f"[PluginCrawler] ⚠️ HTTP {status} 服务器错误: {url}")
+            else:
+                print(f"[PluginCrawler] ⚠️ HTTP {status} 非200响应: {url}")
+            return ""
+        except requests.exceptions.ConnectTimeout:
+            print(f"[PluginCrawler] ⏱️ 连接超时（{timeout}秒）: {url}")
+            return ""
+        except requests.exceptions.ReadTimeout:
+            print(f"[PluginCrawler] ⏱️ 读取超时（{timeout}秒）: {url}")
+            return ""
+        except requests.exceptions.SSLError as e:
+            print(f"[PluginCrawler] 🔒 SSL证书错误: {url} — {e}")
+            return ""
+        except requests.exceptions.ConnectionError as e:
+            print(f"[PluginCrawler] 🔌 连接失败（DNS解析失败或目标不可达）: {url} — {e}")
+            return ""
+        except requests.exceptions.TooManyRedirects:
+            print(f"[PluginCrawler] 🔄 重定向过多: {url}")
             return ""
         except Exception as e:
-            print(f"[PluginCrawler] HTTP请求失败 {url}: {e}")
+            print(f"[PluginCrawler] HTTP请求失败 {url}: {type(e).__name__}: {e}")
             return ""
 
     def parse_articles_generic(self, html: str, site: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -344,6 +373,16 @@ class PluginCrawler:
             if len(articles) > max_articles:
                 articles = articles[:max_articles]
 
+            # 记录站点健康度
+            try:
+                from models.mongo import record_site_health
+                _site_id = site.get('id', site.get('domain', ''))
+                _domain = site.get('domain', '')
+                record_site_health(_site_id, _domain, success=len(articles) > 0,
+                                  error_msg='' if articles else '未提取到文章')
+            except Exception:
+                pass
+
             return {
                 'success': True,
                 'articles': articles,
@@ -353,6 +392,14 @@ class PluginCrawler:
 
         except asyncio.TimeoutError:
             print(f"[PluginCrawler] ⏱️ 站点超时跳过: {name}")
+            # 记录站点健康度（超时）
+            try:
+                from models.mongo import record_site_health
+                _site_id = site.get('id', site.get('domain', ''))
+                _domain = site.get('domain', '')
+                record_site_health(_site_id, _domain, success=False, error_msg='站点超时')
+            except Exception:
+                pass
             return {
                 'success': False,
                 'articles': [],
@@ -362,6 +409,15 @@ class PluginCrawler:
         except Exception as e:
             error_msg = str(e)
             is_timeout = 'timeout' in error_msg.lower()
+            # 记录站点健康度（异常）
+            try:
+                from models.mongo import record_site_health
+                _site_id = site.get('id', site.get('domain', ''))
+                _domain = site.get('domain', '')
+                record_site_health(_site_id, _domain, success=False,
+                                  error_msg='超时跳过' if is_timeout else error_msg)
+            except Exception:
+                pass
             return {
                 'success': False,
                 'articles': [],

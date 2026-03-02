@@ -62,7 +62,8 @@ DEFAULT_SETTINGS = {
             'username': '',
             'password': '',
             'protocol': 'http'
-        }
+        },
+        'curl_cffi_impersonate': 'chrome120',  # curl_cffi TLS 指纹伪装版本
     },
     'duty': {
         'leaders': [],   # 值班领导列表

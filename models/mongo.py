@@ -1112,3 +1112,73 @@ def ensure_alert_reads_indexes() -> None:
 
     except Exception as e:
         print(f"[MongoDB] 创建 alert_reads 索引时出错: {e}")
+
+
+# ==================== 预览缓存 ====================
+
+
+def get_preview_cache_collection():
+    """获取预览缓存集合"""
+    db = get_db()
+    return db['preview_cache']
+
+
+def init_preview_cache_index():
+    """初始化预览缓存 TTL 索引（8小时过期）"""
+    try:
+        col = get_preview_cache_collection()
+        # 检查是否已存在 TTL 索引
+        existing = col.index_information()
+        if 'cached_at_1' not in existing:
+            col.create_index('cached_at', expireAfterSeconds=28800)
+            print("[MongoDB] 已为 preview_cache 创建 TTL 索引（8小时过期）")
+    except Exception as e:
+        print(f"[MongoDB] 创建 preview_cache 索引时出错: {e}")
+
+
+# ==================== 站点健康度监控 ====================
+
+
+def get_site_health_collection():
+    """获取站点健康度集合"""
+    db = get_db()
+    return db['site_health']
+
+
+def record_site_health(site_id: str, domain: str, success: bool, error_msg: str = ''):
+    """记录站点抓取结果"""
+    from datetime import datetime
+    try:
+        col = get_site_health_collection()
+        update_doc = {
+            '$set': {
+                'domain': domain,
+                'last_attempt': datetime.utcnow(),
+                'last_error': error_msg if not success else '',
+            },
+            '$inc': {
+                'total_attempts': 1,
+                'total_successes': 1 if success else 0,
+                'total_failures': 0 if success else 1,
+            },
+            '$setOnInsert': {'site_id': site_id}
+        }
+        # 成功时更新 last_success 并重置连续失败计数
+        if success:
+            update_doc['$set']['last_success'] = datetime.utcnow()
+            update_doc['$set']['consecutive_failures'] = 0
+        else:
+            update_doc['$inc']['consecutive_failures'] = 1
+
+        col.update_one({'site_id': site_id}, update_doc, upsert=True)
+    except Exception:
+        pass
+
+
+def get_sites_health() -> list:
+    """获取所有站点健康度列表"""
+    try:
+        col = get_site_health_collection()
+        return list(col.find({}, {'_id': 0}).sort('consecutive_failures', -1))
+    except Exception:
+        return []

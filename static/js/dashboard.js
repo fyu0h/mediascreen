@@ -256,15 +256,28 @@ function openNewsPreview(url, articleEl) {
                 const d = data.data;
                 const previewType = d.type || 'content';
 
-                // 更新工具栏模式标识
+                // 更新工具栏模式标识（基于 quality 字段）
                 const toolbar = modal.querySelector('.news-preview-toolbar');
-                if (toolbar && previewType !== 'content') {
+                if (toolbar) {
                     const openBtn = toolbar.querySelector('.preview-open-btn');
                     if (openBtn) {
-                        const badgeClass = previewType === 'screenshot' ? 'mode-screenshot' : 'mode-cached';
-                        const badgeText = previewType === 'screenshot' ? '&#128247; 截图模式' : '&#128203; 缓存模式';
-                        openBtn.insertAdjacentHTML('afterend',
-                            `<span class="preview-mode-badge ${badgeClass}">${badgeText}</span>`);
+                        const quality = d.quality || 'full';
+                        let badgeClass = '';
+                        let badgeText = '';
+                        if (quality === 'full') {
+                            badgeClass = 'mode-full';
+                            badgeText = '&#9989; 完整正文';
+                        } else if (quality === 'screenshot') {
+                            badgeClass = 'mode-screenshot';
+                            badgeText = '&#128247; 截图模式';
+                        } else if (quality === 'summary') {
+                            badgeClass = 'mode-cached';
+                            badgeText = '&#128203; 仅摘要';
+                        }
+                        if (badgeText) {
+                            openBtn.insertAdjacentHTML('afterend',
+                                `<span class="preview-mode-badge ${badgeClass}">${badgeText}</span>`);
+                        }
                     }
                 }
 
