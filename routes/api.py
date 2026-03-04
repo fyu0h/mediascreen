@@ -4691,6 +4691,10 @@ def get_events_timeline():
     if 'user' not in session:
         return error_response('未登录', 401)
 
+    # 获取语言参数，默认英文
+    lang = request.args.get('lang', 'en')
+    translate = (lang == 'cn')
+
     try:
         import requests as http_requests
         from models.settings import get_translation_settings
@@ -4715,11 +4719,13 @@ def get_events_timeline():
         # 提取 locations 数组
         locations = data.get('locations', [])
 
-        # 获取翻译设置
-        translation_settings = get_translation_settings()
+        # 获取翻译设置（仅在需要翻译时）
+        translation_settings = None
+        if translate:
+            translation_settings = get_translation_settings()
 
-        # 翻译事件
-        translated_events = []
+        # 处理事件
+        processed_events = []
         for idx, location in enumerate(locations[:10]):  # 只取前10个事件
             try:
                 # 提取事件信息
@@ -4739,15 +4745,6 @@ def get_events_timeline():
                 else:
                     severity = 'low'
 
-                # 翻译标题（location_name）
-                title_cn = _translate_text(location_name, translation_settings) if location_name else location_name
-
-                # 翻译摘要
-                summary_cn = _translate_text(summary, translation_settings) if summary else summary
-
-                # 翻译国家
-                country_cn = _translate_text(country, translation_settings) if country else country
-
                 # 提取第一个关键点的时间作为事件时间
                 timestamp = ''
                 if key_points and len(key_points) > 0:
@@ -4765,29 +4762,53 @@ def get_events_timeline():
                 else:
                     timestamp = datetime.now().isoformat()
 
-                translated_events.append({
-                    'title': title_cn or location_name,
-                    'description': summary_cn or summary,
-                    'location': country_cn or country,
-                    'timestamp': timestamp,
-                    'severity': severity,
-                    'original_title': location_name
-                })
+                # 根据语言设置决定是否翻译
+                if translate and translation_settings:
+                    title_cn = _translate_text(location_name, translation_settings) if location_name else location_name
+                    summary_cn = _translate_text(summary, translation_settings) if summary else summary
+                    country_cn = _translate_text(country, translation_settings) if country else country
+
+                    processed_events.append({
+                        'title': title_cn or location_name,
+                        'description': summary_cn or summary,
+                        'location': country_cn or country,
+                        'timestamp': timestamp,
+                        'severity': severity,
+                        'original_title': location_name,
+                        'original_description': summary,
+                        'original_location': country
+                    })
+                else:
+                    # 默认返回英文原文
+                    processed_events.append({
+                        'title': location_name,
+                        'description': summary,
+                        'location': country,
+                        'timestamp': timestamp,
+                        'severity': severity,
+                        'original_title': location_name,
+                        'original_description': summary,
+                        'original_location': country
+                    })
+
             except Exception as e:
                 log_error(f"处理事件失败: {location.get('location_name', 'unknown')}", str(e))
                 # 处理失败时使用原文
-                translated_events.append({
+                processed_events.append({
                     'title': location.get('location_name', ''),
                     'description': location.get('summary', ''),
                     'location': location.get('country', ''),
                     'timestamp': datetime.now().isoformat(),
                     'severity': 'medium',
-                    'original_title': location.get('location_name', '')
+                    'original_title': location.get('location_name', ''),
+                    'original_description': location.get('summary', ''),
+                    'original_location': location.get('country', '')
                 })
 
         return success_response({
-            'events': translated_events,
-            'total': len(translated_events),
+            'events': processed_events,
+            'total': len(processed_events),
+            'lang': lang,
             'updated_at': datetime.now().isoformat()
         })
 
@@ -4796,6 +4817,7 @@ def get_events_timeline():
         return success_response({
             'events': [],
             'total': 0,
+            'lang': lang,
             'updated_at': datetime.now().isoformat(),
             'error': str(e)
         })

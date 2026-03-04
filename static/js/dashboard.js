@@ -7374,6 +7374,30 @@ function refreshDefconLevel() {
 
 // ========== 全球事件链模块 ==========
 
+// 当前语言设置
+let currentEventsLang = 'en';
+
+/**
+ * 切换事件链语言
+ */
+function switchEventsLanguage(lang) {
+    if (currentEventsLang === lang) return;
+
+    currentEventsLang = lang;
+
+    // 更新按钮状态
+    document.querySelectorAll('#eventsLangSwitch .lang-btn').forEach(btn => {
+        if (btn.getAttribute('data-lang') === lang) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // 重新加载数据
+    loadEventsTimeline();
+}
+
 /**
  * 加载事件时间线数据
  */
@@ -7384,7 +7408,7 @@ async function loadEventsTimeline() {
     try {
         listElem.innerHTML = '<div class="events-loading">加载中...</div>';
 
-        const response = await fetch('/api/events/timeline');
+        const response = await fetch(`/api/events/timeline?lang=${currentEventsLang}`);
         const result = await response.json();
 
         if (result.success) {
@@ -7417,12 +7441,12 @@ function updateEventsDisplay(data) {
     events.forEach(event => {
         const severity = event.severity || 'medium';
         const severityText = {
-            'high': '高',
-            'medium': '中',
-            'low': '低'
-        }[severity] || '中';
+            'high': currentEventsLang === 'cn' ? '高' : 'High',
+            'medium': currentEventsLang === 'cn' ? '中' : 'Med',
+            'low': currentEventsLang === 'cn' ? '低' : 'Low'
+        }[severity] || (currentEventsLang === 'cn' ? '中' : 'Med');
 
-        const timeStr = event.timestamp ? formatEventTime(event.timestamp) : '未知时间';
+        const timeStr = event.timestamp ? formatEventTime(event.timestamp) : (currentEventsLang === 'cn' ? '未知时间' : 'Unknown');
 
         html += `
             <div class="event-item severity-${severity}">
@@ -7473,31 +7497,47 @@ function formatEventTime(timestamp) {
         const now = new Date();
         const diff = now - date;
 
-        // 小于1小时
-        if (diff < 3600000) {
-            const minutes = Math.floor(diff / 60000);
-            return minutes <= 0 ? '刚刚' : `${minutes}分钟前`;
+        if (currentEventsLang === 'cn') {
+            // 中文时间格式
+            if (diff < 3600000) {
+                const minutes = Math.floor(diff / 60000);
+                return minutes <= 0 ? '刚刚' : `${minutes}分钟前`;
+            }
+            if (diff < 86400000) {
+                const hours = Math.floor(diff / 3600000);
+                return `${hours}小时前`;
+            }
+            if (diff < 604800000) {
+                const days = Math.floor(diff / 86400000);
+                return `${days}天前`;
+            }
+            return date.toLocaleDateString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } else {
+            // 英文时间格式
+            if (diff < 3600000) {
+                const minutes = Math.floor(diff / 60000);
+                return minutes <= 0 ? 'Just now' : `${minutes}m ago`;
+            }
+            if (diff < 86400000) {
+                const hours = Math.floor(diff / 3600000);
+                return `${hours}h ago`;
+            }
+            if (diff < 604800000) {
+                const days = Math.floor(diff / 86400000);
+                return `${days}d ago`;
+            }
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         }
-
-        // 小于24小时
-        if (diff < 86400000) {
-            const hours = Math.floor(diff / 3600000);
-            return `${hours}小时前`;
-        }
-
-        // 小于7天
-        if (diff < 604800000) {
-            const days = Math.floor(diff / 86400000);
-            return `${days}天前`;
-        }
-
-        // 显示具体日期
-        return date.toLocaleDateString('zh-CN', {
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
     } catch (e) {
         return timestamp;
     }

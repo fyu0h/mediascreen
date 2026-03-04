@@ -6333,6 +6333,37 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     gap: 8px;
 }
 
+.lang-switch {
+    display: flex;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.lang-btn {
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+}
+
+.lang-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.lang-btn.active {
+    color: #00d4ff;
+    background: rgba(0, 212, 255, 0.15);
+}
+
 .events-update-time {
     font-size: 11px;
     color: var(--text-muted);
