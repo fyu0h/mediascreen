@@ -4984,6 +4984,34 @@ def events_fetch_now():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@api_bp.route('/events/clear', methods=['POST'])
+def events_clear():
+    """清理所有事件缓存"""
+    try:
+        from models.events import get_events_collection, get_events_count
+
+        # 获取当前数量
+        count_before = get_events_count()
+
+        # 清理数据
+        collection = get_events_collection()
+        result = collection.delete_many({})
+
+        log_system(f"清理事件缓存: 删除了 {result.deleted_count} 个事件")
+
+        return jsonify({
+            'success': True,
+            'message': f'已清理 {result.deleted_count} 个事件',
+            'data': {
+                'deleted_count': result.deleted_count,
+                'count_before': count_before
+            }
+        })
+    except Exception as e:
+        log_error("清理事件缓存失败", str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @api_bp.route('/events/detail/<event_id>', methods=['GET'])
 def events_detail(event_id):
     """获取事件详情"""
