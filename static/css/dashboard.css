@@ -6525,6 +6525,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     min-height: 200px;
 }
 
+/* DEFCON 卡片（左侧，宽度减半） */
+.defcon-card {
+    flex: 0 0 calc(50% - 6px);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 /* Telegram 卡片（左侧） */
 .telegram-card {
     flex: 1;
