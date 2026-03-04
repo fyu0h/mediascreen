@@ -7409,7 +7409,8 @@ async function loadEventsTimeline() {
     }
 
     try {
-        listElem.innerHTML = '<div class="events-loading">加载中...</div>';
+        const loadingText = currentEventsLang === 'cn' ? '正在翻译中，请稍候...' : '加载中...';
+        listElem.innerHTML = `<div class="events-loading">${loadingText}</div>`;
 
         console.log(`正在加载事件链数据，语言: ${currentEventsLang}`);
         const response = await fetch(`/api/events/timeline?lang=${currentEventsLang}`);

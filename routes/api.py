@@ -4778,9 +4778,35 @@ def get_events_timeline():
 
                 # 根据语言设置决定是否翻译
                 if translate and translation_config:
-                    title_cn = _translate_text(location_name, translation_config) if location_name else location_name
-                    summary_cn = _translate_text(summary, translation_config) if summary else summary
-                    country_cn = _translate_text(country, translation_config) if country else country
+                    log_system(f"开始翻译事件 {idx + 1}")
+
+                    # 翻译标题
+                    title_cn = location_name
+                    if location_name:
+                        try:
+                            title_cn = _translate_text(location_name, translation_config)
+                            log_system(f"标题翻译完成: {location_name[:30]}... -> {title_cn[:30]}...")
+                        except Exception as e:
+                            log_error(f"标题翻译失败", str(e))
+
+                    # 翻译摘要（限制长度，避免超时）
+                    summary_cn = summary
+                    if summary:
+                        try:
+                            # 只翻译前500个字符
+                            summary_to_translate = summary[:500] if len(summary) > 500 else summary
+                            summary_cn = _translate_text(summary_to_translate, translation_config)
+                            log_system(f"摘要翻译完成")
+                        except Exception as e:
+                            log_error(f"摘要翻译失败", str(e))
+
+                    # 翻译国家
+                    country_cn = country
+                    if country:
+                        try:
+                            country_cn = _translate_text(country, translation_config)
+                        except Exception as e:
+                            log_error(f"国家翻译失败", str(e))
 
                     processed_events.append({
                         'title': title_cn or location_name,
@@ -4847,6 +4873,7 @@ def _translate_text(text: str, config: dict) -> str:
         api_url = config.get('api_url', '')
 
         if not api_key or not api_url:
+            log_system(f"翻译配置不完整: api_key={bool(api_key)}, api_url={bool(api_url)}")
             return text
 
         # 构建翻译提示词
@@ -4864,24 +4891,35 @@ def _translate_text(text: str, config: dict) -> str:
                 {'role': 'user', 'content': prompt}
             ],
             'temperature': 0.3,
-            'max_tokens': 500
+            'max_tokens': 1000
         }
+
+        log_system(f"调用翻译 API: {api_url}, model: {model}")
 
         resp = http_requests.post(
             api_url,
             headers=headers,
             json=payload,
-            timeout=10,
+            timeout=30,  # 增加超时时间到30秒
             verify=False
         )
+
+        log_system(f"翻译 API 响应状态: {resp.status_code}")
 
         if resp.status_code == 200:
             result = resp.json()
             translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-            return translated if translated else text
+            if translated:
+                log_system(f"翻译成功: {text[:30]}... -> {translated[:30]}...")
+                return translated
+            else:
+                log_system("翻译结果为空")
+                return text
         else:
+            log_error(f"翻译 API 返回错误", f"状态码: {resp.status_code}, 响应: {resp.text[:200]}")
             return text
 
-    except Exception:
+    except Exception as e:
+        log_error(f"翻译异常", str(e))
         return text
 
