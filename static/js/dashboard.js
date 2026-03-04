@@ -7533,8 +7533,13 @@ function updateEventsDisplay(data) {
 
         const timeStr = event.timestamp ? formatEventTime(event.timestamp) : (currentEventsLang === 'cn' ? '未知时间' : 'Unknown');
 
+        // 调试：检查 event_id
+        if (!event.event_id) {
+            console.warn('事件缺少 event_id:', event);
+        }
+
         html += `
-            <div class="event-item severity-${severity}" onclick="showEventDetail('${event.event_id}')" style="cursor: pointer;">
+            <div class="event-item severity-${severity}" onclick="showEventDetail('${event.event_id || ''}')" style="cursor: pointer;">
                 <div class="event-time">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -7697,14 +7702,25 @@ setInterval(refreshEventsTimeline, 5 * 60 * 1000);
  */
 async function showEventDetail(eventId) {
     try {
-        console.log('加载事件详情:', eventId);
+        console.log('加载事件详情, eventId:', eventId, 'type:', typeof eventId);
+
+        if (!eventId || eventId === 'undefined') {
+            showModal('错误', `<div style="color: var(--danger);">事件 ID 无效</div>`);
+            return;
+        }
 
         // 显示加载状态
         showModal('事件详情', '<div style="text-align: center; padding: 40px;">加载中...</div>');
 
         // 请求详情数据
-        const response = await fetch(`/api/events/detail/${eventId}?lang=${currentEventsLang}`);
+        const url = `/api/events/detail/${eventId}?lang=${currentEventsLang}`;
+        console.log('请求 URL:', url);
+
+        const response = await fetch(url);
+        console.log('响应状态:', response.status);
+
         const result = await response.json();
+        console.log('响应数据:', result);
 
         if (!result.success) {
             showModal('错误', `<div style="color: var(--danger);">${result.message || '加载失败'}</div>`);
