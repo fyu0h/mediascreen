@@ -130,59 +130,86 @@
                 </div>
             </div>
 
-            <!-- Telegram 群组监控 -->
-            <div class="card telegram-card" data-layout-id="telegram">
-                <div class="card-header">
-                    <span class="card-title">Telegram群组监控</span>
-                    <div class="telegram-header-actions">
-                        <span class="tg-status-badge" id="tgStatusBadge">未启动</span>
-                        <button class="btn-manage" onclick="openTelegramSettingsModal()" title="Telegram设置">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                            </svg>
-                        </button>
+            <!-- Telegram 群组监控与外部监控 -->
+            <div class="telegram-monitor-container">
+                <!-- 左侧：Telegram 群组监控 -->
+                <div class="card telegram-card" data-layout-id="telegram">
+                    <div class="card-header">
+                        <span class="card-title">Telegram群组监控</span>
+                        <div class="telegram-header-actions">
+                            <span class="tg-status-badge" id="tgStatusBadge">未启动</span>
+                            <button class="btn-manage" onclick="openTelegramSettingsModal()" title="Telegram设置">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body telegram-body">
+                        <!-- 统计摘要 -->
+                        <div class="tg-stats-row">
+                            <div class="tg-stat-item">
+                                <div class="tg-stat-value tg-stat-alert" id="tgTodayAlerts">0</div>
+                                <div class="tg-stat-label">今日报警</div>
+                            </div>
+                            <div class="tg-stat-item">
+                                <div class="tg-stat-value tg-stat-unread" id="tgUnreadAlerts">0</div>
+                                <div class="tg-stat-label">未读</div>
+                            </div>
+                            <div class="tg-stat-item">
+                                <div class="tg-stat-value" id="tgGroupCount">0</div>
+                                <div class="tg-stat-label">监控群组</div>
+                            </div>
+                        </div>
+                        <!-- 报警列表 -->
+                        <div class="tg-alert-list" id="tgAlertList">
+                            <div class="tg-empty-hint">暂无报警记录</div>
+                        </div>
+                        <!-- 底部操作 -->
+                        <div class="tg-card-footer">
+                            <button class="btn-view-all" onclick="openTelegramAllAlertsModal()">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                </svg>
+                                查看全部报警
+                            </button>
+                            <button class="btn-view-all" onclick="openTelegramStatsModal()">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                                </svg>
+                                统计分析
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <div class="card-body telegram-body">
-                    <!-- 统计摘要 -->
-                    <div class="tg-stats-row">
-                        <div class="tg-stat-item">
-                            <div class="tg-stat-value tg-stat-alert" id="tgTodayAlerts">0</div>
-                            <div class="tg-stat-label">今日报警</div>
-                        </div>
-                        <div class="tg-stat-item">
-                            <div class="tg-stat-value tg-stat-unread" id="tgUnreadAlerts">0</div>
-                            <div class="tg-stat-label">未读</div>
-                        </div>
-                        <div class="tg-stat-item">
-                            <div class="tg-stat-value" id="tgGroupCount">0</div>
-                            <div class="tg-stat-label">监控群组</div>
-                        </div>
-                    </div>
-                    <!-- 报警列表 -->
-                    <div class="tg-alert-list" id="tgAlertList">
-                        <div class="tg-empty-hint">暂无报警记录</div>
-                    </div>
-                    <!-- 底部操作 -->
-                    <div class="tg-card-footer">
-                        <button class="btn-view-all" onclick="openTelegramAllAlertsModal()">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="3" width="7" height="7"></rect>
-                                <rect x="14" y="3" width="7" height="7"></rect>
-                                <rect x="14" y="14" width="7" height="7"></rect>
-                                <rect x="3" y="14" width="7" height="7"></rect>
+
+                <!-- 右侧：外部监控网页 -->
+                <div class="card external-monitor-card" data-layout-id="external-monitor">
+                    <div class="card-header">
+                        <span class="card-title">World Monitor</span>
+                        <a href="https://world-monitor.com/" target="_blank" class="btn-manage" title="在新窗口打开">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                <polyline points="15 3 21 3 21 9"></polyline>
+                                <line x1="10" y1="14" x2="21" y2="3"></line>
                             </svg>
-                            查看全部报警
-                        </button>
-                        <button class="btn-view-all" onclick="openTelegramStatsModal()">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="20" x2="18" y2="10"></line>
-                                <line x1="12" y1="20" x2="12" y2="4"></line>
-                                <line x1="6" y1="20" x2="6" y2="14"></line>
-                            </svg>
-                            统计分析
-                        </button>
+                        </a>
+                    </div>
+                    <div class="card-body external-monitor-body">
+                        <iframe
+                            src="https://world-monitor.com/"
+                            class="external-monitor-iframe"
+                            frameborder="0"
+                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                            loading="lazy"
+                            title="World Monitor">
+                        </iframe>
                     </div>
                 </div>
             </div>

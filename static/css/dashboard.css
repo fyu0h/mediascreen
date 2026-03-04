@@ -6298,13 +6298,64 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 /* ========== Telegram 监控模块 ========== */
 
-/* Telegram 卡片 */
-.telegram-card {
+/* Telegram 监控容器（左右分栏） */
+.telegram-monitor-container {
+    display: flex;
+    gap: 12px;
     flex: 1;
     min-height: 200px;
+}
+
+/* Telegram 卡片（左侧） */
+.telegram-card {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
 }
+
+/* 外部监控卡片（右侧） */
+.external-monitor-card {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.external-monitor-card .card-header {
+    padding: 10px 16px;
+    background: linear-gradient(90deg, rgba(0, 255, 136, 0.1) 0%, transparent 50%);
+}
+
+.external-monitor-card .card-title {
+    font-size: 13px;
+    color: #00ff88;
+}
+
+.external-monitor-card .card-title::before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: linear-gradient(180deg, #00ff88 0%, #00d4ff 100%);
+    border-radius: 2px;
+    margin-right: 8px;
+    display: inline-block;
+}
+
+.external-monitor-body {
+    padding: 0 !important;
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.external-monitor-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: rgba(0, 0, 0, 0.2);
+}
+
 
 .telegram-card .card-header {
     padding: 10px 16px;
@@ -7290,6 +7341,16 @@ body.resizing .chart-container-sm {
         padding: 5px 8px;
         font-size: 10px;
     }
+
+    /* Telegram 监控容器在平板端垂直堆叠 */
+    .telegram-monitor-container {
+        flex-direction: column;
+    }
+
+    .telegram-card,
+    .external-monitor-card {
+        min-height: 350px;
+    }
 }
 
 /* ========== 新闻预览模态框 ========== */
@@ -7961,6 +8022,20 @@ body.resizing .chart-container-sm {
 
     .telegram-body {
         overflow: visible;
+    }
+
+    /* Telegram 监控容器在移动端垂直堆叠 */
+    .telegram-monitor-container {
+        flex-direction: column;
+    }
+
+    .telegram-card,
+    .external-monitor-card {
+        min-height: 300px;
+    }
+
+    .external-monitor-card {
+        min-height: 400px;
     }
 
     .tg-alert-list {
