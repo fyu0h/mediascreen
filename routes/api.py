@@ -4687,193 +4687,45 @@ def get_defcon_level():
 
 @api_bp.route('/events/timeline', methods=['GET'])
 def get_events_timeline():
-    """获取全球事件时间线"""
+    """获取全球事件时间线（从缓存读取）"""
     if 'user' not in session:
         return error_response('未登录', 401)
-
-    # 获取语言参数，默认英文
-    lang = request.args.get('lang', 'en')
-    translate = (lang == 'cn')
 
     # 获取分页参数
     offset = int(request.args.get('offset', 0))
     limit = int(request.args.get('limit', 20))
 
     try:
-        import requests as http_requests
-        from models.settings import get_translation_config
+        from models.events import get_all_events, get_events_count
 
-        log_system(f"开始获取事件链数据，语言: {lang}, offset: {offset}, limit: {limit}")
+        log_system(f"从缓存获取事件链数据, offset: {offset}, limit: {limit}")
 
-        # 获取事件数据
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'referer': 'https://world-monitor.com/',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        # 从数据库获取事件
+        events = get_all_events(skip=offset, limit=limit)
+        total = get_events_count()
 
-        resp = http_requests.get(
-            'https://world-monitor.com/api/signal-markers',
-            headers=headers,
-            timeout=15,
-            verify=False
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        log_system(f"获取到 {len(events)} 个事件，总数: {total}")
 
-        log_system(f"成功获取外部 API 数据，状态码: {resp.status_code}")
-
-        # 提取 locations 数组
-        locations = data.get('locations', [])
-        log_system(f"提取到 {len(locations)} 个 locations")
-
-        # 获取翻译设置（仅在需要翻译时）
-        translation_config = None
-        if translate:
-            translation_config = get_translation_config()
-            log_system("已加载翻译配置")
-
-        # 处理所有事件并提取时间戳用于排序
-        all_events = []
-        for idx, location in enumerate(locations):
-            try:
-                # 提取事件信息
-                location_name = location.get('location_name', '')
-                country = location.get('country', '')
-                summary = location.get('summary', '')
-                analysis = location.get('analysis', '')
-                key_points = location.get('key_points', [])
-
-                # 确定严重程度（根据关键词）
-                severity = 'medium'
-                summary_lower = summary.lower()
-                if any(word in summary_lower for word in ['war', 'nuclear', 'attack', 'strike', 'military', 'conflict']):
-                    severity = 'high'
-                elif any(word in summary_lower for word in ['tension', 'dispute', 'concern', 'warning']):
-                    severity = 'medium'
-                else:
-                    severity = 'low'
-
-                # 提取第一个关键点的时间作为事件时间
-                timestamp = None
-                timestamp_sort = 0  # 用于排序的时间戳（秒）
-
-                if key_points and len(key_points) > 0:
-                    first_point = key_points[0]
-                    date_str = first_point.get('date', '')
-                    if date_str:
-                        # 尝试解析时间
-                        try:
-                            # 尝试使用 dateutil.parser（如果可用）
-                            try:
-                                from dateutil import parser as date_parser
-                                parsed_date = date_parser.parse(date_str)
-                                timestamp = parsed_date.isoformat()
-                                timestamp_sort = parsed_date.timestamp()
-                            except ImportError:
-                                # 如果 dateutil 不可用，使用当前时间
-                                timestamp = datetime.now().isoformat()
-                                timestamp_sort = datetime.now().timestamp()
-                        except Exception:
-                            timestamp = datetime.now().isoformat()
-                            timestamp_sort = datetime.now().timestamp()
-                    else:
-                        timestamp = datetime.now().isoformat()
-                        timestamp_sort = datetime.now().timestamp()
-                else:
-                    timestamp = datetime.now().isoformat()
-                    timestamp_sort = datetime.now().timestamp()
-
-                # 先存储原始数据，稍后根据分页需求翻译
-                event_data = {
-                    'location_name': location_name,
-                    'country': country,
-                    'summary': summary,
-                    'timestamp': timestamp,
-                    'timestamp_sort': timestamp_sort,
-                    'severity': severity
-                }
-
-                all_events.append(event_data)
-
-            except Exception as e:
-                log_error(f"处理事件失败: {location.get('location_name', 'unknown')}", str(e))
-
-        # 按时间戳降序排序（最新的在前）
-        all_events.sort(key=lambda x: x['timestamp_sort'], reverse=True)
-        log_system(f"事件已按时间排序，共 {len(all_events)} 个")
-
-        # 分页
-        total = len(all_events)
-        paginated_events = all_events[offset:offset + limit]
-        log_system(f"分页: offset={offset}, limit={limit}, 返回 {len(paginated_events)} 个事件")
-
-        # 翻译分页后的事件
+        # 转换为前端格式
         processed_events = []
-        for idx, event_data in enumerate(paginated_events):
-            location_name = event_data['location_name']
-            country = event_data['country']
-            summary = event_data['summary']
-            timestamp = event_data['timestamp']
-            severity = event_data['severity']
+        for event in events:
+            # 优先使用中文，如果没有则使用英文
+            title = event.get('title_cn') or event.get('title', '')
+            description = event.get('description_cn') or event.get('description', '')
+            location = event.get('location_cn') or event.get('location', '')
 
-            # 根据语言设置决定是否翻译
-            if translate and translation_config:
-                log_system(f"开始翻译事件 {offset + idx + 1}")
-
-                # 翻译标题
-                title_cn = location_name
-                if location_name:
-                    try:
-                        title_cn = _translate_text(location_name, translation_config)
-                        log_system(f"标题翻译完成: {location_name[:30]}... -> {title_cn[:30]}...")
-                    except Exception as e:
-                        log_error(f"标题翻译失败", str(e))
-
-                # 翻译摘要（限制长度，避免超时）
-                summary_cn = summary
-                if summary:
-                    try:
-                        # 只翻译前500个字符
-                        summary_to_translate = summary[:500] if len(summary) > 500 else summary
-                        summary_cn = _translate_text(summary_to_translate, translation_config)
-                        log_system(f"摘要翻译完成")
-                    except Exception as e:
-                        log_error(f"摘要翻译失败", str(e))
-
-                # 翻译国家
-                country_cn = country
-                if country:
-                    try:
-                        country_cn = _translate_text(country, translation_config)
-                    except Exception as e:
-                        log_error(f"国家翻译失败", str(e))
-
-                processed_events.append({
-                    'title': title_cn or location_name,
-                    'description': summary_cn or summary,
-                    'location': country_cn or country,
-                    'timestamp': timestamp,
-                    'severity': severity,
-                    'original_title': location_name,
-                    'original_description': summary,
-                    'original_location': country
-                })
-            else:
-                # 默认返回英文原文
-                processed_events.append({
-                    'title': location_name,
-                    'description': summary,
-                    'location': country,
-                    'timestamp': timestamp,
-                    'severity': severity,
-                    'original_title': location_name,
-                    'original_description': summary,
-                    'original_location': country
-                })
-
-        log_system(f"成功处理 {len(processed_events)} 个事件")
+            processed_events.append({
+                'event_id': str(event.get('_id', '')),
+                'title': title,
+                'description': description,
+                'location': location,
+                'timestamp': event.get('timestamp', ''),
+                'severity': event.get('severity', 'medium'),
+                'is_translated': bool(event.get('title_cn')),  # 标记是否已翻译
+                'original_title': event.get('title', ''),
+                'original_description': event.get('description', ''),
+                'original_location': event.get('location', '')
+            })
 
         return success_response({
             'events': processed_events,
@@ -4881,7 +4733,6 @@ def get_events_timeline():
             'offset': offset,
             'limit': limit,
             'has_more': (offset + limit) < total,
-            'lang': lang,
             'updated_at': datetime.now().isoformat()
         })
 
@@ -4953,4 +4804,183 @@ def _translate_text(text: str, config: dict) -> str:
     except Exception as e:
         log_error(f"翻译异常", str(e))
         return text
+
+
+# ==================== 全球事件链 API ====================
+
+@api_bp.route('/events/timeline', methods=['GET'])
+def events_timeline():
+    """获取事件时间线（支持中英文切换）"""
+    try:
+        from models.events import get_all_events, get_events_count
+        from datetime import datetime
+
+        # 获取参数
+        lang = request.args.get('lang', 'en')  # en 或 cn
+        offset = int(request.args.get('offset', 0))
+        limit = int(request.args.get('limit', 20))
+
+        # 获取事件数据
+        events = get_all_events(skip=offset, limit=limit)
+        total = get_events_count()
+
+        # 根据语言选择字段
+        processed_events = []
+        for event in events:
+            # 转换 ObjectId 为字符串
+            if '_id' in event:
+                event['_id'] = str(event['_id'])
+
+            if lang == 'cn':
+                # 中文模式：优先使用翻译后的字段，如果没有则使用英文原文
+                processed_event = {
+                    'event_id': event.get('event_id'),
+                    'title': event.get('title_cn') or event.get('title', ''),
+                    'description': event.get('description_cn') or event.get('description', ''),
+                    'location': event.get('location_cn') or event.get('location', ''),
+                    'timestamp': event.get('timestamp'),
+                    'timestamp_sort': event.get('timestamp_sort'),
+                    'severity': event.get('severity', 'medium'),
+                    'has_translation': bool(event.get('title_cn'))  # 标记是否已翻译
+                }
+            else:
+                # 英文模式：使用原始英文字段
+                processed_event = {
+                    'event_id': event.get('event_id'),
+                    'title': event.get('title', ''),
+                    'description': event.get('description', ''),
+                    'location': event.get('location', ''),
+                    'timestamp': event.get('timestamp'),
+                    'timestamp_sort': event.get('timestamp_sort'),
+                    'severity': event.get('severity', 'medium'),
+                    'has_translation': bool(event.get('title_cn'))
+                }
+
+            processed_events.append(processed_event)
+
+        # 判断是否还有更多数据
+        has_more = (offset + len(processed_events)) < total
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'events': processed_events,
+                'total': total,
+                'offset': offset,
+                'has_more': has_more,
+                'updated_at': datetime.now().isoformat()
+            }
+        })
+    except Exception as e:
+        log_error("获取事件时间线失败", str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_bp.route('/events/list', methods=['GET'])
+def events_list():
+    """获取事件列表（分页）"""
+    try:
+        from models.events import get_all_events, get_events_count
+
+        skip = int(request.args.get('skip', 0))
+        limit = int(request.args.get('limit', 20))
+
+        events = get_all_events(skip=skip, limit=limit)
+        total = get_events_count()
+
+        # 转换 ObjectId 为字符串
+        for event in events:
+            if '_id' in event:
+                event['_id'] = str(event['_id'])
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'events': events,
+                'total': total,
+                'skip': skip,
+                'limit': limit
+            }
+        })
+    except Exception as e:
+        log_error("获取事件列表失败", str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_bp.route('/events/service/status', methods=['GET'])
+def events_service_status():
+    """获取事件服务状态"""
+    try:
+        from services.events_service import get_events_service
+
+        service = get_events_service()
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'running': service.running,
+                'fetch_interval': service.fetch_interval,
+                'translate_interval': service.translate_interval
+            }
+        })
+    except Exception as e:
+        log_error("获取事件服务状态失败", str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_bp.route('/events/service/start', methods=['POST'])
+def events_service_start():
+    """启动事件服务"""
+    try:
+        from services.events_service import start_events_service
+
+        start_events_service()
+        log_system("手动启动事件服务")
+
+        return jsonify({
+            'success': True,
+            'message': '事件服务已启动'
+        })
+    except Exception as e:
+        log_error("启动事件服务失败", str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_bp.route('/events/service/stop', methods=['POST'])
+def events_service_stop():
+    """停止事件服务"""
+    try:
+        from services.events_service import stop_events_service
+
+        stop_events_service()
+        log_system("手动停止事件服务")
+
+        return jsonify({
+            'success': True,
+            'message': '事件服务已停止'
+        })
+    except Exception as e:
+        log_error("停止事件服务失败", str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@api_bp.route('/events/fetch', methods=['POST'])
+def events_fetch_now():
+    """立即获取事件"""
+    try:
+        from services.events_service import get_events_service
+
+        service = get_events_service()
+        service._fetch_and_cache_events()
+
+        log_system("手动触发事件获取")
+
+        return jsonify({
+            'success': True,
+            'message': '事件获取完成'
+        })
+    except Exception as e:
+        log_error("手动获取事件失败", str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 

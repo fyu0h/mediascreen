@@ -42,7 +42,8 @@
       "WebFetch(domain:hongkongfp.com)",
       "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && wc -l \"\"{}\"\"')",
       "Bash(grep:*)",
-      "Bash(copy \"D:\\\\code\\\\态势感知\\\\settings.json\" \"D:\\\\code\\\\态势感知\\\\settings.example.json\")"
+      "Bash(copy \"D:\\\\code\\\\态势感知\\\\settings.json\" \"D:\\\\code\\\\态势感知\\\\settings.example.json\")",
+      "Bash(git revert:*)"
     ]
   }
 }

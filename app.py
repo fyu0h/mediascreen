@@ -276,6 +276,16 @@ def init_telegram():
         print(f"[Telegram] 初始化失败: {e}")
 
 
+def init_events_service():
+    """初始化全球事件链后台服务"""
+    try:
+        from services.events_service import start_events_service
+        start_events_service()
+        print("[事件链] 后台服务已启动（自动获取和翻译）")
+    except Exception as e:
+        print(f"[事件链] 初始化失败: {e}")
+
+
 # 创建应用实例
 app = create_app()
 
@@ -300,6 +310,9 @@ if __name__ == '__main__':
 
     # 初始化 Telegram 监控
     init_telegram()
+
+    # 初始化全球事件链服务
+    init_events_service()
 
     print("按 Ctrl+C 停止服务器")
     print()

@@ -7380,6 +7380,7 @@ let eventsOffset = 0;
 let eventsHasMore = true;
 let eventsLoading = false;
 let allEventsData = [];
+let eventsTranslationCheckInterval = null;  // 翻译检查定时器
 
 /**
  * 切换事件链语言
@@ -7397,6 +7398,12 @@ function switchEventsLanguage(lang) {
             btn.classList.remove('active');
         }
     });
+
+    // 清理翻译检查定时器
+    if (eventsTranslationCheckInterval) {
+        clearInterval(eventsTranslationCheckInterval);
+        eventsTranslationCheckInterval = null;
+    }
 
     // 重置分页并重新加载数据
     eventsOffset = 0;
@@ -7563,6 +7570,35 @@ function updateEventsDisplay(data) {
             hour: '2-digit',
             minute: '2-digit'
         });
+    }
+
+    // 检查是否有未翻译的事件（仅在中文模式下）
+    if (currentEventsLang === 'cn') {
+        const hasUntranslated = events.some(event => !event.has_translation);
+
+        if (hasUntranslated) {
+            // 有未翻译的事件，启动定时检查
+            if (!eventsTranslationCheckInterval) {
+                console.log('检测到未翻译事件，启动30秒轮询');
+                eventsTranslationCheckInterval = setInterval(() => {
+                    console.log('轮询检查翻译状态');
+                    refreshEventsTimeline();
+                }, 30000);  // 30秒检查一次
+            }
+        } else {
+            // 所有事件都已翻译，停止定时检查
+            if (eventsTranslationCheckInterval) {
+                console.log('所有事件已翻译完成，停止轮询');
+                clearInterval(eventsTranslationCheckInterval);
+                eventsTranslationCheckInterval = null;
+            }
+        }
+    } else {
+        // 英文模式下停止翻译检查
+        if (eventsTranslationCheckInterval) {
+            clearInterval(eventsTranslationCheckInterval);
+            eventsTranslationCheckInterval = null;
+        }
     }
 }
 
