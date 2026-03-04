@@ -4697,7 +4697,7 @@ def get_events_timeline():
 
     try:
         import requests as http_requests
-        from models.settings import get_translation_settings
+        from models.settings import get_translation_config
 
         log_system(f"开始获取事件链数据，语言: {lang}")
 
@@ -4725,10 +4725,10 @@ def get_events_timeline():
         log_system(f"提取到 {len(locations)} 个 locations")
 
         # 获取翻译设置（仅在需要翻译时）
-        translation_settings = None
+        translation_config = None
         if translate:
-            translation_settings = get_translation_settings()
-            log_system("已加载翻译设置")
+            translation_config = get_translation_config()
+            log_system("已加载翻译配置")
 
         # 处理事件
         processed_events = []
@@ -4777,10 +4777,10 @@ def get_events_timeline():
                     timestamp = datetime.now().isoformat()
 
                 # 根据语言设置决定是否翻译
-                if translate and translation_settings:
-                    title_cn = _translate_text(location_name, translation_settings) if location_name else location_name
-                    summary_cn = _translate_text(summary, translation_settings) if summary else summary
-                    country_cn = _translate_text(country, translation_settings) if country else country
+                if translate and translation_config:
+                    title_cn = _translate_text(location_name, translation_config) if location_name else location_name
+                    summary_cn = _translate_text(summary, translation_config) if summary else summary
+                    country_cn = _translate_text(country, translation_config) if country else country
 
                     processed_events.append({
                         'title': title_cn or location_name,
@@ -4833,7 +4833,7 @@ def get_events_timeline():
         return error_response(f'获取事件失败: {str(e)}', 500)
 
 
-def _translate_text(text: str, settings: dict) -> str:
+def _translate_text(text: str, config: dict) -> str:
     """翻译文本的辅助函数"""
     if not text or not text.strip():
         return text
@@ -4841,12 +4841,12 @@ def _translate_text(text: str, settings: dict) -> str:
     try:
         import requests as http_requests
 
-        provider = settings.get('provider', 'siliconflow')
-        api_key = settings.get('api_key', '')
-        model = settings.get('model', 'Qwen/Qwen2.5-7B-Instruct')
-        api_url = settings.get('api_url', '')
+        provider = config.get('provider', 'siliconflow')
+        api_key = config.get('api_key', '')
+        model = config.get('model', 'Qwen/Qwen2.5-7B-Instruct')
+        api_url = config.get('api_url', '')
 
-        if not api_key:
+        if not api_key or not api_url:
             return text
 
         # 构建翻译提示词
