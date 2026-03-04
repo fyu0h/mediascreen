@@ -6296,7 +6296,226 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(0, 0, 0, 0.1);
 }
 
-/* ========== Telegram 监控模块 ========== */
+/* ========== DEFCON 威胁等级模块 ========== */
+
+/* DEFCON 卡片 */
+.defcon-card {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.defcon-card .card-header {
+    padding: 10px 16px;
+    background: linear-gradient(90deg, rgba(255, 68, 68, 0.1) 0%, transparent 50%);
+}
+
+.defcon-card .card-title {
+    font-size: 13px;
+    color: #ff4444;
+}
+
+.defcon-card .card-title::before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: linear-gradient(180deg, #ff4444 0%, #ff8800 100%);
+    border-radius: 2px;
+    margin-right: 8px;
+    display: inline-block;
+}
+
+.defcon-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.defcon-update-time {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.defcon-body {
+    padding: 16px !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* 当前等级显示 */
+.defcon-current {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 68, 68, 0.2);
+}
+
+.defcon-level-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px;
+}
+
+.defcon-level-number {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1;
+    color: #ffd700;
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+.defcon-level-name {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.defcon-status {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+/* 等级指示器 */
+.defcon-levels {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+}
+
+.defcon-level-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.defcon-level-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.defcon-level-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.defcon-level-item[data-level="5"] .defcon-level-dot {
+    background: rgba(0, 255, 136, 0.3);
+    border-color: #00ff88;
+}
+
+.defcon-level-item[data-level="4"] .defcon-level-dot {
+    background: rgba(0, 212, 255, 0.3);
+    border-color: #00d4ff;
+}
+
+.defcon-level-item[data-level="3"] .defcon-level-dot {
+    background: rgba(255, 215, 0, 0.3);
+    border-color: #ffd700;
+}
+
+.defcon-level-item[data-level="2"] .defcon-level-dot {
+    background: rgba(255, 136, 0, 0.3);
+    border-color: #ff8800;
+}
+
+.defcon-level-item[data-level="1"] .defcon-level-dot {
+    background: rgba(255, 0, 68, 0.3);
+    border-color: #ff0044;
+}
+
+.defcon-level-item.active .defcon-level-dot {
+    box-shadow: 0 0 12px currentColor;
+    animation: defconPulse 2s ease-in-out infinite;
+}
+
+.defcon-level-item.active[data-level="5"] .defcon-level-dot {
+    background: #00ff88;
+}
+
+.defcon-level-item.active[data-level="4"] .defcon-level-dot {
+    background: #00d4ff;
+}
+
+.defcon-level-item.active[data-level="3"] .defcon-level-dot {
+    background: #ffd700;
+}
+
+.defcon-level-item.active[data-level="2"] .defcon-level-dot {
+    background: #ff8800;
+}
+
+.defcon-level-item.active[data-level="1"] .defcon-level-dot {
+    background: #ff0044;
+}
+
+@keyframes defconPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 0.8;
+    }
+}
+
+.defcon-level-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.defcon-level-item.active .defcon-level-label {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* 原因说明 */
+.defcon-reason {
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    border-left: 3px solid rgba(255, 68, 68, 0.5);
+}
+
+.defcon-reason-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.defcon-reason-text {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+/* ========== Telegram 监控模块（已禁用）========== */
 
 /* Telegram 监控容器（左右分栏） */
 .telegram-monitor-container {
@@ -7342,11 +7561,12 @@ body.resizing .chart-container-sm {
         font-size: 10px;
     }
 
-    /* Telegram 监控容器在平板端垂直堆叠 */
+    /* DEFCON 和外部监控容器在平板端垂直堆叠 */
     .telegram-monitor-container {
         flex-direction: column;
     }
 
+    .defcon-card,
     .telegram-card,
     .external-monitor-card {
         min-height: 350px;
@@ -8024,11 +8244,12 @@ body.resizing .chart-container-sm {
         overflow: visible;
     }
 
-    /* Telegram 监控容器在移动端垂直堆叠 */
+    /* DEFCON 和外部监控容器在移动端垂直堆叠 */
     .telegram-monitor-container {
         flex-direction: column;
     }
 
+    .defcon-card,
     .telegram-card,
     .external-monitor-card {
         min-height: 300px;
@@ -8036,6 +8257,20 @@ body.resizing .chart-container-sm {
 
     .external-monitor-card {
         min-height: 400px;
+    }
+
+    /* DEFCON 移动端适配 */
+    .defcon-current {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .defcon-levels {
+        flex-wrap: wrap;
+    }
+
+    .defcon-level-item {
+        min-width: 60px;
     }
 
     .tg-alert-list {

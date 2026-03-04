@@ -4553,3 +4553,133 @@ def proxy_image():
         transparent_pixel = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
         from flask import Response
         return Response(transparent_pixel, content_type='image/gif')
+
+
+@api_bp.route('/defcon/current', methods=['GET'])
+def get_defcon_level():
+    """获取当前 DEFCON 威胁等级"""
+    if 'user' not in session:
+        return error_response('未登录', 401)
+
+    try:
+        import requests as http_requests
+        from bs4 import BeautifulSoup
+
+        # 获取页面内容
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        resp = http_requests.get(
+            'https://www.defconlevel.com/current-level',
+            headers=headers,
+            timeout=10,
+            verify=False
+        )
+        resp.raise_for_status()
+
+        soup = BeautifulSoup(resp.text, 'html.parser')
+
+        # 提取当前等级
+        current_level = None
+        status_text = ""
+        reason = ""
+
+        # 查找当前等级（通常在 h2 或特定 class 中）
+        level_elem = soup.find('h2', string=lambda t: t and 'DEFCON' in t)
+        if level_elem:
+            level_text = level_elem.get_text().strip()
+            # 提取数字
+            import re
+            match = re.search(r'DEFCON\s*(\d)', level_text)
+            if match:
+                current_level = int(match.group(1))
+
+        # 查找状态描述
+        status_elem = soup.find('p', class_='status-description')
+        if not status_elem:
+            # 尝试其他可能的选择器
+            status_elem = soup.find('div', class_='current-status')
+        if status_elem:
+            status_text = status_elem.get_text().strip()
+
+        # 查找原因说明
+        reason_elem = soup.find('div', class_='reason')
+        if not reason_elem:
+            reason_elem = soup.find('p', string=lambda t: t and 'Reason' in t)
+        if reason_elem:
+            reason = reason_elem.get_text().strip()
+
+        # 如果没有找到，使用默认值
+        if current_level is None:
+            current_level = 3
+            status_text = "数据获取中..."
+            reason = "正在从 DEFCON Level 获取最新数据"
+
+        # DEFCON 等级定义
+        levels = [
+            {
+                'level': 5,
+                'name': 'DEFCON 5',
+                'name_cn': '和平时期',
+                'color': '#00ff88',
+                'description': '正常和平时期准备状态',
+                'description_cn': '正常和平时期准备状态'
+            },
+            {
+                'level': 4,
+                'name': 'DEFCON 4',
+                'name_cn': '提高警戒',
+                'color': '#00d4ff',
+                'description': '加强情报监控和安全措施',
+                'description_cn': '加强情报监控和安全措施'
+            },
+            {
+                'level': 3,
+                'name': 'DEFCON 3',
+                'name_cn': '军事戒备',
+                'color': '#ffd700',
+                'description': '军事准备状态高于正常水平',
+                'description_cn': '军事准备状态高于正常水平'
+            },
+            {
+                'level': 2,
+                'name': 'DEFCON 2',
+                'name_cn': '战备就绪',
+                'color': '#ff8800',
+                'description': '武装部队准备在6小时内部署作战',
+                'description_cn': '武装部队准备在6小时内部署作战'
+            },
+            {
+                'level': 1,
+                'name': 'DEFCON 1',
+                'name_cn': '核战边缘',
+                'color': '#ff0044',
+                'description': '最高戒备状态，核战争即将爆发',
+                'description_cn': '最高戒备状态，核战争即将爆发'
+            }
+        ]
+
+        return success_response({
+            'current_level': current_level,
+            'status': status_text,
+            'reason': reason,
+            'levels': levels,
+            'updated_at': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        log_error("获取 DEFCON 等级失败", str(e))
+        # 返回默认数据
+        return success_response({
+            'current_level': 3,
+            'status': '数据获取失败',
+            'reason': f'无法连接到 DEFCON Level 服务器: {str(e)}',
+            'levels': [
+                {'level': 5, 'name': 'DEFCON 5', 'name_cn': '和平时期', 'color': '#00ff88', 'description_cn': '正常和平时期准备状态'},
+                {'level': 4, 'name': 'DEFCON 4', 'name_cn': '提高警戒', 'color': '#00d4ff', 'description_cn': '加强情报监控和安全措施'},
+                {'level': 3, 'name': 'DEFCON 3', 'name_cn': '军事戒备', 'color': '#ffd700', 'description_cn': '军事准备状态高于正常水平'},
+                {'level': 2, 'name': 'DEFCON 2', 'name_cn': '战备就绪', 'color': '#ff8800', 'description_cn': '武装部队准备在6小时内部署作战'},
+                {'level': 1, 'name': 'DEFCON 1', 'name_cn': '核战边缘', 'color': '#ff0044', 'description_cn': '最高戒备状态，核战争即将爆发'}
+            ],
+            'updated_at': datetime.now().isoformat()
+        })

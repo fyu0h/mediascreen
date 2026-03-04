@@ -7288,3 +7288,97 @@ document.addEventListener('DOMContentLoaded', function () {
         _mobileModalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
     });
 });
+
+// ========== DEFCON 威胁等级模块 ==========
+
+/**
+ * 加载 DEFCON 威胁等级数据
+ */
+async function loadDefconLevel() {
+    try {
+        const response = await fetch('/api/defcon/current');
+        const result = await response.json();
+
+        if (result.success) {
+            const data = result.data;
+            updateDefconDisplay(data);
+        } else {
+            console.error('加载 DEFCON 数据失败:', result.message);
+        }
+    } catch (error) {
+        console.error('加载 DEFCON 数据异常:', error);
+    }
+}
+
+/**
+ * 更新 DEFCON 显示
+ */
+function updateDefconDisplay(data) {
+    const currentLevel = data.current_level;
+    const levelInfo = data.levels.find(l => l.level === currentLevel);
+
+    // 更新当前等级显示
+    const levelDisplay = document.getElementById('defconLevelDisplay');
+    if (levelDisplay) {
+        const numberElem = levelDisplay.querySelector('.defcon-level-number');
+        const nameElem = levelDisplay.querySelector('.defcon-level-name');
+        if (numberElem) numberElem.textContent = currentLevel;
+        if (nameElem) nameElem.textContent = levelInfo ? levelInfo.name_cn : '未知';
+
+        // 设置颜色
+        if (levelInfo && numberElem) {
+            numberElem.style.color = levelInfo.color;
+            numberElem.style.textShadow = `0 0 20px ${levelInfo.color}80`;
+        }
+    }
+
+    // 更新状态描述
+    const statusElem = document.getElementById('defconStatus');
+    if (statusElem) {
+        statusElem.textContent = data.status || (levelInfo ? levelInfo.description_cn : '');
+    }
+
+    // 更新原因说明
+    const reasonElem = document.getElementById('defconReason');
+    if (reasonElem) {
+        reasonElem.textContent = data.reason || '暂无详细信息';
+    }
+
+    // 更新等级指示器
+    document.querySelectorAll('.defcon-level-item').forEach(item => {
+        const level = parseInt(item.getAttribute('data-level'));
+        if (level === currentLevel) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+
+    // 更新时间
+    const updateTimeElem = document.getElementById('defconUpdateTime');
+    if (updateTimeElem && data.updated_at) {
+        const updateTime = new Date(data.updated_at);
+        updateTimeElem.textContent = updateTime.toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+}
+
+/**
+ * 刷新 DEFCON 数据
+ */
+function refreshDefconLevel() {
+    loadDefconLevel();
+}
+
+// 页面加载时初始化 DEFCON 数据
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadDefconLevel);
+} else {
+    loadDefconLevel();
+}
+
+// 每5分钟自动刷新一次
+setInterval(loadDefconLevel, 5 * 60 * 1000);
+
