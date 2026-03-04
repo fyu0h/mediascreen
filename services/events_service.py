@@ -170,10 +170,12 @@ class EventsBackgroundService:
                         'event_id': event_id,
                         'title': location_name,
                         'description': summary[:500] if len(summary) > 500 else summary,  # 限制长度
+                        'summary': summary,  # 保存完整摘要
                         'location': country,
                         'timestamp': timestamp,
                         'timestamp_sort': timestamp_sort,
                         'severity': severity,
+                        'key_points': key_points,  # 保存关键点
                         'fetched_at': datetime.now()
                     }
 

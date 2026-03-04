@@ -7534,7 +7534,7 @@ function updateEventsDisplay(data) {
         const timeStr = event.timestamp ? formatEventTime(event.timestamp) : (currentEventsLang === 'cn' ? '未知时间' : 'Unknown');
 
         html += `
-            <div class="event-item severity-${severity}">
+            <div class="event-item severity-${severity}" onclick="showEventDetail('${event.event_id}')" style="cursor: pointer;">
                 <div class="event-time">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -7689,6 +7689,220 @@ if (document.readyState === 'loading') {
 
 // 每5分钟自动刷新一次
 setInterval(refreshEventsTimeline, 5 * 60 * 1000);
+
+// ========== 事件详情模块 ==========
+
+/**
+ * 显示事件详情
+ */
+async function showEventDetail(eventId) {
+    try {
+        console.log('加载事件详情:', eventId);
+
+        // 显示加载状态
+        showModal('事件详情', '<div style="text-align: center; padding: 40px;">加载中...</div>');
+
+        // 请求详情数据
+        const response = await fetch(`/api/events/detail/${eventId}?lang=${currentEventsLang}`);
+        const result = await response.json();
+
+        if (!result.success) {
+            showModal('错误', `<div style="color: var(--danger);">${result.message || '加载失败'}</div>`);
+            return;
+        }
+
+        const event = result.data;
+
+        // 构建详情 HTML
+        const severityText = {
+            'high': currentEventsLang === 'cn' ? '高危' : 'High',
+            'medium': currentEventsLang === 'cn' ? '中等' : 'Medium',
+            'low': currentEventsLang === 'cn' ? '低' : 'Low'
+        }[event.severity] || (currentEventsLang === 'cn' ? '中等' : 'Medium');
+
+        const severityColor = {
+            'high': '#ff4444',
+            'medium': '#ffaa00',
+            'low': '#00ff88'
+        }[event.severity] || '#ffaa00';
+
+        let detailHtml = `
+            <div style="max-height: 70vh; overflow-y: auto; padding: 20px;">
+                <!-- 标题和基本信息 -->
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: var(--primary); margin-bottom: 10px; font-size: 18px;">${escapeHtml(event.title)}</h3>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <span style="color: ${severityColor}; font-weight: bold;">
+                            ${currentEventsLang === 'cn' ? '严重程度' : 'Severity'}: ${severityText}
+                        </span>
+                        ${event.location ? `
+                        <span style="color: var(--text-secondary);">
+                            <svg style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            ${escapeHtml(event.location)}
+                        </span>
+                        ` : ''}
+                        ${event.timestamp ? `
+                        <span style="color: var(--text-secondary);">
+                            <svg style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            ${formatEventTime(event.timestamp)}
+                        </span>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- 摘要 -->
+                ${event.summary ? `
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: var(--primary); margin-bottom: 10px; font-size: 14px; text-transform: uppercase;">
+                        ${currentEventsLang === 'cn' ? '事件摘要' : 'Summary'}
+                    </h4>
+                    <div style="color: var(--text-primary); line-height: 1.6; background: rgba(255,255,255,0.02); padding: 15px; border-radius: 4px; border-left: 3px solid var(--primary);">
+                        ${escapeHtml(event.summary)}
+                    </div>
+                </div>
+                ` : ''}
+
+                <!-- 关键点时间线 -->
+                ${event.key_points && event.key_points.length > 0 ? `
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: var(--primary); margin-bottom: 15px; font-size: 14px; text-transform: uppercase;">
+                        ${currentEventsLang === 'cn' ? '事件时间线' : 'Timeline'}
+                    </h4>
+                    <div style="position: relative; padding-left: 30px;">
+                        <div style="position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, var(--primary), transparent);"></div>
+                        ${event.key_points.map((point, index) => `
+                            <div style="position: relative; margin-bottom: 20px;">
+                                <div style="position: absolute; left: -26px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-primary);"></div>
+                                <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+                                    ${point.date ? `
+                                    <div style="color: var(--primary); font-size: 12px; margin-bottom: 6px; font-weight: 500;">
+                                        ${point.date}
+                                    </div>
+                                    ` : ''}
+                                    <div style="color: var(--text-primary); line-height: 1.5;">
+                                        ${escapeHtml(point.description || point.text || '')}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        `;
+
+        showModal(currentEventsLang === 'cn' ? '事件详情' : 'Event Details', detailHtml);
+
+    } catch (error) {
+        console.error('加载事件详情失败:', error);
+        showModal('错误', `<div style="color: var(--danger);">${currentEventsLang === 'cn' ? '加载失败' : 'Failed to load'}: ${error.message}</div>`);
+    }
+}
+
+/**
+ * 显示模态框
+ */
+function showModal(title, content) {
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('eventDetailModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // 创建模态框
+    const modal = document.createElement('div');
+    modal.id = 'eventDetailModal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        backdrop-filter: blur(4px);
+    `;
+
+    modal.innerHTML = `
+        <div style="
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        ">
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 20px;
+                border-bottom: 1px solid var(--border-primary);
+            ">
+                <h3 style="color: var(--primary); margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.1em;">
+                    ${title}
+                </h3>
+                <button onclick="closeEventDetailModal()" style="
+                    background: none;
+                    border: none;
+                    color: var(--text-secondary);
+                    font-size: 24px;
+                    cursor: pointer;
+                    padding: 0;
+                    width: 30px;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: color 0.2s;
+                " onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-secondary)'">
+                    ×
+                </button>
+            </div>
+            <div>
+                ${content}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // 点击背景关闭
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeEventDetailModal();
+        }
+    });
+
+    // ESC 键关闭
+    document.addEventListener('keydown', function escHandler(e) {
+        if (e.key === 'Escape') {
+            closeEventDetailModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    });
+}
+
+/**
+ * 关闭模态框
+ */
+function closeEventDetailModal() {
+    const modal = document.getElementById('eventDetailModal');
+    if (modal) {
+        modal.remove();
+    }
+}
 
 // DEFCON 模块（临时禁用，不自动加载）
 // if (document.readyState === 'loading') {

@@ -4984,3 +4984,68 @@ def events_fetch_now():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@api_bp.route('/events/detail/<event_id>', methods=['GET'])
+def events_detail(event_id):
+    """获取事件详情"""
+    try:
+        from models.events import get_event_by_id
+
+        # 获取语言参数
+        lang = request.args.get('lang', 'en')
+
+        # 获取事件
+        event = get_event_by_id(event_id)
+
+        if not event:
+            return jsonify({
+                'success': False,
+                'message': '事件不存在'
+            }), 404
+
+        # 转换 ObjectId 为字符串
+        if '_id' in event:
+            event['_id'] = str(event['_id'])
+
+        # 根据语言处理数据
+        if lang == 'cn':
+            # 中文模式：优先使用翻译
+            detail = {
+                'event_id': event.get('event_id'),
+                'title': event.get('title_cn') or event.get('title', ''),
+                'summary': event.get('summary_cn') or event.get('summary', ''),
+                'description': event.get('description_cn') or event.get('description', ''),
+                'location': event.get('location_cn') or event.get('location', ''),
+                'timestamp': event.get('timestamp'),
+                'severity': event.get('severity', 'medium'),
+                'key_points': event.get('key_points', []),
+                'has_translation': bool(event.get('title_cn'))
+            }
+
+            # 翻译关键点
+            if detail['key_points'] and event.get('key_points_cn'):
+                detail['key_points'] = event.get('key_points_cn')
+
+        else:
+            # 英文模式：使用原始数据
+            detail = {
+                'event_id': event.get('event_id'),
+                'title': event.get('title', ''),
+                'summary': event.get('summary', ''),
+                'description': event.get('description', ''),
+                'location': event.get('location', ''),
+                'timestamp': event.get('timestamp'),
+                'severity': event.get('severity', 'medium'),
+                'key_points': event.get('key_points', []),
+                'has_translation': bool(event.get('title_cn'))
+            }
+
+        return jsonify({
+            'success': True,
+            'data': detail
+        })
+
+    except Exception as e:
+        log_error(f"获取事件详情失败: {event_id}", str(e))
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
