@@ -1,0 +1,20 @@
+[Unit]
+Description=皇岗边检站全球舆情态势感知平台
+After=network.target mongodb.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/path/to/态势感知
+Environment="PATH=/usr/bin:/usr/local/bin"
+Environment="FLASK_HOST=0.0.0.0"
+ExecStart=/usr/bin/python3 /path/to/态势感知/run_production.py
+Restart=always
+RestartSec=10
+
+# 日志
+StandardOutput=append:/var/log/news-dashboard/output.log
+StandardError=append:/var/log/news-dashboard/error.log
+
+[Install]
+WantedBy=multi-user.target
