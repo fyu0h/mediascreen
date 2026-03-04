@@ -4710,45 +4710,79 @@ def get_events_timeline():
             verify=False
         )
         resp.raise_for_status()
-        events_data = resp.json()
+        data = resp.json()
+
+        # 提取 locations 数组
+        locations = data.get('locations', [])
 
         # 获取翻译设置
         translation_settings = get_translation_settings()
 
         # 翻译事件
         translated_events = []
-        for event in events_data[:10]:  # 只取前10个事件
+        for idx, location in enumerate(locations[:10]):  # 只取前10个事件
             try:
                 # 提取事件信息
-                title = event.get('title', '')
-                description = event.get('description', '')
-                location = event.get('location', '')
-                timestamp = event.get('timestamp', '')
-                severity = event.get('severity', 'medium')
+                location_name = location.get('location_name', '')
+                country = location.get('country', '')
+                summary = location.get('summary', '')
+                analysis = location.get('analysis', '')
+                key_points = location.get('key_points', [])
 
-                # 翻译标题和描述
-                title_cn = _translate_text(title, translation_settings) if title else ''
-                description_cn = _translate_text(description, translation_settings) if description else ''
-                location_cn = _translate_text(location, translation_settings) if location else ''
+                # 确定严重程度（根据关键词）
+                severity = 'medium'
+                summary_lower = summary.lower()
+                if any(word in summary_lower for word in ['war', 'nuclear', 'attack', 'strike', 'military', 'conflict']):
+                    severity = 'high'
+                elif any(word in summary_lower for word in ['tension', 'dispute', 'concern', 'warning']):
+                    severity = 'medium'
+                else:
+                    severity = 'low'
+
+                # 翻译标题（location_name）
+                title_cn = _translate_text(location_name, translation_settings) if location_name else location_name
+
+                # 翻译摘要
+                summary_cn = _translate_text(summary, translation_settings) if summary else summary
+
+                # 翻译国家
+                country_cn = _translate_text(country, translation_settings) if country else country
+
+                # 提取第一个关键点的时间作为事件时间
+                timestamp = ''
+                if key_points and len(key_points) > 0:
+                    first_point = key_points[0]
+                    date_str = first_point.get('date', '')
+                    if date_str:
+                        # 尝试解析时间
+                        try:
+                            from dateutil import parser
+                            timestamp = parser.parse(date_str).isoformat()
+                        except:
+                            timestamp = datetime.now().isoformat()
+                    else:
+                        timestamp = datetime.now().isoformat()
+                else:
+                    timestamp = datetime.now().isoformat()
 
                 translated_events.append({
-                    'title': title_cn or title,
-                    'description': description_cn or description,
-                    'location': location_cn or location,
+                    'title': title_cn or location_name,
+                    'description': summary_cn or summary,
+                    'location': country_cn or country,
                     'timestamp': timestamp,
                     'severity': severity,
-                    'original_title': title
+                    'original_title': location_name
                 })
             except Exception as e:
-                log_error(f"翻译事件失败: {event.get('title', 'unknown')}", str(e))
-                # 翻译失败时使用原文
+                log_error(f"处理事件失败: {location.get('location_name', 'unknown')}", str(e))
+                # 处理失败时使用原文
                 translated_events.append({
-                    'title': event.get('title', ''),
-                    'description': event.get('description', ''),
-                    'location': event.get('location', ''),
-                    'timestamp': event.get('timestamp', ''),
-                    'severity': event.get('severity', 'medium'),
-                    'original_title': event.get('title', '')
+                    'title': location.get('location_name', ''),
+                    'description': location.get('summary', ''),
+                    'location': location.get('country', ''),
+                    'timestamp': datetime.now().isoformat(),
+                    'severity': 'medium',
+                    'original_title': location.get('location_name', '')
                 })
 
         return success_response({
