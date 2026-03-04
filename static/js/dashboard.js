@@ -7403,23 +7403,32 @@ function switchEventsLanguage(lang) {
  */
 async function loadEventsTimeline() {
     const listElem = document.getElementById('eventsTimelineList');
-    if (!listElem) return;
+    if (!listElem) {
+        console.error('事件链列表元素不存在');
+        return;
+    }
 
     try {
         listElem.innerHTML = '<div class="events-loading">加载中...</div>';
 
+        console.log(`正在加载事件链数据，语言: ${currentEventsLang}`);
         const response = await fetch(`/api/events/timeline?lang=${currentEventsLang}`);
+        console.log(`API 响应状态: ${response.status}`);
+
         const result = await response.json();
+        console.log('API 响应数据:', result);
 
         if (result.success) {
             const data = result.data;
+            console.log(`获取到 ${data.events?.length || 0} 个事件`);
             updateEventsDisplay(data);
         } else {
-            listElem.innerHTML = '<div class="events-loading">加载失败</div>';
+            console.error('API 返回失败:', result.message);
+            listElem.innerHTML = `<div class="events-loading">加载失败: ${result.message || '未知错误'}</div>`;
         }
     } catch (error) {
         console.error('加载事件链数据异常:', error);
-        listElem.innerHTML = '<div class="events-loading">加载异常</div>';
+        listElem.innerHTML = `<div class="events-loading">加载异常: ${error.message}</div>`;
     }
 }
 

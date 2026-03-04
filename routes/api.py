@@ -4699,6 +4699,8 @@ def get_events_timeline():
         import requests as http_requests
         from models.settings import get_translation_settings
 
+        log_system(f"开始获取事件链数据，语言: {lang}")
+
         # 获取事件数据
         headers = {
             'accept': '*/*',
@@ -4716,13 +4718,17 @@ def get_events_timeline():
         resp.raise_for_status()
         data = resp.json()
 
+        log_system(f"成功获取外部 API 数据，状态码: {resp.status_code}")
+
         # 提取 locations 数组
         locations = data.get('locations', [])
+        log_system(f"提取到 {len(locations)} 个 locations")
 
         # 获取翻译设置（仅在需要翻译时）
         translation_settings = None
         if translate:
             translation_settings = get_translation_settings()
+            log_system("已加载翻译设置")
 
         # 处理事件
         processed_events = []
@@ -4734,6 +4740,8 @@ def get_events_timeline():
                 summary = location.get('summary', '')
                 analysis = location.get('analysis', '')
                 key_points = location.get('key_points', [])
+
+                log_system(f"处理事件 {idx + 1}: {location_name[:50]}...")
 
                 # 确定严重程度（根据关键词）
                 severity = 'medium'
@@ -4753,9 +4761,15 @@ def get_events_timeline():
                     if date_str:
                         # 尝试解析时间
                         try:
-                            from dateutil import parser
-                            timestamp = parser.parse(date_str).isoformat()
-                        except:
+                            # 尝试使用 dateutil.parser（如果可用）
+                            try:
+                                from dateutil import parser as date_parser
+                                timestamp = date_parser.parse(date_str).isoformat()
+                            except ImportError:
+                                # 如果 dateutil 不可用，使用简单的时间解析
+                                # 假设格式类似 "Mar 1, evening" 或 "March 4"
+                                timestamp = datetime.now().isoformat()
+                        except Exception:
                             timestamp = datetime.now().isoformat()
                     else:
                         timestamp = datetime.now().isoformat()
@@ -4805,6 +4819,8 @@ def get_events_timeline():
                     'original_location': location.get('country', '')
                 })
 
+        log_system(f"成功处理 {len(processed_events)} 个事件")
+
         return success_response({
             'events': processed_events,
             'total': len(processed_events),
@@ -4814,13 +4830,7 @@ def get_events_timeline():
 
     except Exception as e:
         log_error("获取事件时间线失败", str(e))
-        return success_response({
-            'events': [],
-            'total': 0,
-            'lang': lang,
-            'updated_at': datetime.now().isoformat(),
-            'error': str(e)
-        })
+        return error_response(f'获取事件失败: {str(e)}', 500)
 
 
 def _translate_text(text: str, settings: dict) -> str:
