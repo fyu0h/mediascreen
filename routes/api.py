@@ -4683,3 +4683,139 @@ def get_defcon_level():
             ],
             'updated_at': datetime.now().isoformat()
         })
+
+
+@api_bp.route('/events/timeline', methods=['GET'])
+def get_events_timeline():
+    """获取全球事件时间线"""
+    if 'user' not in session:
+        return error_response('未登录', 401)
+
+    try:
+        import requests as http_requests
+        from models.settings import get_translation_settings
+
+        # 获取事件数据
+        headers = {
+            'accept': '*/*',
+            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'referer': 'https://world-monitor.com/',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+
+        resp = http_requests.get(
+            'https://world-monitor.com/api/signal-markers',
+            headers=headers,
+            timeout=15,
+            verify=False
+        )
+        resp.raise_for_status()
+        events_data = resp.json()
+
+        # 获取翻译设置
+        translation_settings = get_translation_settings()
+
+        # 翻译事件
+        translated_events = []
+        for event in events_data[:10]:  # 只取前10个事件
+            try:
+                # 提取事件信息
+                title = event.get('title', '')
+                description = event.get('description', '')
+                location = event.get('location', '')
+                timestamp = event.get('timestamp', '')
+                severity = event.get('severity', 'medium')
+
+                # 翻译标题和描述
+                title_cn = _translate_text(title, translation_settings) if title else ''
+                description_cn = _translate_text(description, translation_settings) if description else ''
+                location_cn = _translate_text(location, translation_settings) if location else ''
+
+                translated_events.append({
+                    'title': title_cn or title,
+                    'description': description_cn or description,
+                    'location': location_cn or location,
+                    'timestamp': timestamp,
+                    'severity': severity,
+                    'original_title': title
+                })
+            except Exception as e:
+                log_error(f"翻译事件失败: {event.get('title', 'unknown')}", str(e))
+                # 翻译失败时使用原文
+                translated_events.append({
+                    'title': event.get('title', ''),
+                    'description': event.get('description', ''),
+                    'location': event.get('location', ''),
+                    'timestamp': event.get('timestamp', ''),
+                    'severity': event.get('severity', 'medium'),
+                    'original_title': event.get('title', '')
+                })
+
+        return success_response({
+            'events': translated_events,
+            'total': len(translated_events),
+            'updated_at': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        log_error("获取事件时间线失败", str(e))
+        return success_response({
+            'events': [],
+            'total': 0,
+            'updated_at': datetime.now().isoformat(),
+            'error': str(e)
+        })
+
+
+def _translate_text(text: str, settings: dict) -> str:
+    """翻译文本的辅助函数"""
+    if not text or not text.strip():
+        return text
+
+    try:
+        import requests as http_requests
+
+        provider = settings.get('provider', 'siliconflow')
+        api_key = settings.get('api_key', '')
+        model = settings.get('model', 'Qwen/Qwen2.5-7B-Instruct')
+        api_url = settings.get('api_url', '')
+
+        if not api_key:
+            return text
+
+        # 构建翻译提示词
+        prompt = f"请将以下英文翻译成简体中文，只返回翻译结果，不要添加任何解释：\n\n{text}"
+
+        # 调用 LLM API
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+
+        payload = {
+            'model': model,
+            'messages': [
+                {'role': 'user', 'content': prompt}
+            ],
+            'temperature': 0.3,
+            'max_tokens': 500
+        }
+
+        resp = http_requests.post(
+            api_url,
+            headers=headers,
+            json=payload,
+            timeout=10,
+            verify=False
+        )
+
+        if resp.status_code == 200:
+            result = resp.json()
+            translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            return translated if translated else text
+        else:
+            return text
+
+    except Exception:
+        return text
+

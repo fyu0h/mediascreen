@@ -7372,13 +7372,169 @@ function refreshDefconLevel() {
     loadDefconLevel();
 }
 
-// 页面加载时初始化 DEFCON 数据
+// ========== 全球事件链模块 ==========
+
+/**
+ * 加载事件时间线数据
+ */
+async function loadEventsTimeline() {
+    const listElem = document.getElementById('eventsTimelineList');
+    if (!listElem) return;
+
+    try {
+        listElem.innerHTML = '<div class="events-loading">加载中...</div>';
+
+        const response = await fetch('/api/events/timeline');
+        const result = await response.json();
+
+        if (result.success) {
+            const data = result.data;
+            updateEventsDisplay(data);
+        } else {
+            listElem.innerHTML = '<div class="events-loading">加载失败</div>';
+        }
+    } catch (error) {
+        console.error('加载事件链数据异常:', error);
+        listElem.innerHTML = '<div class="events-loading">加载异常</div>';
+    }
+}
+
+/**
+ * 更新事件链显示
+ */
+function updateEventsDisplay(data) {
+    const listElem = document.getElementById('eventsTimelineList');
+    if (!listElem) return;
+
+    const events = data.events || [];
+
+    if (events.length === 0) {
+        listElem.innerHTML = '<div class="events-loading">暂无事件数据</div>';
+        return;
+    }
+
+    let html = '';
+    events.forEach(event => {
+        const severity = event.severity || 'medium';
+        const severityText = {
+            'high': '高',
+            'medium': '中',
+            'low': '低'
+        }[severity] || '中';
+
+        const timeStr = event.timestamp ? formatEventTime(event.timestamp) : '未知时间';
+
+        html += `
+            <div class="event-item severity-${severity}">
+                <div class="event-time">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    ${timeStr}
+                    <span class="event-severity-badge ${severity}">${severityText}</span>
+                </div>
+                <div class="event-title">${escapeHtml(event.title)}</div>
+                ${event.location ? `
+                <div class="event-location">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                    ${escapeHtml(event.location)}
+                </div>
+                ` : ''}
+                ${event.description ? `
+                <div class="event-description">${escapeHtml(event.description)}</div>
+                ` : ''}
+            </div>
+        `;
+    });
+
+    listElem.innerHTML = html;
+
+    // 更新时间
+    const updateTimeElem = document.getElementById('eventsUpdateTime');
+    if (updateTimeElem && data.updated_at) {
+        const updateTime = new Date(data.updated_at);
+        updateTimeElem.textContent = updateTime.toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+}
+
+/**
+ * 格式化事件时间
+ */
+function formatEventTime(timestamp) {
+    try {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+
+        // 小于1小时
+        if (diff < 3600000) {
+            const minutes = Math.floor(diff / 60000);
+            return minutes <= 0 ? '刚刚' : `${minutes}分钟前`;
+        }
+
+        // 小于24小时
+        if (diff < 86400000) {
+            const hours = Math.floor(diff / 3600000);
+            return `${hours}小时前`;
+        }
+
+        // 小于7天
+        if (diff < 604800000) {
+            const days = Math.floor(diff / 86400000);
+            return `${days}天前`;
+        }
+
+        // 显示具体日期
+        return date.toLocaleDateString('zh-CN', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return timestamp;
+    }
+}
+
+/**
+ * HTML 转义
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * 刷新事件链数据
+ */
+function refreshEventsTimeline() {
+    loadEventsTimeline();
+}
+
+// 页面加载时初始化事件链数据
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadDefconLevel);
+    document.addEventListener('DOMContentLoaded', loadEventsTimeline);
 } else {
-    loadDefconLevel();
+    loadEventsTimeline();
 }
 
 // 每5分钟自动刷新一次
-setInterval(loadDefconLevel, 5 * 60 * 1000);
+setInterval(loadEventsTimeline, 5 * 60 * 1000);
+
+// DEFCON 模块（临时禁用，不自动加载）
+// if (document.readyState === 'loading') {
+//     document.addEventListener('DOMContentLoaded', loadDefconLevel);
+// } else {
+//     loadDefconLevel();
+// }
+// setInterval(loadDefconLevel, 5 * 60 * 1000);
+
 

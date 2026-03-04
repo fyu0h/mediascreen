@@ -130,10 +130,32 @@
                 </div>
             </div>
 
-            <!-- 全球威胁等级监控与外部监控 -->
+            <!-- 全球事件链与外部监控 -->
             <div class="telegram-monitor-container">
-                <!-- 左侧：DEFCON 威胁等级 -->
-                <div class="card defcon-card" data-layout-id="defcon">
+                <!-- 左侧：全球事件时间线 -->
+                <div class="card events-timeline-card" data-layout-id="events-timeline">
+                    <div class="card-header">
+                        <span class="card-title">全球事件链</span>
+                        <div class="events-header-actions">
+                            <span class="events-update-time" id="eventsUpdateTime">--</span>
+                            <button class="btn-manage" onclick="refreshEventsTimeline()" title="刷新数据">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body events-timeline-body">
+                        <div class="events-timeline-list" id="eventsTimelineList">
+                            <div class="events-loading">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 左侧：DEFCON 威胁等级（临时隐藏） -->
+                <div class="card defcon-card" data-layout-id="defcon" style="display: none;">
                     <div class="card-header">
                         <span class="card-title">全球威胁等级</span>
                         <div class="defcon-header-actions">

@@ -6296,6 +6296,194 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(0, 0, 0, 0.1);
 }
 
+/* ========== 全球事件链模块 ========== */
+
+/* 事件链卡片 */
+.events-timeline-card {
+    flex: 0 0 380px;
+    min-width: 320px;
+    max-width: 450px;
+    display: flex;
+    flex-direction: column;
+}
+
+.events-timeline-card .card-header {
+    padding: 10px 16px;
+    background: linear-gradient(90deg, rgba(0, 212, 255, 0.1) 0%, transparent 50%);
+}
+
+.events-timeline-card .card-title {
+    font-size: 13px;
+    color: #00d4ff;
+}
+
+.events-timeline-card .card-title::before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: linear-gradient(180deg, #00d4ff 0%, #0088ff 100%);
+    border-radius: 2px;
+    margin-right: 8px;
+    display: inline-block;
+}
+
+.events-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.events-update-time {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.events-timeline-body {
+    padding: 0 !important;
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.events-timeline-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.events-loading {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* 事件项 */
+.event-item {
+    position: relative;
+    padding-left: 24px;
+    padding-bottom: 20px;
+    border-left: 2px solid rgba(0, 212, 255, 0.2);
+}
+
+.event-item:last-child {
+    padding-bottom: 0;
+    border-left-color: transparent;
+}
+
+.event-item::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #00d4ff;
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+}
+
+.event-item.severity-high::before {
+    background: #ff0044;
+    box-shadow: 0 0 8px rgba(255, 0, 68, 0.6);
+}
+
+.event-item.severity-medium::before {
+    background: #ff8800;
+    box-shadow: 0 0 8px rgba(255, 136, 0, 0.6);
+}
+
+.event-item.severity-low::before {
+    background: #ffd700;
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+}
+
+.event-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.event-time svg {
+    width: 10px;
+    height: 10px;
+}
+
+.event-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.event-location {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.event-location svg {
+    width: 10px;
+    height: 10px;
+}
+
+.event-description {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    border-radius: 4px;
+    border-left: 2px solid rgba(0, 212, 255, 0.3);
+}
+
+.event-item.severity-high .event-description {
+    border-left-color: rgba(255, 0, 68, 0.5);
+}
+
+.event-item.severity-medium .event-description {
+    border-left-color: rgba(255, 136, 0, 0.5);
+}
+
+.event-item.severity-low .event-description {
+    border-left-color: rgba(255, 215, 0, 0.5);
+}
+
+.event-severity-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.event-severity-badge.high {
+    background: rgba(255, 0, 68, 0.2);
+    color: #ff0044;
+    border: 1px solid rgba(255, 0, 68, 0.3);
+}
+
+.event-severity-badge.medium {
+    background: rgba(255, 136, 0, 0.2);
+    color: #ff8800;
+    border: 1px solid rgba(255, 136, 0, 0.3);
+}
+
+.event-severity-badge.low {
+    background: rgba(255, 215, 0, 0.2);
+    color: #ffd700;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
 /* ========== DEFCON 威胁等级模块 ========== */
 
 /* DEFCON 卡片 */
@@ -7573,15 +7761,18 @@ body.resizing .chart-container-sm {
         font-size: 10px;
     }
 
-    /* DEFCON 和外部监控容器在平板端垂直堆叠 */
+    /* 事件链和外部监控容器在平板端垂直堆叠 */
     .telegram-monitor-container {
         flex-direction: column;
     }
 
+    .events-timeline-card,
     .defcon-card,
     .telegram-card,
     .external-monitor-card {
         min-height: 350px;
+        flex: none;
+        max-width: none;
     }
 }
 
@@ -8256,33 +8447,35 @@ body.resizing .chart-container-sm {
         overflow: visible;
     }
 
-    /* DEFCON 和外部监控容器在移动端垂直堆叠 */
+    /* 事件链和外部监控容器在移动端垂直堆叠 */
     .telegram-monitor-container {
         flex-direction: column;
     }
 
+    .events-timeline-card,
     .defcon-card,
     .telegram-card,
     .external-monitor-card {
         min-height: 300px;
+        flex: none;
+        max-width: none;
     }
 
     .external-monitor-card {
         min-height: 400px;
     }
 
-    /* DEFCON 移动端适配 */
-    .defcon-current {
-        flex-direction: column;
-        text-align: center;
+    /* 事件链移动端适配 */
+    .event-item {
+        padding-left: 20px;
     }
 
-    .defcon-levels {
-        flex-wrap: wrap;
+    .event-title {
+        font-size: 12px;
     }
 
-    .defcon-level-item {
-        min-width: 60px;
+    .event-description {
+        font-size: 10px;
     }
 
     .tg-alert-list {
