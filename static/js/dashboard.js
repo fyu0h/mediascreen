@@ -7374,8 +7374,8 @@ function refreshDefconLevel() {
 
 // ========== 全球事件链模块 ==========
 
-// 当前语言设置
-let currentEventsLang = 'en';
+// 当前语言设置（默认中文）
+let currentEventsLang = 'cn';
 let eventsOffset = 0;
 let eventsHasMore = true;
 let eventsLoading = false;
