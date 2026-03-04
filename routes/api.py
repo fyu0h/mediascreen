@@ -4695,11 +4695,15 @@ def get_events_timeline():
     lang = request.args.get('lang', 'en')
     translate = (lang == 'cn')
 
+    # 获取分页参数
+    offset = int(request.args.get('offset', 0))
+    limit = int(request.args.get('limit', 20))
+
     try:
         import requests as http_requests
         from models.settings import get_translation_config
 
-        log_system(f"开始获取事件链数据，语言: {lang}")
+        log_system(f"开始获取事件链数据，语言: {lang}, offset: {offset}, limit: {limit}")
 
         # 获取事件数据
         headers = {
@@ -4730,9 +4734,9 @@ def get_events_timeline():
             translation_config = get_translation_config()
             log_system("已加载翻译配置")
 
-        # 处理事件
-        processed_events = []
-        for idx, location in enumerate(locations[:10]):  # 只取前10个事件
+        # 处理所有事件并提取时间戳用于排序
+        all_events = []
+        for idx, location in enumerate(locations):
             try:
                 # 提取事件信息
                 location_name = location.get('location_name', '')
@@ -4740,8 +4744,6 @@ def get_events_timeline():
                 summary = location.get('summary', '')
                 analysis = location.get('analysis', '')
                 key_points = location.get('key_points', [])
-
-                log_system(f"处理事件 {idx + 1}: {location_name[:50]}...")
 
                 # 确定严重程度（根据关键词）
                 severity = 'medium'
@@ -4754,7 +4756,9 @@ def get_events_timeline():
                     severity = 'low'
 
                 # 提取第一个关键点的时间作为事件时间
-                timestamp = ''
+                timestamp = None
+                timestamp_sort = 0  # 用于排序的时间戳（秒）
+
                 if key_points and len(key_points) > 0:
                     first_point = key_points[0]
                     date_str = first_point.get('date', '')
@@ -4764,92 +4768,119 @@ def get_events_timeline():
                             # 尝试使用 dateutil.parser（如果可用）
                             try:
                                 from dateutil import parser as date_parser
-                                timestamp = date_parser.parse(date_str).isoformat()
+                                parsed_date = date_parser.parse(date_str)
+                                timestamp = parsed_date.isoformat()
+                                timestamp_sort = parsed_date.timestamp()
                             except ImportError:
-                                # 如果 dateutil 不可用，使用简单的时间解析
-                                # 假设格式类似 "Mar 1, evening" 或 "March 4"
+                                # 如果 dateutil 不可用，使用当前时间
                                 timestamp = datetime.now().isoformat()
+                                timestamp_sort = datetime.now().timestamp()
                         except Exception:
                             timestamp = datetime.now().isoformat()
+                            timestamp_sort = datetime.now().timestamp()
                     else:
                         timestamp = datetime.now().isoformat()
+                        timestamp_sort = datetime.now().timestamp()
                 else:
                     timestamp = datetime.now().isoformat()
+                    timestamp_sort = datetime.now().timestamp()
 
-                # 根据语言设置决定是否翻译
-                if translate and translation_config:
-                    log_system(f"开始翻译事件 {idx + 1}")
+                # 先存储原始数据，稍后根据分页需求翻译
+                event_data = {
+                    'location_name': location_name,
+                    'country': country,
+                    'summary': summary,
+                    'timestamp': timestamp,
+                    'timestamp_sort': timestamp_sort,
+                    'severity': severity
+                }
 
-                    # 翻译标题
-                    title_cn = location_name
-                    if location_name:
-                        try:
-                            title_cn = _translate_text(location_name, translation_config)
-                            log_system(f"标题翻译完成: {location_name[:30]}... -> {title_cn[:30]}...")
-                        except Exception as e:
-                            log_error(f"标题翻译失败", str(e))
-
-                    # 翻译摘要（限制长度，避免超时）
-                    summary_cn = summary
-                    if summary:
-                        try:
-                            # 只翻译前500个字符
-                            summary_to_translate = summary[:500] if len(summary) > 500 else summary
-                            summary_cn = _translate_text(summary_to_translate, translation_config)
-                            log_system(f"摘要翻译完成")
-                        except Exception as e:
-                            log_error(f"摘要翻译失败", str(e))
-
-                    # 翻译国家
-                    country_cn = country
-                    if country:
-                        try:
-                            country_cn = _translate_text(country, translation_config)
-                        except Exception as e:
-                            log_error(f"国家翻译失败", str(e))
-
-                    processed_events.append({
-                        'title': title_cn or location_name,
-                        'description': summary_cn or summary,
-                        'location': country_cn or country,
-                        'timestamp': timestamp,
-                        'severity': severity,
-                        'original_title': location_name,
-                        'original_description': summary,
-                        'original_location': country
-                    })
-                else:
-                    # 默认返回英文原文
-                    processed_events.append({
-                        'title': location_name,
-                        'description': summary,
-                        'location': country,
-                        'timestamp': timestamp,
-                        'severity': severity,
-                        'original_title': location_name,
-                        'original_description': summary,
-                        'original_location': country
-                    })
+                all_events.append(event_data)
 
             except Exception as e:
                 log_error(f"处理事件失败: {location.get('location_name', 'unknown')}", str(e))
-                # 处理失败时使用原文
+
+        # 按时间戳降序排序（最新的在前）
+        all_events.sort(key=lambda x: x['timestamp_sort'], reverse=True)
+        log_system(f"事件已按时间排序，共 {len(all_events)} 个")
+
+        # 分页
+        total = len(all_events)
+        paginated_events = all_events[offset:offset + limit]
+        log_system(f"分页: offset={offset}, limit={limit}, 返回 {len(paginated_events)} 个事件")
+
+        # 翻译分页后的事件
+        processed_events = []
+        for idx, event_data in enumerate(paginated_events):
+            location_name = event_data['location_name']
+            country = event_data['country']
+            summary = event_data['summary']
+            timestamp = event_data['timestamp']
+            severity = event_data['severity']
+
+            # 根据语言设置决定是否翻译
+            if translate and translation_config:
+                log_system(f"开始翻译事件 {offset + idx + 1}")
+
+                # 翻译标题
+                title_cn = location_name
+                if location_name:
+                    try:
+                        title_cn = _translate_text(location_name, translation_config)
+                        log_system(f"标题翻译完成: {location_name[:30]}... -> {title_cn[:30]}...")
+                    except Exception as e:
+                        log_error(f"标题翻译失败", str(e))
+
+                # 翻译摘要（限制长度，避免超时）
+                summary_cn = summary
+                if summary:
+                    try:
+                        # 只翻译前500个字符
+                        summary_to_translate = summary[:500] if len(summary) > 500 else summary
+                        summary_cn = _translate_text(summary_to_translate, translation_config)
+                        log_system(f"摘要翻译完成")
+                    except Exception as e:
+                        log_error(f"摘要翻译失败", str(e))
+
+                # 翻译国家
+                country_cn = country
+                if country:
+                    try:
+                        country_cn = _translate_text(country, translation_config)
+                    except Exception as e:
+                        log_error(f"国家翻译失败", str(e))
+
                 processed_events.append({
-                    'title': location.get('location_name', ''),
-                    'description': location.get('summary', ''),
-                    'location': location.get('country', ''),
-                    'timestamp': datetime.now().isoformat(),
-                    'severity': 'medium',
-                    'original_title': location.get('location_name', ''),
-                    'original_description': location.get('summary', ''),
-                    'original_location': location.get('country', '')
+                    'title': title_cn or location_name,
+                    'description': summary_cn or summary,
+                    'location': country_cn or country,
+                    'timestamp': timestamp,
+                    'severity': severity,
+                    'original_title': location_name,
+                    'original_description': summary,
+                    'original_location': country
+                })
+            else:
+                # 默认返回英文原文
+                processed_events.append({
+                    'title': location_name,
+                    'description': summary,
+                    'location': country,
+                    'timestamp': timestamp,
+                    'severity': severity,
+                    'original_title': location_name,
+                    'original_description': summary,
+                    'original_location': country
                 })
 
         log_system(f"成功处理 {len(processed_events)} 个事件")
 
         return success_response({
             'events': processed_events,
-            'total': len(processed_events),
+            'total': total,
+            'offset': offset,
+            'limit': limit,
+            'has_more': (offset + limit) < total,
             'lang': lang,
             'updated_at': datetime.now().isoformat()
         })

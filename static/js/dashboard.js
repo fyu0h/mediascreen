@@ -7376,6 +7376,10 @@ function refreshDefconLevel() {
 
 // 当前语言设置
 let currentEventsLang = 'en';
+let eventsOffset = 0;
+let eventsHasMore = true;
+let eventsLoading = false;
+let allEventsData = [];
 
 /**
  * 切换事件链语言
@@ -7394,26 +7398,53 @@ function switchEventsLanguage(lang) {
         }
     });
 
-    // 重新加载数据
-    loadEventsTimeline();
+    // 重置分页并重新加载数据
+    eventsOffset = 0;
+    allEventsData = [];
+    eventsHasMore = true;
+    loadEventsTimeline(true);
 }
 
 /**
  * 加载事件时间线数据
  */
-async function loadEventsTimeline() {
+async function loadEventsTimeline(reset = false) {
     const listElem = document.getElementById('eventsTimelineList');
     if (!listElem) {
         console.error('事件链列表元素不存在');
         return;
     }
 
-    try {
-        const loadingText = currentEventsLang === 'cn' ? '正在翻译中，请稍候...' : '加载中...';
-        listElem.innerHTML = `<div class="events-loading">${loadingText}</div>`;
+    if (eventsLoading) {
+        console.log('正在加载中，跳过重复请求');
+        return;
+    }
 
-        console.log(`正在加载事件链数据，语言: ${currentEventsLang}`);
-        const response = await fetch(`/api/events/timeline?lang=${currentEventsLang}`);
+    if (!eventsHasMore && !reset) {
+        console.log('没有更多数据了');
+        return;
+    }
+
+    try {
+        eventsLoading = true;
+
+        if (reset) {
+            eventsOffset = 0;
+            allEventsData = [];
+            eventsHasMore = true;
+            const loadingText = currentEventsLang === 'cn' ? '正在翻译中，请稍候...' : '加载中...';
+            listElem.innerHTML = `<div class="events-loading">${loadingText}</div>`;
+        } else {
+            // 追加加载提示
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'events-loading';
+            loadingDiv.textContent = currentEventsLang === 'cn' ? '加载更多...' : 'Loading more...';
+            loadingDiv.id = 'eventsLoadingMore';
+            listElem.appendChild(loadingDiv);
+        }
+
+        console.log(`正在加载事件链数据，语言: ${currentEventsLang}, offset: ${eventsOffset}`);
+        const response = await fetch(`/api/events/timeline?lang=${currentEventsLang}&offset=${eventsOffset}&limit=20`);
         console.log(`API 响应状态: ${response.status}`);
 
         const result = await response.json();
@@ -7421,8 +7452,20 @@ async function loadEventsTimeline() {
 
         if (result.success) {
             const data = result.data;
-            console.log(`获取到 ${data.events?.length || 0} 个事件`);
-            updateEventsDisplay(data);
+            console.log(`获取到 ${data.events?.length || 0} 个事件，总数: ${data.total}, has_more: ${data.has_more}`);
+
+            // 移除加载提示
+            const loadingMore = document.getElementById('eventsLoadingMore');
+            if (loadingMore) {
+                loadingMore.remove();
+            }
+
+            // 追加新数据
+            allEventsData = allEventsData.concat(data.events || []);
+            eventsOffset = data.offset + data.events.length;
+            eventsHasMore = data.has_more;
+
+            updateEventsDisplay({ events: allEventsData, updated_at: data.updated_at });
         } else {
             console.error('API 返回失败:', result.message);
             listElem.innerHTML = `<div class="events-loading">加载失败: ${result.message || '未知错误'}</div>`;
@@ -7430,7 +7473,32 @@ async function loadEventsTimeline() {
     } catch (error) {
         console.error('加载事件链数据异常:', error);
         listElem.innerHTML = `<div class="events-loading">加载异常: ${error.message}</div>`;
+    } finally {
+        eventsLoading = false;
     }
+}
+
+/**
+ * 监听滚动事件，实现无限加载
+ */
+function setupEventsScrollListener() {
+    const listElem = document.getElementById('eventsTimelineList');
+    if (!listElem) return;
+
+    listElem.addEventListener('scroll', function() {
+        // 检查是否滚动到底部
+        const scrollTop = listElem.scrollTop;
+        const scrollHeight = listElem.scrollHeight;
+        const clientHeight = listElem.clientHeight;
+
+        // 距离底部100px时开始加载
+        if (scrollHeight - scrollTop - clientHeight < 100) {
+            if (eventsHasMore && !eventsLoading) {
+                console.log('触发滚动加载');
+                loadEventsTimeline(false);
+            }
+        }
+    });
 }
 
 /**
@@ -7566,18 +7634,25 @@ function escapeHtml(text) {
  * 刷新事件链数据
  */
 function refreshEventsTimeline() {
-    loadEventsTimeline();
+    eventsOffset = 0;
+    allEventsData = [];
+    eventsHasMore = true;
+    loadEventsTimeline(true);
 }
 
 // 页面加载时初始化事件链数据
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadEventsTimeline);
+    document.addEventListener('DOMContentLoaded', function() {
+        loadEventsTimeline(true);
+        setupEventsScrollListener();
+    });
 } else {
-    loadEventsTimeline();
+    loadEventsTimeline(true);
+    setupEventsScrollListener();
 }
 
 // 每5分钟自动刷新一次
-setInterval(loadEventsTimeline, 5 * 60 * 1000);
+setInterval(refreshEventsTimeline, 5 * 60 * 1000);
 
 // DEFCON 模块（临时禁用，不自动加载）
 // if (document.readyState === 'loading') {
