@@ -607,6 +607,18 @@ async function loadSourceChart() {
     const counts = sortedData.map(item => item.count);
 
     const option = {
+        textStyle: {
+            fontSize: 10
+        },
+        legend: {
+            top: 5,
+            right: 10,
+            textStyle: {
+                fontSize: 10
+            },
+            itemWidth: 12,
+            itemHeight: 12
+        },
         tooltip: {
             trigger: 'axis',
             axisPointer: { type: 'shadow' },
