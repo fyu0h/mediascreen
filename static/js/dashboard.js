@@ -576,25 +576,11 @@ async function loadOverviewStats() {
         document.getElementById('totalArticles').textContent = formatNumber(overview.total_articles);
         document.getElementById('totalSources').textContent = overview.total_sources;
         document.getElementById('totalCountries').textContent = overview.total_countries;
-        // 活跃源使用监控的总新闻源数（与底部一致）
-        document.getElementById('activeSources').textContent = overview.total_sources;
     }
 
     if (realtime) {
         document.getElementById('todayCount').textContent = formatNumber(realtime.today_count);
-        document.getElementById('weekCount').textContent = formatNumber(realtime.week_count);
         // 更新时间由 updateRefreshTime() 处理
-
-        // 环比变化
-        const changeEl = document.getElementById('changeRate');
-        if (realtime.change_rate !== 0) {
-            const isUp = realtime.change_rate > 0;
-            changeEl.textContent = `${isUp ? '↑' : '↓'} ${Math.abs(realtime.change_rate)}%`;
-            changeEl.className = `stat-change ${isUp ? 'up' : 'down'}`;
-        } else {
-            changeEl.textContent = '-- 持平';
-            changeEl.className = 'stat-change';
-        }
     }
 }
 
@@ -626,11 +612,11 @@ async function loadSourceChart() {
             axisPointer: { type: 'shadow' },
             backgroundColor: 'rgba(10,20,40,0.9)',
             borderColor: 'rgba(0,240,255,0.3)',
-            textStyle: { color: '#fff' },
+            textStyle: { color: '#fff', fontSize: 12 },
             formatter: (params) => `${params[0].name}: ${params[0].value} 篇<br/><span style="color:#00f0ff;font-size:10px;">点击查看文章</span>`
         },
         grid: {
-            left: '3%', right: '15%', top: '5%', bottom: '5%',
+            left: 30, right: 30, top: 30, bottom: 20,
             containLabel: true
         },
         dataZoom: [
