@@ -299,6 +299,65 @@ html, body {
     color: var(--secondary);
 }
 
+/* ========== 合并卡片：数据概览与分布 ========== */
+.stats-chart-card {
+    height: 290px;
+    display: flex;
+    flex-direction: column;
+}
+
+.stats-chart-card .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 15px;
+}
+
+/* 紧凑统计区 */
+.stats-compact {
+    display: flex;
+    gap: 10px;
+    padding: 0;
+}
+
+.stat-item-compact {
+    flex: 1;
+    text-align: center;
+    padding: 8px;
+    background: rgba(0, 240, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(0, 240, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.stat-item-compact:hover {
+    background: rgba(0, 240, 255, 0.1);
+    border-color: var(--primary);
+    transform: translateY(-2px);
+}
+
+.stat-value-compact {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary);
+    font-family: 'Consolas', 'Monaco', monospace;
+    text-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+    line-height: 1.2;
+}
+
+.stat-label-compact {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* 紧凑图表容器 */
+.chart-container-compact {
+    flex: 1;
+    min-height: 200px;
+    width: 100%;
+}
+
 /* ========== 图表容器 ========== */
 .chart-container {
     width: 100%;
