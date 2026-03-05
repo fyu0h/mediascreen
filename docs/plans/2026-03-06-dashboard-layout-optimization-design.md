@@ -270,3 +270,23 @@
 5. ✅ 最新获取文章占据约70%的垂直空间
 6. ✅ 所有数据正常更新
 7. ✅ 响应式布局正常工作
+
+---
+
+## 实施状态
+
+✅ **已完成** - 2026-03-06
+
+**提交记录：**
+- 7cc8857: refactor: 合并实时数据概览和新闻源分布到一个卡片
+- d26c3b0: style: 添加合并卡片的紧凑布局样式
+- 3220577: refactor: 调整统计数据和图表逻辑以适配合并卡片
+- cffb17a: fix: 添加 ECharts 缺失的 legend 和 textStyle 配置
+- 3ee3ebe: chore: 清理已删除的文件
+
+**验收结果：** 所有验收标准已通过
+
+**文件修改：**
+- templates/index.html: 合并两个 section 为一个
+- static/css/dashboard.css: 添加紧凑布局样式
+- static/js/dashboard.js: 调整统计和图表逻辑
