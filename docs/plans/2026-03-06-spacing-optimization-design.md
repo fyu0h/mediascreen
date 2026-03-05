@@ -194,3 +194,19 @@ git revert <commit-hash> --no-edit
 2. 考虑调整统计数据的字体大小
 3. 考虑在小屏幕上进一步缩小间距
 4. 考虑统一调整其他卡片的间距
+
+---
+
+## 实施状态
+
+✅ **已完成** - 2026-03-06
+
+**提交记录：**
+- style: 缩小合并卡片的内部间距
+
+**验收结果：** 所有验收标准已通过
+
+**修改内容：**
+- `.stats-chart-card .card-body` padding: 15px → 12px
+- `.stats-chart-card .card-body` gap: 10px → 8px
+- `.stat-item-compact` padding: 8px → 7px
