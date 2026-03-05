@@ -37,42 +37,26 @@
     <main class="main-content">
         <!-- 左侧面板 -->
         <aside class="panel panel-left">
-            <!-- 实时统计 -->
-            <section class="card" data-layout-id="stats-overview">
+            <!-- 数据概览与分布 -->
+            <section class="card stats-chart-card" data-layout-id="stats-and-chart">
                 <div class="card-header">
-                    <span class="card-title">实时数据概览</span>
+                    <span class="card-title">数据概览与分布</span>
                     <span class="refresh-indicator" id="refreshIndicator"></span>
                 </div>
                 <div class="card-body">
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <div class="stat-value" id="totalArticles">--</div>
-                            <div class="stat-label">文章总数</div>
+                    <!-- 紧凑统计区 -->
+                    <div class="stats-compact">
+                        <div class="stat-item-compact">
+                            <div class="stat-value-compact" id="todayCount">--</div>
+                            <div class="stat-label-compact">今日新增</div>
                         </div>
-                        <div class="stat-item">
-                            <div class="stat-value" id="todayCount">--</div>
-                            <div class="stat-label">今日新增</div>
-                            <div class="stat-change" id="changeRate"></div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value" id="weekCount">--</div>
-                            <div class="stat-label">本周新增</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value" id="activeSources">--</div>
-                            <div class="stat-label">监控源</div>
+                        <div class="stat-item-compact">
+                            <div class="stat-value-compact" id="totalArticles">--</div>
+                            <div class="stat-label-compact">文章总数</div>
                         </div>
                     </div>
-                </div>
-            </section>
-
-            <!-- 新闻源分布 -->
-            <section class="card flex-1" data-layout-id="source-chart">
-                <div class="card-header">
-                    <span class="card-title">新闻源文章分布</span>
-                </div>
-                <div class="card-body">
-                    <div id="sourceChart" class="chart-container"></div>
+                    <!-- 图表区 -->
+                    <div id="sourceChart" class="chart-container-compact"></div>
                 </div>
             </section>
 
