@@ -7369,113 +7369,106 @@ function refreshDefconLevel() {
     loadDefconLevel();
 }
 
-// ========== 全球事件链模块 ==========
+// ========== 全球事件链模块（重构版） ==========
 
-// 当前语言设置（默认中文）
-let currentEventsLang = 'cn';
-let eventsOffset = 0;
-let eventsHasMore = true;
+// 事件数据存储
+let allEventsData = [];          // 原始事件数据
+let filteredEventsData = [];     // 筛选后的事件数据
 let eventsLoading = false;
-let allEventsData = [];
-let eventsTranslationCheckInterval = null;  // 翻译检查定时器
+let currentEventsSeverityFilter = 'all';  // 当前 severity 筛选
+let selectedEventId = null;      // 当前选中的事件 ID
+
+// severity 数字到文本映射
+const SEVERITY_MAP = {
+    5: 'CRITICAL',
+    4: 'HIGH',
+    3: 'MEDIUM',
+    2: 'LOW',
+    1: 'NOTICE'
+};
+
+const SEVERITY_COLORS = {
+    5: '#ff0044',
+    4: '#ff8800',
+    3: '#ffd700',
+    2: '#00d4ff',
+    1: '#00ff41'
+};
 
 /**
- * 切换事件链语言
+ * 筛选事件（按 severity）
  */
-function switchEventsLanguage(lang) {
-    if (currentEventsLang === lang) return;
+function filterEventsBySeverity(severity) {
+    currentEventsSeverityFilter = severity;
 
-    currentEventsLang = lang;
-
-    // 更新按钮状态
-    document.querySelectorAll('#eventsLangSwitch .lang-btn').forEach(btn => {
-        if (btn.getAttribute('data-lang') === lang) {
+    // 更新筛选按钮状态
+    document.querySelectorAll('#eventsFilterGroup .events-filter-btn').forEach(btn => {
+        if (btn.getAttribute('data-severity') === severity) {
             btn.classList.add('active');
         } else {
             btn.classList.remove('active');
         }
     });
 
-    // 清理翻译检查定时器
-    if (eventsTranslationCheckInterval) {
-        clearInterval(eventsTranslationCheckInterval);
-        eventsTranslationCheckInterval = null;
-    }
-
-    // 重置分页并重新加载数据
-    eventsOffset = 0;
-    allEventsData = [];
-    eventsHasMore = true;
-    loadEventsTimeline(true);
+    // 重新筛选并渲染
+    applyEventsFilter();
 }
 
 /**
- * 加载事件时间线数据
+ * 应用筛选逻辑
+ */
+function applyEventsFilter() {
+    if (currentEventsSeverityFilter === 'all') {
+        filteredEventsData = [...allEventsData];
+    } else {
+        const sevLevel = parseInt(currentEventsSeverityFilter);
+        filteredEventsData = allEventsData.filter(e => e.severity === sevLevel);
+    }
+
+    updateEventsDisplay();
+}
+
+/**
+ * 加载事件时间线数据（从代理 API）
  */
 async function loadEventsTimeline(reset = false) {
     const listElem = document.getElementById('eventsTimelineList');
-    if (!listElem) {
-        console.error('事件链列表元素不存在');
-        return;
-    }
+    if (!listElem) return;
 
-    if (eventsLoading) {
-        console.log('正在加载中，跳过重复请求');
-        return;
-    }
-
-    if (!eventsHasMore && !reset) {
-        console.log('没有更多数据了');
-        return;
-    }
+    if (eventsLoading) return;
 
     try {
         eventsLoading = true;
+        listElem.innerHTML = '<div class="events-loading">LOADING...</div>';
 
-        if (reset) {
-            eventsOffset = 0;
-            allEventsData = [];
-            eventsHasMore = true;
-            const loadingText = currentEventsLang === 'cn' ? '正在翻译中，请稍候...' : '加载中...';
-            listElem.innerHTML = `<div class="events-loading">${loadingText}</div>`;
-        } else {
-            // 追加加载提示
-            const loadingDiv = document.createElement('div');
-            loadingDiv.className = 'events-loading';
-            loadingDiv.textContent = currentEventsLang === 'cn' ? '加载更多...' : 'Loading more...';
-            loadingDiv.id = 'eventsLoadingMore';
-            listElem.appendChild(loadingDiv);
-        }
-
-        console.log(`正在加载事件链数据，语言: ${currentEventsLang}, offset: ${eventsOffset}`);
-        const response = await fetch(`/api/events/timeline?lang=${currentEventsLang}&offset=${eventsOffset}&limit=20`);
-        console.log(`API 响应状态: ${response.status}`);
-
+        const response = await fetch('/api/events/proxy');
         const result = await response.json();
-        console.log('API 响应数据:', result);
 
         if (result.success) {
             const data = result.data;
-            console.log(`获取到 ${data.events?.length || 0} 个事件，总数: ${data.total}, has_more: ${data.has_more}`);
+            const markers = data.markers || [];
 
-            // 移除加载提示
-            const loadingMore = document.getElementById('eventsLoadingMore');
-            if (loadingMore) {
-                loadingMore.remove();
+            // 按 relevanceScore 降序排序
+            markers.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+
+            allEventsData = markers;
+            applyEventsFilter();
+
+            // 更新时间
+            const updateTimeElem = document.getElementById('eventsUpdateTime');
+            if (updateTimeElem) {
+                updateTimeElem.textContent = new Date().toLocaleTimeString('zh-CN', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
             }
 
-            // 追加新数据
-            allEventsData = allEventsData.concat(data.events || []);
-            eventsOffset = data.offset + data.events.length;
-            eventsHasMore = data.has_more;
-
-            updateEventsDisplay({ events: allEventsData, updated_at: data.updated_at });
+            console.log(`[事件链] 加载 ${markers.length} 个事件`);
         } else {
-            console.error('API 返回失败:', result.message);
             listElem.innerHTML = `<div class="events-loading">加载失败: ${result.message || '未知错误'}</div>`;
         }
     } catch (error) {
-        console.error('加载事件链数据异常:', error);
+        console.error('[事件链] 加载异常:', error);
         listElem.innerHTML = `<div class="events-loading">加载异常: ${error.message}</div>`;
     } finally {
         eventsLoading = false;
@@ -7483,36 +7476,13 @@ async function loadEventsTimeline(reset = false) {
 }
 
 /**
- * 监听滚动事件，实现无限加载
+ * 更新事件时间轴显示
  */
-function setupEventsScrollListener() {
+function updateEventsDisplay() {
     const listElem = document.getElementById('eventsTimelineList');
     if (!listElem) return;
 
-    listElem.addEventListener('scroll', function() {
-        // 检查是否滚动到底部
-        const scrollTop = listElem.scrollTop;
-        const scrollHeight = listElem.scrollHeight;
-        const clientHeight = listElem.clientHeight;
-
-        // 距离底部100px时开始加载
-        if (scrollHeight - scrollTop - clientHeight < 100) {
-            if (eventsHasMore && !eventsLoading) {
-                console.log('触发滚动加载');
-                loadEventsTimeline(false);
-            }
-        }
-    });
-}
-
-/**
- * 更新事件链显示
- */
-function updateEventsDisplay(data) {
-    const listElem = document.getElementById('eventsTimelineList');
-    if (!listElem) return;
-
-    const events = data.events || [];
+    const events = filteredEventsData;
 
     if (events.length === 0) {
         listElem.innerHTML = '<div class="events-loading">暂无事件数据</div>';
@@ -7521,141 +7491,181 @@ function updateEventsDisplay(data) {
 
     let html = '';
     events.forEach(event => {
-        const severity = event.severity || 'medium';
-        const severityText = {
-            'high': currentEventsLang === 'cn' ? '高' : 'High',
-            'medium': currentEventsLang === 'cn' ? '中' : 'Med',
-            'low': currentEventsLang === 'cn' ? '低' : 'Low'
-        }[severity] || (currentEventsLang === 'cn' ? '中' : 'Med');
-
-        const timeStr = event.timestamp ? formatEventTime(event.timestamp) : (currentEventsLang === 'cn' ? '未知时间' : 'Unknown');
-
-        // 调试：检查 event_id
-        if (!event.event_id) {
-            console.warn('事件缺少 event_id:', event);
-        }
+        const sev = event.severity || 1;
+        const sevText = SEVERITY_MAP[sev] || 'NOTICE';
+        const location = event.location || event.title || '';
+        const country = event.country || '';
+        const headline = event.headline || event.notes || '';
+        const timeStr = event.timestamp ? formatEventTime(event.timestamp) : '';
+        const agoStr = event.timestamp ? formatEventAgo(event.timestamp) : '';
+        const isActive = event.id === selectedEventId ? ' active' : '';
 
         html += `
-            <div class="event-item severity-${severity}" onclick="showEventDetail('${event.event_id || ''}')" style="cursor: pointer;">
-                <div class="event-time">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                    ${timeStr}
-                    <span class="event-severity-badge ${severity}">${severityText}</span>
+            <div class="event-item severity-${sev}${isActive}" onclick="showEventDetail('${escapeAttr(event.id || '')}')" data-event-id="${escapeAttr(event.id || '')}">
+                <div class="event-item-header">
+                    <span class="event-item-location">${escapeHtml(location)}</span>
+                    <span class="event-item-country">${escapeHtml(country)}</span>
+                    <span class="event-item-sev sev-${sev}">${sevText}</span>
                 </div>
-                <div class="event-title">${escapeHtml(event.title)}</div>
-                ${event.location ? `
-                <div class="event-location">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                        <circle cx="12" cy="10" r="3"></circle>
-                    </svg>
-                    ${escapeHtml(event.location)}
-                </div>
-                ` : ''}
-                ${event.description ? `
-                <div class="event-description">${escapeHtml(event.description)}</div>
-                ` : ''}
+                <div class="event-item-time">${timeStr}</div>
+                <div class="event-item-desc">${escapeHtml(headline)}</div>
+                ${agoStr ? `<div class="event-item-ago">${agoStr}</div>` : ''}
             </div>
         `;
     });
 
     listElem.innerHTML = html;
+}
 
-    // 更新时间
-    const updateTimeElem = document.getElementById('eventsUpdateTime');
-    if (updateTimeElem && data.updated_at) {
-        const updateTime = new Date(data.updated_at);
-        updateTimeElem.textContent = updateTime.toLocaleTimeString('zh-CN', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+/**
+ * 显示事件详情（左侧面板）
+ */
+function showEventDetail(eventId) {
+    if (!eventId) return;
+
+    selectedEventId = eventId;
+
+    // 从缓存数据中查找事件
+    const event = allEventsData.find(e => e.id === eventId);
+    if (!event) return;
+
+    const panel = document.getElementById('eventsDetailPanel');
+    if (!panel) return;
+
+    const sev = event.severity || 1;
+    const sevText = SEVERITY_MAP[sev] || 'NOTICE';
+    const timeStr = event.timestamp ? formatEventTime(event.timestamp) : '';
+
+    let html = `<div class="event-detail-content">`;
+
+    // severity 徽章
+    html += `<div class="event-detail-severity sev-${sev}">${sevText}</div>`;
+
+    // 标题
+    html += `<div class="event-detail-title">${escapeHtml(event.location || event.title || '')}</div>`;
+
+    // 类型
+    if (event.type) {
+        html += `<div class="event-detail-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            ${escapeHtml(event.type.toUpperCase())}
+            ${event.subEventType ? ' / ' + escapeHtml(event.subEventType) : ''}
+        </div>`;
     }
 
-    // 检查是否有未翻译的事件（仅在中文模式下）
-    if (currentEventsLang === 'cn') {
-        const hasUntranslated = events.some(event => !event.has_translation);
+    // 国家
+    if (event.country) {
+        html += `<div class="event-detail-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            ${escapeHtml(event.country)}
+        </div>`;
+    }
 
-        if (hasUntranslated) {
-            // 有未翻译的事件，启动定时检查
-            if (!eventsTranslationCheckInterval) {
-                console.log('检测到未翻译事件，启动30秒轮询');
-                eventsTranslationCheckInterval = setInterval(() => {
-                    console.log('轮询检查翻译状态');
-                    refreshEventsTimeline();
-                }, 30000);  // 30秒检查一次
-            }
+    // 时间
+    if (timeStr) {
+        html += `<div class="event-detail-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            ${timeStr}
+        </div>`;
+    }
+
+    // 坐标
+    if (event.position && event.position.length === 2) {
+        html += `<div class="event-detail-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><line x1="1" y1="12" x2="23" y2="12"></line></svg>
+            ${event.position[0].toFixed(2)}, ${event.position[1].toFixed(2)}
+        </div>`;
+    }
+
+    // 相关性评分
+    if (event.relevanceScore) {
+        html += `<div class="event-detail-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            Score: ${event.relevanceScore}
+        </div>`;
+    }
+
+    // 参与方
+    if (event.actor1 || event.actor2) {
+        html += `<div class="event-detail-label">ACTORS</div>`;
+        html += `<div class="event-detail-actors">`;
+        if (event.actor1) html += `<span>${escapeHtml(event.actor1)}</span>`;
+        if (event.actor1 && event.actor2) html += ` vs `;
+        if (event.actor2) html += `<span>${escapeHtml(event.actor2)}</span>`;
+        html += `</div>`;
+    }
+
+    // 标题/描述
+    if (event.headline) {
+        html += `<div class="event-detail-label">SUMMARY</div>`;
+        html += `<div class="event-detail-text">${escapeHtml(event.headline)}</div>`;
+    }
+
+    // 备注
+    if (event.notes && event.notes !== event.headline) {
+        html += `<div class="event-detail-label">NOTES</div>`;
+        html += `<div class="event-detail-text">${escapeHtml(event.notes)}</div>`;
+    }
+
+    // 来源链接
+    if (event.sourceUrl) {
+        html += `<div class="event-detail-source">
+            <div class="event-detail-label">SOURCE</div>
+            <a href="${escapeAttr(event.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(event.source || event.sourceUrl)}</a>
+        </div>`;
+    }
+
+    html += `</div>`;
+
+    panel.innerHTML = html;
+
+    // 高亮当前选中的时间轴项
+    document.querySelectorAll('.event-item').forEach(item => {
+        if (item.getAttribute('data-event-id') === eventId) {
+            item.classList.add('active');
         } else {
-            // 所有事件都已翻译，停止定时检查
-            if (eventsTranslationCheckInterval) {
-                console.log('所有事件已翻译完成，停止轮询');
-                clearInterval(eventsTranslationCheckInterval);
-                eventsTranslationCheckInterval = null;
-            }
+            item.classList.remove('active');
         }
-    } else {
-        // 英文模式下停止翻译检查
-        if (eventsTranslationCheckInterval) {
-            clearInterval(eventsTranslationCheckInterval);
-            eventsTranslationCheckInterval = null;
-        }
+    });
+}
+
+/**
+ * 格式化事件时间（显示日期和时段）
+ */
+function formatEventTime(timestamp) {
+    try {
+        const date = new Date(timestamp);
+        const month = date.toLocaleString('en-US', { month: 'short' });
+        const day = date.getDate();
+        const hour = date.getHours();
+
+        let period = 'night';
+        if (hour >= 6 && hour < 12) period = 'morning';
+        else if (hour >= 12 && hour < 18) period = 'afternoon';
+        else if (hour >= 18 && hour < 22) period = 'evening';
+
+        return `${month} ${day}, ${period}`;
+    } catch (e) {
+        return String(timestamp);
     }
 }
 
 /**
- * 格式化事件时间
+ * 格式化事件相对时间
  */
-function formatEventTime(timestamp) {
+function formatEventAgo(timestamp) {
     try {
         const date = new Date(timestamp);
         const now = new Date();
         const diff = now - date;
 
-        if (currentEventsLang === 'cn') {
-            // 中文时间格式
-            if (diff < 3600000) {
-                const minutes = Math.floor(diff / 60000);
-                return minutes <= 0 ? '刚刚' : `${minutes}分钟前`;
-            }
-            if (diff < 86400000) {
-                const hours = Math.floor(diff / 3600000);
-                return `${hours}小时前`;
-            }
-            if (diff < 604800000) {
-                const days = Math.floor(diff / 86400000);
-                return `${days}天前`;
-            }
-            return date.toLocaleDateString('zh-CN', {
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } else {
-            // 英文时间格式
-            if (diff < 3600000) {
-                const minutes = Math.floor(diff / 60000);
-                return minutes <= 0 ? 'Just now' : `${minutes}m ago`;
-            }
-            if (diff < 86400000) {
-                const hours = Math.floor(diff / 3600000);
-                return `${hours}h ago`;
-            }
-            if (diff < 604800000) {
-                const days = Math.floor(diff / 86400000);
-                return `${days}d ago`;
-            }
-            return date.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
+        if (diff < 60000) return '~1m';
+        if (diff < 3600000) return `~${Math.floor(diff / 60000)}m`;
+        if (diff < 86400000) return `~${Math.floor(diff / 3600000)}h`;
+        if (diff < 604800000) return `~${Math.floor(diff / 86400000)}d`;
+        return '';
     } catch (e) {
-        return timestamp;
+        return '';
     }
 }
 
@@ -7663,18 +7673,24 @@ function formatEventTime(timestamp) {
  * HTML 转义
  */
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
 /**
+ * 属性值转义
+ */
+function escapeAttr(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
  * 刷新事件链数据
  */
 function refreshEventsTimeline() {
-    eventsOffset = 0;
-    allEventsData = [];
-    eventsHasMore = true;
     loadEventsTimeline(true);
 }
 
@@ -7682,141 +7698,15 @@ function refreshEventsTimeline() {
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
         loadEventsTimeline(true);
-        setupEventsScrollListener();
     });
 } else {
     loadEventsTimeline(true);
-    setupEventsScrollListener();
 }
 
 // 每5分钟自动刷新一次
 setInterval(refreshEventsTimeline, 5 * 60 * 1000);
 
-// ========== 事件详情模块 ==========
-
-/**
- * 显示事件详情
- */
-async function showEventDetail(eventId) {
-    try {
-        console.log('加载事件详情, eventId:', eventId, 'type:', typeof eventId);
-
-        if (!eventId || eventId === 'undefined') {
-            showModal('错误', `<div style="color: var(--danger);">事件 ID 无效</div>`);
-            return;
-        }
-
-        // 显示加载状态
-        showModal('事件详情', '<div style="text-align: center; padding: 40px;">加载中...</div>');
-
-        // 请求详情数据
-        const url = `/api/events/detail/${eventId}?lang=${currentEventsLang}`;
-        console.log('请求 URL:', url);
-
-        const response = await fetch(url);
-        console.log('响应状态:', response.status);
-
-        const result = await response.json();
-        console.log('响应数据:', result);
-
-        if (!result.success) {
-            showModal('错误', `<div style="color: var(--danger);">${result.message || '加载失败'}</div>`);
-            return;
-        }
-
-        const event = result.data;
-
-        // 构建详情 HTML
-        const severityText = {
-            'high': currentEventsLang === 'cn' ? '高危' : 'High',
-            'medium': currentEventsLang === 'cn' ? '中等' : 'Medium',
-            'low': currentEventsLang === 'cn' ? '低' : 'Low'
-        }[event.severity] || (currentEventsLang === 'cn' ? '中等' : 'Medium');
-
-        const severityColor = {
-            'high': '#ff4444',
-            'medium': '#ffaa00',
-            'low': '#00ff88'
-        }[event.severity] || '#ffaa00';
-
-        let detailHtml = `
-            <div style="max-height: 70vh; overflow-y: auto; padding: 20px;">
-                <!-- 标题和基本信息 -->
-                <div style="margin-bottom: 20px;">
-                    <h3 style="color: var(--primary); margin-bottom: 10px; font-size: 18px;">${escapeHtml(event.title)}</h3>
-                    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-                        <span style="color: ${severityColor}; font-weight: bold;">
-                            ${currentEventsLang === 'cn' ? '严重程度' : 'Severity'}: ${severityText}
-                        </span>
-                        ${event.location ? `
-                        <span style="color: var(--text-secondary);">
-                            <svg style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                <circle cx="12" cy="10" r="3"></circle>
-                            </svg>
-                            ${escapeHtml(event.location)}
-                        </span>
-                        ` : ''}
-                        ${event.timestamp ? `
-                        <span style="color: var(--text-secondary);">
-                            <svg style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12 6 12 12 16 14"></polyline>
-                            </svg>
-                            ${formatEventTime(event.timestamp)}
-                        </span>
-                        ` : ''}
-                    </div>
-                </div>
-
-                <!-- 摘要 -->
-                ${event.summary ? `
-                <div style="margin-bottom: 20px;">
-                    <h4 style="color: var(--primary); margin-bottom: 10px; font-size: 14px; text-transform: uppercase;">
-                        ${currentEventsLang === 'cn' ? '事件摘要' : 'Summary'}
-                    </h4>
-                    <div style="color: var(--text-primary); line-height: 1.6; background: rgba(255,255,255,0.02); padding: 15px; border-radius: 4px; border-left: 3px solid var(--primary);">
-                        ${escapeHtml(event.summary)}
-                    </div>
-                </div>
-                ` : ''}
-
-                <!-- 关键点时间线 -->
-                ${event.key_points && event.key_points.length > 0 ? `
-                <div style="margin-bottom: 20px;">
-                    <h4 style="color: var(--primary); margin-bottom: 15px; font-size: 14px; text-transform: uppercase;">
-                        ${currentEventsLang === 'cn' ? '事件时间线' : 'Timeline'}
-                    </h4>
-                    <div style="position: relative; padding-left: 30px;">
-                        <div style="position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, var(--primary), transparent);"></div>
-                        ${event.key_points.map((point, index) => `
-                            <div style="position: relative; margin-bottom: 20px;">
-                                <div style="position: absolute; left: -26px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-primary);"></div>
-                                <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-                                    ${point.date ? `
-                                    <div style="color: var(--primary); font-size: 12px; margin-bottom: 6px; font-weight: 500;">
-                                        ${point.date}
-                                    </div>
-                                    ` : ''}
-                                    <div style="color: var(--text-primary); line-height: 1.5;">
-                                        ${escapeHtml(point.description || point.text || '')}
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-                ` : ''}
-            </div>
-        `;
-
-        showModal(currentEventsLang === 'cn' ? '事件详情' : 'Event Details', detailHtml);
-
-    } catch (error) {
-        console.error('加载事件详情失败:', error);
-        showModal('错误', `<div style="color: var(--danger);">${currentEventsLang === 'cn' ? '加载失败' : 'Failed to load'}: ${error.message}</div>`);
-    }
-}
+// ========== 事件详情模块（保留模态框函数） ==========
 
 /**
  * 显示模态框

@@ -133,9 +133,12 @@
                     <div class="card-header">
                         <span class="card-title">全球事件链</span>
                         <div class="events-header-actions">
-                            <div class="lang-switch" id="eventsLangSwitch">
-                                <button class="lang-btn" data-lang="en" onclick="switchEventsLanguage('en')">英</button>
-                                <button class="lang-btn active" data-lang="cn" onclick="switchEventsLanguage('cn')">中</button>
+                            <div class="events-filter-group" id="eventsFilterGroup">
+                                <button class="events-filter-btn active" data-severity="all" onclick="filterEventsBySeverity('all')">ALL</button>
+                                <button class="events-filter-btn" data-severity="5" onclick="filterEventsBySeverity('5')">CRIT</button>
+                                <button class="events-filter-btn" data-severity="4" onclick="filterEventsBySeverity('4')">HIGH</button>
+                                <button class="events-filter-btn" data-severity="3" onclick="filterEventsBySeverity('3')">MED</button>
+                                <button class="events-filter-btn" data-severity="2" onclick="filterEventsBySeverity('2')">LOW</button>
                             </div>
                             <span class="events-update-time" id="eventsUpdateTime">--</span>
                             <button class="btn-manage" onclick="refreshEventsTimeline()" title="刷新数据">
@@ -148,6 +151,18 @@
                         </div>
                     </div>
                     <div class="card-body events-timeline-body">
+                        <!-- 左侧：事件详情面板 -->
+                        <div class="events-detail-panel" id="eventsDetailPanel">
+                            <div class="events-detail-placeholder">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
+                                <span>选择事件查看详情</span>
+                            </div>
+                        </div>
+                        <!-- 右侧：时间轴列表 -->
                         <div class="events-timeline-list" id="eventsTimelineList">
                             <div class="events-loading">加载中...</div>
                         </div>

@@ -4497,9 +4497,9 @@ def get_defcon_level():
         })
 
 
-@api_bp.route('/events/timeline', methods=['GET'])
+@api_bp.route('/events/timeline/legacy', methods=['GET'])
 def get_events_timeline():
-    """获取全球事件时间线（从缓存读取）"""
+    """获取全球事件时间线（旧接口，已废弃）"""
     if 'user' not in session:
         return error_response('未登录', 401)
 
@@ -4618,7 +4618,66 @@ def _translate_text(text: str, config: dict) -> str:
         return text
 
 
-# ==================== 全球事件链 API ====================
+# ==================== 全球事件链代理 API ====================
+
+# 事件代理缓存
+_events_proxy_cache = {
+    'data': None,
+    'timestamp': 0
+}
+_EVENTS_CACHE_TTL = 300  # 5分钟缓存
+
+@api_bp.route('/events/proxy', methods=['GET'])
+def events_proxy():
+    """代理请求 world-monitor.com/api/events，缓存5分钟"""
+    if 'user' not in session:
+        return error_response('未登录', 401)
+
+    try:
+        import requests as http_requests
+        import time
+
+        now = time.time()
+
+        # 检查缓存是否有效
+        if _events_proxy_cache['data'] and (now - _events_proxy_cache['timestamp']) < _EVENTS_CACHE_TTL:
+            log_system("使用事件代理缓存数据")
+            return success_response(_events_proxy_cache['data'])
+
+        # 请求外部 API
+        log_system("从 world-monitor.com 获取事件数据")
+        resp = http_requests.get(
+            'https://world-monitor.com/api/events',
+            timeout=30,
+            verify=False,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        )
+
+        if resp.status_code != 200:
+            log_error("事件代理请求失败", f"状态码: {resp.status_code}")
+            return error_response(f'外部 API 请求失败: {resp.status_code}', 502)
+
+        data = resp.json()
+        log_system(f"获取到 {data.get('count', 0)} 个事件")
+
+        # 更新缓存
+        _events_proxy_cache['data'] = data
+        _events_proxy_cache['timestamp'] = now
+
+        return success_response(data)
+
+    except Exception as e:
+        log_error("事件代理请求异常", str(e))
+        # 如果有缓存数据，在请求失败时返回缓存
+        if _events_proxy_cache['data']:
+            log_system("外部请求失败，返回过期缓存数据")
+            return success_response(_events_proxy_cache['data'])
+        return error_response(f'获取事件失败: {str(e)}', 500)
+
+
+# ==================== 全球事件链 API（旧接口，保留兼容） ====================
 
 @api_bp.route('/events/timeline', methods=['GET'])
 def events_timeline():
