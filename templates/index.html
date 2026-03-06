@@ -92,25 +92,6 @@
                 </div>
             </div>
 
-            <!-- 成果展示 -->
-            <div class="card achievements-card achievements-card-compact" data-layout-id="achievements">
-                <div class="card-header">
-                    <span class="card-title">成果展示</span>
-                    <button class="btn-manage" onclick="openAchievementModal()" title="添加成果">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="16"></line>
-                            <line x1="8" y1="12" x2="16" y2="12"></line>
-                        </svg>
-                    </button>
-                </div>
-                <div class="card-body achievements-body">
-                    <div class="achievements-list" id="achievementsList">
-                        <div class="loading-text">加载中...</div>
-                    </div>
-                </div>
-            </div>
-
             <!-- 全球事件链与外部监控 -->
             <div class="telegram-monitor-container">
                 <!-- 左侧：全球事件时间线 -->
@@ -1063,64 +1044,6 @@
                     <button class="btn btn-sm" onclick="loadArticlesPage(articlesCurrentPage - 1)" id="articlesPrevBtn" disabled>上一页</button>
                     <span class="page-info">第 <span id="articlesCurrentPageNum">1</span> / <span id="articlesTotalPages">1</span> 页</span>
                     <button class="btn btn-sm" onclick="loadArticlesPage(articlesCurrentPage + 1)" id="articlesNextBtn">下一页</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 添加/编辑成果弹窗 -->
-    <div class="modal-overlay" id="achievementModal">
-        <div class="modal modal-md">
-            <div class="modal-header">
-                <h3 class="modal-title" id="achievementModalTitle">添加成果</h3>
-                <button class="modal-close" onclick="closeAchievementModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="editAchievementId">
-                <div class="form-group">
-                    <label class="form-label">引用链接 <span class="required">*</span></label>
-                    <div class="input-with-btn">
-                        <input type="text" id="achievementUrl" class="form-input" placeholder="https://example.com/article">
-                        <button class="btn btn-outline btn-sm" onclick="fetchAchievementTitle()" id="btnFetchTitle">
-                            <span class="btn-text">抓取标题</span>
-                            <span class="btn-loading" style="display:none;">抓取中...</span>
-                        </button>
-                    </div>
-                    <div class="form-hint">输入链接后点击"抓取标题"自动获取页面标题</div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">成果标题</label>
-                    <input type="text" id="achievementTitle" class="form-input" placeholder="自动从链接抓取，或手动输入">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">封面图片</label>
-                    <div class="image-upload-area" id="imageUploadArea" onclick="triggerImageUpload()">
-                        <div class="upload-placeholder" id="uploadPlaceholder">
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                <polyline points="21 15 16 10 5 21"></polyline>
-                            </svg>
-                            <span>点击上传图片</span>
-                            <span class="upload-hint">支持 PNG/JPG/GIF/WEBP</span>
-                        </div>
-                        <img id="imagePreview" class="image-preview" style="display:none;">
-                        <button class="btn-remove-image" id="btnRemoveImage" onclick="removeAchievementImage(event)" style="display:none;" title="移除图片">
-                            &times;
-                        </button>
-                    </div>
-                    <input type="file" id="achievementImage" accept="image/*" style="display:none;" onchange="previewAchievementImage(this)">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">描述（可选）</label>
-                    <textarea id="achievementDesc" class="form-textarea" rows="2" placeholder="简要描述成果内容..."></textarea>
-                </div>
-                <div class="form-actions">
-                    <button class="btn btn-cancel" onclick="closeAchievementModal()">取消</button>
-                    <button class="btn btn-save" onclick="saveAchievement()" id="btnSaveAchievement">
-                        <span class="btn-text">保存</span>
-                        <span class="btn-loading" style="display:none;">保存中...</span>
-                    </button>
                 </div>
             </div>
         </div>
