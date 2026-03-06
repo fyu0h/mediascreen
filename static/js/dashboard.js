@@ -6,7 +6,9 @@
 // ==================== 全局配置 ====================
 const CONFIG = {
     refreshInterval: 30000,  // 自动刷新间隔（毫秒）- 30秒
-    alertLimit: 30           // 告警列表数量
+    alertLimit: 30,          // 告警列表数量
+    // PMTiles 瓦片源配置（可修改为自托管 .pmtiles 文件 URL）
+    pmtilesUrl: 'https://build.protomaps.com/20250101.pmtiles'
 };
 
 // 全局变量
@@ -30,6 +32,50 @@ let articleRefreshing = false;   // 文章刷新防并发标记
 let allAlertsData = [];           // 存储所有告警数据
 let currentFilterKeyword = null;  // 当前筛选的关键词
 let keywordChartData = [];        // 关键词图表数据
+
+/**
+ * 为地图添加暗色瓦片层
+ * 优先使用 PMTiles（protomaps-leaflet），失败时回退到 OpenFreeMap / CartoDB
+ */
+function addDarkTileLayer(map) {
+    // 尝试 PMTiles 矢量瓦片（protomaps-leaflet）
+    if (typeof protomapsL !== 'undefined') {
+        try {
+            const pmLayer = protomapsL.leafletLayer({
+                url: CONFIG.pmtilesUrl,
+                flavor: 'dark'
+            });
+            pmLayer.addTo(map);
+            // 监听加载错误，自动回退
+            pmLayer.on('error', function () {
+                map.removeLayer(pmLayer);
+                _addFallbackTileLayer(map);
+            });
+            return;
+        } catch (e) {
+            console.warn('[地图] PMTiles 加载失败，使用回退瓦片源:', e.message);
+        }
+    }
+    _addFallbackTileLayer(map);
+}
+
+/** 回退瓦片层：先尝试 OpenFreeMap，再回退 CartoDB */
+function _addFallbackTileLayer(map) {
+    // OpenFreeMap Positron 暗色风格
+    try {
+        L.tileLayer('https://tiles.openfreemap.org/positron/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap'
+        }).addTo(map);
+        return;
+    } catch (e) {
+        console.warn('[地图] OpenFreeMap 回退失败，使用 CartoDB');
+    }
+    // 最终回退：CartoDB Dark
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+    }).addTo(map);
+}
 
 // 国家代码映射（扩展中文名称）
 const COUNTRY_NAMES = {
@@ -830,10 +876,8 @@ async function loadWorldMap() {
             attributionControl: false
         });
 
-        // 使用深色地图图层
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            maxZoom: 19
-        }).addTo(worldMap);
+        // 使用深色地图图层（PMTiles / OpenFreeMap 回退）
+        addDarkTileLayer(worldMap);
     }
 
     // 清除现有标记（包括自定义图层组）
@@ -1018,9 +1062,7 @@ function initHotspotMap() {
         attributionControl: false
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19
-    }).addTo(hotspotMap);
+    addDarkTileLayer(hotspotMap);
 }
 
 /** 加载热点区域数据并渲染多边形 */
