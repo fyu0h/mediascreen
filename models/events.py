@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 全球事件链数据模型
-适配 world-monitor.com/api/events 的 markers 数据结构
+适配 world-monitor.com/api/signal-markers 的 locations 数据结构
 """
 
 from datetime import datetime
@@ -30,10 +30,8 @@ def save_event(event_data: Dict) -> bool:
         if not event_id:
             return False
 
-        # 添加更新时间
         event_data['updated_at'] = datetime.now()
 
-        # 使用 upsert 更新或插入
         collection.update_one(
             {'event_id': event_id},
             {'$set': event_data},
@@ -45,23 +43,14 @@ def save_event(event_data: Dict) -> bool:
         return False
 
 
-def save_events_bulk(events: List[Dict]) -> int:
-    """批量保存事件，返回成功数量"""
-    count = 0
-    for event_data in events:
-        if save_event(event_data):
-            count += 1
-    return count
-
-
-def get_all_events(skip: int = 0, limit: int = 0, severity: int = None) -> List[Dict]:
-    """获取所有事件（按 relevanceScore 降序）"""
+def get_all_events(skip: int = 0, limit: int = 0, intensity: int = None) -> List[Dict]:
+    """获取所有事件（按 intensity 降序 + mention_count 降序）"""
     collection = get_events_collection()
     query = {}
-    if severity is not None:
-        query['severity'] = severity
+    if intensity is not None:
+        query['intensity'] = intensity
 
-    cursor = collection.find(query).sort('relevance_score', -1)
+    cursor = collection.find(query).sort([('intensity', -1), ('mention_count', -1)])
     if skip > 0:
         cursor = cursor.skip(skip)
     if limit > 0:
@@ -69,25 +58,25 @@ def get_all_events(skip: int = 0, limit: int = 0, severity: int = None) -> List[
     return list(cursor)
 
 
-def get_events_count(severity: int = None) -> int:
+def get_events_count(intensity: int = None) -> int:
     """获取事件总数"""
     collection = get_events_collection()
     query = {}
-    if severity is not None:
-        query['severity'] = severity
+    if intensity is not None:
+        query['intensity'] = intensity
     return collection.count_documents(query)
 
 
 def get_untranslated_events(limit: int = 10) -> List[Dict]:
-    """获取未翻译的事件（headline 未翻译）"""
+    """获取未翻译的事件（summary_cn 不存在）"""
     collection = get_events_collection()
     cursor = collection.find({
         '$or': [
-            {'headline_cn': {'$exists': False}},
-            {'headline_cn': None},
-            {'headline_cn': ''}
+            {'summary_cn': {'$exists': False}},
+            {'summary_cn': None},
+            {'summary_cn': ''}
         ]
-    }).sort('relevance_score', -1).limit(limit)
+    }).sort([('intensity', -1), ('mention_count', -1)]).limit(limit)
     return list(cursor)
 
 
@@ -110,8 +99,8 @@ def delete_old_events(days: int = 30) -> int:
     """删除旧事件"""
     try:
         collection = get_events_collection()
-        cutoff_date = datetime.now().timestamp() - (days * 24 * 3600)
-        result = collection.delete_many({'timestamp_sort': {'$lt': cutoff_date}})
+        cutoff = datetime.now().timestamp() - (days * 24 * 3600)
+        result = collection.delete_many({'last_mentioned_sort': {'$lt': cutoff}})
         return result.deleted_count
     except Exception as e:
         print(f"删除旧事件失败: {e}")

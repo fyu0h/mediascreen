@@ -4618,11 +4618,11 @@ def _translate_text(text: str, config: dict) -> str:
         return text
 
 
-# ==================== 全球事件链 API（从 MongoDB 读取） ====================
+# ==================== 全球事件链 API（从 MongoDB 读取 signal-markers 数据） ====================
 
 @api_bp.route('/events/proxy', methods=['GET'])
 def events_proxy():
-    """从 MongoDB 读取事件数据（后台服务定时获取并翻译）"""
+    """从 MongoDB 读取事件数据（后台服务定时从 signal-markers 获取并翻译）"""
     if 'user' not in session:
         return error_response('未登录', 401)
 
@@ -4630,54 +4630,48 @@ def events_proxy():
         from models.events import get_all_events, get_events_count
 
         # 获取参数
-        severity = request.args.get('severity')
-        severity_int = int(severity) if severity and severity.isdigit() else None
+        intensity = request.args.get('intensity')
+        intensity_int = int(intensity) if intensity and intensity.isdigit() else None
 
         # 从数据库读取事件
-        events = get_all_events(severity=severity_int)
-        total = get_events_count(severity=severity_int)
+        events = get_all_events(intensity=intensity_int)
+        total = get_events_count(intensity=intensity_int)
 
         # 转换为前端格式
-        markers = []
+        locations = []
         has_untranslated = False
         for event in events:
-            # ObjectId 转字符串
             if '_id' in event:
                 event['_id'] = str(event['_id'])
 
-            is_translated = bool(event.get('headline_cn'))
+            is_translated = bool(event.get('summary_cn'))
             if not is_translated:
                 has_untranslated = True
 
-            marker = {
+            # 优先使用中文翻译
+            loc = {
                 'id': event.get('event_id', ''),
-                'actor1': event.get('actor1', ''),
-                'actor2': event.get('actor2', ''),
-                # 优先使用中文翻译
+                'location_name': event.get('location_name_cn') or event.get('location_name', ''),
+                'location_name_en': event.get('location_name', ''),
                 'country': event.get('country_cn') or event.get('country', ''),
-                'headline': event.get('headline_cn') or event.get('headline', ''),
-                'location': event.get('location_cn') or event.get('location', ''),
-                'notes': event.get('notes_cn') or event.get('notes', ''),
-                'position': event.get('position', []),
-                'relevanceScore': event.get('relevance_score', 0),
-                'severity': event.get('severity', 1),
-                'source': event.get('source', ''),
-                'sourceUrl': event.get('source_url', ''),
-                'subEventType': event.get('sub_event_type_cn') or event.get('sub_event_type', ''),
-                'timestamp': event.get('timestamp', ''),
-                'title': event.get('title', ''),
-                'type': event.get('type', ''),
-                'is_translated': is_translated,
-                # 保留英文原文供详情面板使用
-                'headline_en': event.get('headline', ''),
-                'notes_en': event.get('notes', ''),
                 'country_en': event.get('country', ''),
-                'location_en': event.get('location', ''),
+                'lat': event.get('lat', 0),
+                'lng': event.get('lng', 0),
+                'summary': event.get('summary_cn') or event.get('summary', ''),
+                'summary_en': event.get('summary', ''),
+                'analysis': event.get('analysis', ''),
+                'key_points': event.get('key_points_cn') or event.get('key_points', [])[-10:],
+                'key_points_en': event.get('key_points', [])[-10:],
+                'intensity': event.get('intensity', 1),
+                'mention_count': event.get('mention_count', 0),
+                'first_seen_at': event.get('first_seen_at', ''),
+                'last_mentioned_at': event.get('last_mentioned_at', ''),
+                'is_translated': is_translated,
             }
-            markers.append(marker)
+            locations.append(loc)
 
         return success_response({
-            'markers': markers,
+            'locations': locations,
             'count': total,
             'has_untranslated': has_untranslated
         })
