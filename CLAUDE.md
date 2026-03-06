@@ -42,8 +42,7 @@ settings.json                 # 运行时配置（LLM多提供商、爬虫参数
 │   ├── sites.py              # 站点管理（域名→国家推断、坐标、sitemap 检测）
 │   ├── tasks.py              # 后台任务管理
 │   ├── logger.py             # 日志系统（操作/请求/系统日志）
-│   ├── console_log.py        # 实时控制台日志（stdout/stderr 拦截，环形缓冲区，SSE 推送）
-│   └── achievements.py       # 成果展示（含图片上传）
+│   └── console_log.py        # 实时控制台日志（stdout/stderr 拦截，环形缓冲区，SSE 推送）
 ├── plugins/
 │   ├── base.py               # BasePlugin 抽象基类
 │   ├── registry.py           # PluginRegistry 全局单例注册表
@@ -65,7 +64,7 @@ settings.json                 # 运行时配置（LLM多提供商、爬虫参数
 │   ├── js/dashboard.js       # 前端逻辑（原生 JS）
 │   ├── css/dashboard.css     # 样式（科技深色主题）
 │   ├── images/               # 静态图片资源
-│   └── uploads/              # 用户上传文件（成果展示图片等）
+│   └── uploads/              # 用户上传文件
 └── docs/
     ├── plans/                # 开发计划文档
     └── reports/              # 报告文档
@@ -93,7 +92,6 @@ settings.json                 # 运行时配置（LLM多提供商、爬虫参数
 - `telegram_accounts` / `telegram_groups` / `telegram_keywords`：Telegram 配置
 - `users`：用户（角色 admin/viewer）
 - `ai_summaries`：AI 舆情总结历史
-- `achievements`：成果展示
 - `logs`：系统日志
 
 ### API 模块分区（routes/api.py, 4000+ 行, 160+ 端点）
@@ -113,7 +111,6 @@ settings.json                 # 运行时配置（LLM多提供商、爬虫参数
 | 调度器 | `/api/scheduler/*` | 调度器状态、手动触发、定时爬取配置 |
 | 日志 | `/api/logs/*` | 日志列表/详情/统计/清空 |
 | 控制台 | `/api/console/*` | SSE 实时输出流、历史、清空 |
-| 成果展示 | `/api/achievements/*` | 成果CRUD、图片上传、URL标题抓取 |
 | 舆情总结 | `/api/summary/*` | AI 总结生成、历史、提示词管理 |
 | 翻译 | `/api/translation/*` | 翻译设置、提示词、API 测试 |
 | Telegram | `/api/telegram/*` | 账号/群组/关键词/报警/消息/统计/Webhook/监控控制 |
