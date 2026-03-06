@@ -4130,175 +4130,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     cursor: pointer;
 }
 
-/* ========== 成果展示模块 ========== */
-.achievements-card {
-    flex: 1;
-    min-height: 150px;
-    display: flex;
-    flex-direction: column;
-}
-
-.achievements-card-compact {
-    flex: 0 0 100px;
-    min-height: 80px;
-}
-
-.achievements-card .card-header {
-    padding: 10px 16px;
-    background: linear-gradient(90deg, rgba(0, 255, 136, 0.08) 0%, transparent 50%);
-}
-
-.achievements-card .card-title {
-    font-size: 13px;
-    color: var(--secondary);
-}
-
-.achievements-card .card-title::before {
-    content: '';
-    width: 3px;
-    height: 14px;
-    background: linear-gradient(180deg, var(--secondary) 0%, var(--primary) 100%);
-    border-radius: 2px;
-    margin-right: 8px;
-    display: inline-block;
-}
-
-.achievements-body {
-    padding: 10px !important;
-    flex: 1;
-    overflow: hidden;
-}
-
-.achievements-list {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    padding-bottom: 5px;
-    height: 100%;
-}
-
-.achievements-list::-webkit-scrollbar {
-    height: 6px;
-}
-
-.achievements-list::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 3px;
-}
-
-.achievements-list::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 3px;
-}
-
-/* 成果卡片 */
-.achievement-item {
-    flex-shrink: 0;
-    width: 180px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    overflow: hidden;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    position: relative;
-}
-
-.achievement-item:hover {
-    border-color: var(--primary);
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0, 240, 255, 0.2);
-}
-
-.achievement-image {
-    width: 100%;
-    height: 100px;
-    background: linear-gradient(135deg, rgba(0, 240, 255, 0.1) 0%, rgba(0, 255, 136, 0.1) 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.achievement-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.achievement-image .placeholder-icon {
-    color: rgba(0, 240, 255, 0.3);
-}
-
-.achievement-info {
-    padding: 10px;
-}
-
-.achievement-title {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-primary);
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    margin-bottom: 5px;
-}
-
-.achievement-date {
-    font-size: 10px;
-    color: var(--text-muted);
-}
-
-/* 成果操作按钮 */
-.achievement-actions {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    display: flex;
-    gap: 3px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.achievement-item:hover .achievement-actions {
-    opacity: 1;
-}
-
-.achievement-actions .btn-icon-sm {
-    background: rgba(0, 0, 0, 0.6);
-    border-radius: 4px;
-    padding: 4px;
-}
-
-.achievement-actions .btn-icon-sm:hover {
-    background: rgba(0, 0, 0, 0.8);
-}
-
-.achievement-actions .btn-icon-sm.delete:hover {
-    color: var(--risk-high);
-}
-
-/* 空状态 */
-.achievements-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 30px;
-    color: var(--text-muted);
-    width: 100%;
-}
-
-.achievements-empty svg {
-    margin-bottom: 10px;
-    opacity: 0.5;
-}
-
-.achievements-empty span {
-    font-size: 12px;
-}
 
 /* ========== 成果弹窗样式 ========== */
 .image-upload-area {
@@ -8426,7 +8257,6 @@ body.resizing .chart-container-sm {
     [data-layout-id="source-chart"]    { order: 6; }
     [data-layout-id="latest-articles"] { order: 7; }
     [data-layout-id="world-map"]       { order: 8; }
-    [data-layout-id="achievements"]    { order: 9; }
     [data-layout-id="telegram"]        { order: 10; }
 
     .panel {
@@ -8529,21 +8359,6 @@ body.resizing .chart-container-sm {
         height: auto;
         max-height: 300px;
         overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    /* 成果展示 */
-    .achievements-card {
-        max-height: none;
-    }
-
-    .achievements-body {
-        overflow: visible;
-    }
-
-    .achievements-list {
-        height: auto;
-        overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
 
@@ -9012,8 +8827,7 @@ body.resizing .chart-container-sm {
     .log-item,
     .tg-alert-item,
     .keyword-item,
-    .plugin-card,
-    .achievement-item {
+    .plugin-card {
         padding: 12px;
     }
 

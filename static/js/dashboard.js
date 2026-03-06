@@ -6423,7 +6423,6 @@ const LAYOUT_DEFAULTS = {
         'source-chart': { flex: '1', height: null },
         'latest-articles': { flex: '1', height: null },
         'world-map': { flex: null, height: 'calc(62% + 7.5px)' },
-        'achievements': { flex: '0 0 100px', height: null },
         'telegram': { flex: '1', height: null },
         'duty': { flex: null, height: null },
         'risk-monitor': { flex: null, height: null },
