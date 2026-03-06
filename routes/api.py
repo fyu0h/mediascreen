@@ -2179,16 +2179,6 @@ def console_clear():
 
 # ==================== 成果展示接口 ====================
 
-from models.achievements import (
-    get_all_achievements,
-    get_achievement,
-    add_achievement,
-    update_achievement,
-    delete_achievement,
-    fetch_page_title,
-    save_uploaded_image,
-    delete_image
-)
 
 
 @api_bp.route('/achievements', methods=['GET'])
