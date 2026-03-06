@@ -184,7 +184,7 @@ def init_database():
     """初始化数据库（迁移和索引）"""
     from models.sites import migrate_from_json, ensure_indexes
     from models.users import ensure_admin_user
-    from models.mongo import ensure_articles_indexes, ensure_alert_reads_indexes, init_preview_cache_index
+    from models.mongo import ensure_articles_indexes, ensure_alert_reads_indexes, init_preview_cache_index, ensure_hotspots_indexes
     from models.tasks import ensure_task_indexes
     from models.logger import ensure_indexes as ensure_log_indexes
 
@@ -219,6 +219,9 @@ def init_database():
 
     # 确保日志集合索引存在（含 TTL 自动过期）
     ensure_log_indexes()
+
+    # 确保热点区域集合索引存在
+    ensure_hotspots_indexes()
 
     # 确保默认管理员账号存在
     ensure_admin_user()

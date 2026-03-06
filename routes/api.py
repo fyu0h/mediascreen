@@ -4889,3 +4889,197 @@ def events_detail(event_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ==================== 热点区域 API ====================
+
+@api_bp.route('/hotspots', methods=['GET'])
+def list_hotspots():
+    """获取热点区域列表"""
+    try:
+        from models.mongo import get_hotspots
+        enabled = request.args.get('enabled')
+        risk_level = request.args.get('risk_level')
+
+        enabled_val = None
+        if enabled == 'true':
+            enabled_val = True
+        elif enabled == 'false':
+            enabled_val = False
+
+        data = get_hotspots(enabled=enabled_val, risk_level=risk_level)
+        return success_response(data)
+    except Exception as e:
+        log_error('获取热点列表失败', str(e))
+        return error_response('获取热点列表失败', 500)
+
+
+@api_bp.route('/hotspots/<hotspot_id>', methods=['GET'])
+def get_hotspot(hotspot_id):
+    """获取单个热点详情"""
+    try:
+        from models.mongo import get_hotspot_by_id
+        data = get_hotspot_by_id(hotspot_id)
+        if not data:
+            return error_response('热点不存在', 404)
+        return success_response(data)
+    except Exception as e:
+        log_error('获取热点详情失败', str(e))
+        return error_response('获取热点详情失败', 500)
+
+
+@api_bp.route('/hotspots', methods=['POST'])
+def create_hotspot_api():
+    """创建热点区域"""
+    try:
+        from models.mongo import create_hotspot
+        data = request.get_json()
+        if not data or not data.get('name'):
+            return error_response('热点名称不能为空')
+        if not data.get('coordinates') or len(data['coordinates']) < 3:
+            return error_response('多边形至少需要3个坐标点')
+
+        hotspot_id = create_hotspot(data)
+        if hotspot_id:
+            log_operation('创建热点区域', f"名称: {data['name']}, ID: {hotspot_id}")
+            return success_response({'_id': hotspot_id})
+        return error_response('创建失败', 500)
+    except Exception as e:
+        log_error('创建热点失败', str(e))
+        return error_response(f'创建失败: {str(e)}', 500)
+
+
+@api_bp.route('/hotspots/<hotspot_id>', methods=['PUT'])
+def update_hotspot_api(hotspot_id):
+    """更新热点区域"""
+    try:
+        from models.mongo import update_hotspot
+        data = request.get_json()
+        if not data:
+            return error_response('请求体不能为空')
+        if 'coordinates' in data and len(data['coordinates']) < 3:
+            return error_response('多边形至少需要3个坐标点')
+
+        ok = update_hotspot(hotspot_id, data)
+        if ok:
+            log_operation('更新热点区域', f"ID: {hotspot_id}")
+            return success_response({'updated': True})
+        return error_response('更新失败或热点不存在', 404)
+    except Exception as e:
+        log_error('更新热点失败', str(e))
+        return error_response(f'更新失败: {str(e)}', 500)
+
+
+@api_bp.route('/hotspots/<hotspot_id>', methods=['DELETE'])
+def delete_hotspot_api(hotspot_id):
+    """删除热点区域（同时清理视频文件）"""
+    try:
+        import os
+        import shutil
+        from models.mongo import delete_hotspot
+
+        deleted = delete_hotspot(hotspot_id)
+        if not deleted:
+            return error_response('热点不存在', 404)
+
+        # 清理关联的视频文件
+        videos = deleted.get('videos', [])
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'uploads', 'hotspot_videos')
+        for v in videos:
+            filepath = os.path.join(upload_dir, v.get('filename', ''))
+            if os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
+
+        log_operation('删除热点区域', f"名称: {deleted.get('name')}, 视频数: {len(videos)}")
+        return success_response({'deleted': True})
+    except Exception as e:
+        log_error('删除热点失败', str(e))
+        return error_response(f'删除失败: {str(e)}', 500)
+
+
+@api_bp.route('/hotspots/<hotspot_id>/videos', methods=['POST'])
+def upload_hotspot_video(hotspot_id):
+    """上传热点视频"""
+    try:
+        import os
+        from models.mongo import get_hotspot_by_id, add_hotspot_video
+        from werkzeug.utils import secure_filename
+
+        hotspot = get_hotspot_by_id(hotspot_id)
+        if not hotspot:
+            return error_response('热点不存在', 404)
+
+        if 'video' not in request.files:
+            return error_response('未选择视频文件')
+
+        file = request.files['video']
+        if not file.filename:
+            return error_response('文件名为空')
+
+        # 验证文件扩展名
+        allowed_ext = {'.mp4', '.webm', '.mov'}
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in allowed_ext:
+            return error_response(f'不支持的文件格式，仅支持: {", ".join(allowed_ext)}')
+
+        # 生成安全文件名
+        original_name = secure_filename(file.filename) or 'video' + ext
+        timestamp = int(time.time())
+        filename = f"{hotspot_id}_{timestamp}_{original_name}"
+
+        # 确保上传目录存在
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'uploads', 'hotspot_videos')
+        os.makedirs(upload_dir, exist_ok=True)
+
+        filepath = os.path.join(upload_dir, filename)
+        file.save(filepath)
+
+        # 写入数据库
+        title = request.form.get('title', '')
+        video_info = {
+            'filename': filename,
+            'path': f'/static/uploads/hotspot_videos/{filename}',
+            'title': title,
+        }
+
+        ok = add_hotspot_video(hotspot_id, video_info)
+        if ok:
+            log_operation('上传热点视频', f"热点: {hotspot.get('name')}, 文件: {filename}")
+            return success_response(video_info)
+
+        # 写入数据库失败时清理文件
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        return error_response('保存视频信息失败', 500)
+
+    except Exception as e:
+        log_error('上传热点视频失败', str(e))
+        return error_response(f'上传失败: {str(e)}', 500)
+
+
+@api_bp.route('/hotspots/<hotspot_id>/videos/<filename>', methods=['DELETE'])
+def delete_hotspot_video(hotspot_id, filename):
+    """删除热点视频"""
+    try:
+        import os
+        from models.mongo import remove_hotspot_video
+
+        ok = remove_hotspot_video(hotspot_id, filename)
+        if not ok:
+            return error_response('视频不存在', 404)
+
+        # 删除文件
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'uploads', 'hotspot_videos')
+        filepath = os.path.join(upload_dir, filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+        log_operation('删除热点视频', f"文件: {filename}")
+        return success_response({'deleted': True})
+    except Exception as e:
+        log_error('删除热点视频失败', str(e))
+        return error_response(f'删除失败: {str(e)}', 500)
+
+
+

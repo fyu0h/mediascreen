@@ -58,3 +58,11 @@ def logout():
     """退出登录"""
     session.clear()
     return redirect(url_for('views.login'))
+
+
+@views_bp.route('/hotspot-admin')
+def hotspot_admin():
+    """热点区域管理页面（需要登录）"""
+    if 'user' not in session:
+        return redirect(url_for('views.login'))
+    return render_template('hotspot_admin.html')

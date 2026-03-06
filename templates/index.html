@@ -78,17 +78,49 @@
         <section class="panel panel-center">
             <div class="card map-card" data-layout-id="world-map">
                 <div class="card-header">
-                    <span class="card-title">全球新闻源分布</span>
-                    <div class="map-legend">
+                    <span class="card-title" id="mapTitle">全球新闻源分布</span>
+                    <div class="map-toggle-wrap">
+                        <label class="map-toggle" id="mapToggle" title="切换地图视图">
+                            <input type="checkbox" id="mapToggleInput">
+                            <span class="map-toggle-slider"></span>
+                            <span class="map-toggle-label map-toggle-label--left">新闻源</span>
+                            <span class="map-toggle-label map-toggle-label--right">热点区域</span>
+                        </label>
+                    </div>
+                    <div class="map-legend" id="mapLegendNews">
                         <span class="legend-item"><i class="dot dot-lg"></i>高活跃</span>
                         <span class="legend-item"><i class="dot dot-md"></i>中活跃</span>
                         <span class="legend-item"><i class="dot dot-sm"></i>低活跃</span>
                         <span class="legend-item legend-separator">|</span>
                         <span class="legend-item"><i class="dot dot-risk"></i>风控警报</span>
                     </div>
+                    <div class="map-legend" id="mapLegendHotspot" style="display:none;">
+                        <span class="legend-item"><i class="dot" style="background:#ff4757;"></i>高风险</span>
+                        <span class="legend-item"><i class="dot" style="background:#ffa502;"></i>中风险</span>
+                        <span class="legend-item"><i class="dot" style="background:#ffea00;"></i>关注</span>
+                    </div>
                 </div>
                 <div class="card-body map-body">
-                    <div id="worldMap"></div>
+                    <div id="worldMap" class="map-layer map-layer--active"></div>
+                    <div id="hotspotMap" class="map-layer"></div>
+                    <!-- 热点详情卡片 -->
+                    <div id="hotspotDetail" class="hotspot-detail" style="display:none;">
+                        <div class="hotspot-detail__header">
+                            <span class="hotspot-detail__name"></span>
+                            <span class="hotspot-detail__risk"></span>
+                            <button class="hotspot-detail__close" onclick="closeHotspotDetail()">&times;</button>
+                        </div>
+                        <div class="hotspot-detail__desc"></div>
+                        <div class="hotspot-detail__time"></div>
+                        <div class="hotspot-detail__videos">
+                            <div class="hotspot-video__container">
+                                <div class="hotspot-video__track"></div>
+                            </div>
+                            <button class="hotspot-video__arrow hotspot-video__arrow--left" onclick="slideHotspotVideo(-1)">&#8249;</button>
+                            <button class="hotspot-video__arrow hotspot-video__arrow--right" onclick="slideHotspotVideo(1)">&#8250;</button>
+                            <div class="hotspot-video__dots"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

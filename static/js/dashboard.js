@@ -13,6 +13,13 @@ const CONFIG = {
 let sourceChart = null;
 let keywordChart = null;
 let worldMap = null;
+let hotspotMap = null;           // 热点区域地图
+let mapAutoTimer = null;         // 地图自动切换定时器
+let mapIdleTimer = null;         // 用户无操作恢复定时器
+let currentMapView = 'news';     // 当前地图视图: 'news' | 'hotspot'
+let hotspotVideoIndex = 0;       // 当前视频索引
+let hotspotDataCache = null;     // 热点数据缓存
+let hotspotCacheTime = 0;        // 缓存时间
 let refreshTimer = null;
 let articleRefreshTimer = null;  // 文章独立快速刷新定时器
 let clockTimer = null;           // 顶部时钟定时器
@@ -996,6 +1003,270 @@ async function loadWorldMap() {
     });
 }
 
+// ==================== 热点区域地图 ====================
+
+/** 初始化热点地图 */
+function initHotspotMap() {
+    if (hotspotMap) return;
+    const isMobile = window.innerWidth <= 768;
+    hotspotMap = L.map('hotspotMap', {
+        center: isMobile ? [20, 0] : [25, 20],
+        zoom: isMobile ? 1 : 2,
+        minZoom: 1,
+        maxZoom: 6,
+        zoomControl: false,
+        attributionControl: false
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+    }).addTo(hotspotMap);
+}
+
+/** 加载热点区域数据并渲染多边形 */
+async function loadHotspotData() {
+    // 缓存5分钟
+    const now = Date.now();
+    if (hotspotDataCache && (now - hotspotCacheTime) < 300000) {
+        renderHotspots(hotspotDataCache);
+        return;
+    }
+
+    const data = await fetchAPI('/hotspots?enabled=true');
+    if (!data) return;
+
+    hotspotDataCache = data;
+    hotspotCacheTime = now;
+    renderHotspots(data);
+}
+
+/** 在热点地图上渲染多边形区域 */
+function renderHotspots(hotspots) {
+    if (!hotspotMap) initHotspotMap();
+
+    // 清除现有多边形
+    hotspotMap.eachLayer(layer => {
+        if (layer instanceof L.Polygon) {
+            hotspotMap.removeLayer(layer);
+        }
+    });
+
+    const styleMap = {
+        high:   { color: '#ff4757', fillColor: 'rgba(255, 71, 87, 0.3)',  weight: 2 },
+        medium: { color: '#ffa502', fillColor: 'rgba(255, 165, 2, 0.3)',  weight: 2 },
+        low:    { color: '#ffea00', fillColor: 'rgba(255, 234, 0, 0.3)',  weight: 2 }
+    };
+
+    hotspots.forEach(h => {
+        if (!h.coordinates || h.coordinates.length < 3) return;
+
+        const style = styleMap[h.risk_level] || styleMap.medium;
+        const polygon = L.polygon(h.coordinates, {
+            color: style.color,
+            fillColor: style.fillColor,
+            fillOpacity: 0.3,
+            weight: style.weight
+        }).addTo(hotspotMap);
+
+        // 鼠标悬停高亮
+        polygon.on('mouseover', function () {
+            this.setStyle({ fillOpacity: 0.5, weight: 3 });
+        });
+        polygon.on('mouseout', function () {
+            this.setStyle({ fillOpacity: 0.3, weight: style.weight });
+        });
+
+        // 点击显示详情
+        polygon.on('click', function () {
+            showHotspotDetail(h);
+            resetMapIdleTimer();
+        });
+
+        // 添加标签
+        const center = polygon.getBounds().getCenter();
+        const label = L.divIcon({
+            className: 'hotspot-label',
+            html: `<span style="color:${style.color};font-size:11px;text-shadow:0 0 6px rgba(0,0,0,0.8);white-space:nowrap;">${h.name}</span>`,
+            iconSize: [100, 20],
+            iconAnchor: [50, 10]
+        });
+        L.marker(center, { icon: label, interactive: false }).addTo(hotspotMap);
+    });
+
+    if (!hotspots.length) {
+        // 暂无热点数据时不做额外处理
+    }
+}
+
+/** 显示热点详情卡片 */
+function showHotspotDetail(hotspot) {
+    const el = document.getElementById('hotspotDetail');
+    el.querySelector('.hotspot-detail__name').textContent = hotspot.name;
+
+    const riskEl = el.querySelector('.hotspot-detail__risk');
+    const riskLabels = { high: '高风险', medium: '中风险', low: '关注' };
+    riskEl.textContent = riskLabels[hotspot.risk_level] || '未知';
+    riskEl.className = 'hotspot-detail__risk hotspot-detail__risk--' + (hotspot.risk_level || 'medium');
+
+    el.querySelector('.hotspot-detail__desc').textContent = hotspot.description || '';
+
+    const timeStr = hotspot.updated_at ? new Date(hotspot.updated_at).toLocaleString('zh-CN') : '-';
+    el.querySelector('.hotspot-detail__time').textContent = '更新时间：' + timeStr;
+
+    // 渲染视频
+    const track = el.querySelector('.hotspot-video__track');
+    const dots = el.querySelector('.hotspot-video__dots');
+    const videos = hotspot.videos || [];
+    hotspotVideoIndex = 0;
+
+    track.innerHTML = '';
+    dots.innerHTML = '';
+
+    if (videos.length > 0) {
+        el.querySelector('.hotspot-detail__videos').style.display = '';
+        videos.forEach((v, i) => {
+            const video = document.createElement('video');
+            video.src = v.path;
+            video.controls = true;
+            video.preload = 'metadata';
+            video.setAttribute('playsinline', '');
+            track.appendChild(video);
+
+            const dot = document.createElement('span');
+            dot.className = 'hotspot-video__dot' + (i === 0 ? ' hotspot-video__dot--active' : '');
+            dot.onclick = () => goToHotspotVideo(i);
+            dots.appendChild(dot);
+        });
+    } else {
+        el.querySelector('.hotspot-detail__videos').style.display = 'none';
+    }
+
+    el.style.display = '';
+}
+
+/** 关闭热点详情 */
+function closeHotspotDetail() {
+    document.getElementById('hotspotDetail').style.display = 'none';
+    // 暂停所有视频
+    document.querySelectorAll('#hotspotDetail video').forEach(v => v.pause());
+}
+
+/** 视频轮播：滑动到指定索引 */
+function goToHotspotVideo(index) {
+    const track = document.querySelector('.hotspot-video__track');
+    const total = track.children.length;
+    if (total === 0) return;
+    hotspotVideoIndex = Math.max(0, Math.min(index, total - 1));
+    track.style.transform = `translateX(-${hotspotVideoIndex * 100}%)`;
+
+    // 暂停其他视频
+    track.querySelectorAll('video').forEach((v, i) => {
+        if (i !== hotspotVideoIndex) v.pause();
+    });
+
+    // 更新圆点
+    document.querySelectorAll('.hotspot-video__dot').forEach((d, i) => {
+        d.classList.toggle('hotspot-video__dot--active', i === hotspotVideoIndex);
+    });
+}
+
+/** 视频轮播：方向切换 */
+function slideHotspotVideo(dir) {
+    goToHotspotVideo(hotspotVideoIndex + dir);
+    resetMapIdleTimer();
+}
+
+// ==================== 地图切换逻辑 ====================
+
+/** 切换地图视图 */
+function switchMapView(view) {
+    if (view === currentMapView) return;
+    currentMapView = view;
+
+    const newsLayer = document.getElementById('worldMap');
+    const hotspotLayer = document.getElementById('hotspotMap');
+    const titleEl = document.getElementById('mapTitle');
+    const legendNews = document.getElementById('mapLegendNews');
+    const legendHotspot = document.getElementById('mapLegendHotspot');
+    const toggle = document.getElementById('mapToggleInput');
+
+    if (view === 'hotspot') {
+        newsLayer.classList.remove('map-layer--active');
+        hotspotLayer.classList.add('map-layer--active');
+        titleEl.textContent = '全球热点区域';
+        legendNews.style.display = 'none';
+        legendHotspot.style.display = '';
+        toggle.checked = true;
+
+        // 延迟初始化和加载热点数据
+        if (!hotspotMap) initHotspotMap();
+        setTimeout(() => {
+            if (hotspotMap) hotspotMap.invalidateSize();
+            loadHotspotData();
+        }, 100);
+    } else {
+        hotspotLayer.classList.remove('map-layer--active');
+        newsLayer.classList.add('map-layer--active');
+        titleEl.textContent = '全球新闻源分布';
+        legendNews.style.display = '';
+        legendHotspot.style.display = 'none';
+        toggle.checked = false;
+        closeHotspotDetail();
+
+        setTimeout(() => {
+            if (worldMap) worldMap.invalidateSize();
+        }, 100);
+    }
+}
+
+/** 启动地图自动切换（5秒间隔） */
+function startMapAutoSwitch() {
+    stopMapAutoSwitch();
+    mapAutoTimer = setInterval(() => {
+        switchMapView(currentMapView === 'news' ? 'hotspot' : 'news');
+    }, 5000);
+}
+
+/** 停止地图自动切换 */
+function stopMapAutoSwitch() {
+    if (mapAutoTimer) {
+        clearInterval(mapAutoTimer);
+        mapAutoTimer = null;
+    }
+}
+
+/** 用户操作后重置空闲计时器（30秒后恢复自动切换） */
+function resetMapIdleTimer() {
+    stopMapAutoSwitch();
+    if (mapIdleTimer) clearTimeout(mapIdleTimer);
+    mapIdleTimer = setTimeout(() => {
+        startMapAutoSwitch();
+    }, 30000);
+}
+
+/** 初始化地图切换控制 */
+function initMapToggle() {
+    const toggle = document.getElementById('mapToggleInput');
+    if (!toggle) return;
+
+    toggle.addEventListener('change', () => {
+        switchMapView(toggle.checked ? 'hotspot' : 'news');
+        resetMapIdleTimer();
+    });
+
+    // 页面失焦时暂停自动切换，聚焦时恢复
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopMapAutoSwitch();
+        } else {
+            startMapAutoSwitch();
+        }
+    });
+
+    // 启动自动切换
+    startMapAutoSwitch();
+}
+
 // ==================== 风控监控 ====================
 
 async function loadRiskStats() {
@@ -1412,6 +1683,7 @@ function handleResize() {
     if (sourceChart) sourceChart.resize();
     if (keywordChart) keywordChart.resize();
     if (worldMap) worldMap.invalidateSize();
+    if (hotspotMap) hotspotMap.invalidateSize();
 }
 
 // 页面初始化
@@ -1451,6 +1723,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => {
         if (worldMap) worldMap.invalidateSize();
     }, 500);
+
+    // 初始化地图切换控制（热点地图 <-> 新闻源地图）
+    initMapToggle();
 
     // ESC 关闭弹窗
     document.addEventListener('keydown', (e) => {

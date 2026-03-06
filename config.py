@@ -42,8 +42,8 @@ class Config:
     SESSION_COOKIE_SAMESITE = 'Lax'  # 限制跨站请求携带 Cookie，防止 CSRF 攻击
     SESSION_COOKIE_SECURE = os.environ.get('FLASK_ENV') == 'production'  # 生产环境仅通过 HTTPS 传输 Cookie；开发环境允许 HTTP
 
-    # 上传文件大小限制（5MB）
-    MAX_CONTENT_LENGTH = 5 * 1024 * 1024
+    # 上传文件大小限制（100MB，支持视频上传）
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
     # MongoDB 配置
     # 优先使用完整 URI（支持 MongoDB Atlas）
@@ -62,6 +62,7 @@ class Config:
     COLLECTION_SITES = 'sites'  # 订阅站点集合
     COLLECTION_PLUGIN_SUBSCRIPTIONS = 'plugin_subscriptions'  # 插件订阅配置
     COLLECTION_SUMMARIES = 'ai_summaries'  # AI舆情总结历史
+    COLLECTION_HOTSPOTS = 'hotspot_zones'  # 热点区域集合
 
     # 分页默认值
     DEFAULT_PAGE_SIZE = 20

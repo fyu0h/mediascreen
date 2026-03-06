@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>热点区域管理 - 全球舆情态势感知平台</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a1628;
+            --bg-card: rgba(15, 25, 50, 0.85);
+            --border: rgba(0, 240, 255, 0.15);
+            --primary: #00f0ff;
+            --danger: #ff4757;
+            --warning: #ffa502;
+            --text: #e0e6ed;
+            --text-muted: #7a8ba3;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 50%, #0d1b2e 100%);
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            color: var(--text);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .page-header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .page-header a {
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: rgba(0, 240, 255, 0.15);
+            color: var(--primary);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: rgba(0, 240, 255, 0.25);
+        }
+
+        .btn-danger {
+            background: rgba(255, 71, 87, 0.15);
+            color: var(--danger);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+        }
+
+        .btn-danger:hover {
+            background: rgba(255, 71, 87, 0.25);
+        }
+
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+
+        /* 筛选栏 */
+        .filter-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
+
+        .filter-bar input, .filter-bar select {
+            padding: 8px 12px;
+            background: rgba(15, 25, 50, 0.9);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .filter-bar input { flex: 1; max-width: 300px; }
+
+        /* 表格 */
+        .table-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        th {
+            background: rgba(0, 240, 255, 0.05);
+            color: var(--text-muted);
+            font-weight: 500;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        tr:hover td {
+            background: rgba(0, 240, 255, 0.03);
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .risk-high { background: rgba(255,71,87,0.2); color: #ff4757; }
+        .risk-medium { background: rgba(255,165,2,0.2); color: #ffa502; }
+        .risk-low { background: rgba(255,234,0,0.2); color: #ffea00; }
+
+        .status-on { color: #2ed573; }
+        .status-off { color: var(--text-muted); }
+
+        .actions { display: flex; gap: 6px; }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* 模态框 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 40px 20px;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: #0f1932;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 700px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h2 { font-size: 16px; font-weight: 600; }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 22px;
+            cursor: pointer;
+        }
+
+        .modal-body { padding: 20px; }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(10, 20, 40, 0.9);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 16px;
+        }
+
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        /* 地图选点 */
+        #drawMap {
+            width: 100%;
+            height: 300px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            margin-bottom: 8px;
+        }
+
+        .coords-display {
+            font-size: 11px;
+            color: var(--text-muted);
+            max-height: 60px;
+            overflow-y: auto;
+            word-break: break-all;
+        }
+
+        /* 视频上传 */
+        .video-upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .video-upload-zone:hover, .video-upload-zone.dragover {
+            border-color: var(--primary);
+        }
+
+        .video-list {
+            margin-top: 8px;
+        }
+
+        .video-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .video-item span { flex: 1; }
+
+        .video-item .remove-btn {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .upload-progress {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .upload-progress__bar {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 2000;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s;
+        }
+
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast-success { background: rgba(46, 213, 115, 0.9); color: #fff; }
+        .toast-error { background: rgba(255, 71, 87, 0.9); color: #fff; }
+
+        .draw-hint {
+            font-size: 12px;
+            color: var(--primary);
+            margin-bottom: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <h1>热点区域管理</h1>
+            <div style="display:flex;align-items:center;gap:16px;">
+                <a href="/">返回仪表盘</a>
+                <button class="btn btn-primary" onclick="openCreateModal()">+ 新增热点</button>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <input type="text" id="searchInput" placeholder="搜索热点名称..." oninput="filterTable()">
+            <select id="filterRisk" onchange="filterTable()">
+                <option value="">全部风险</option>
+                <option value="high">高风险</option>
+                <option value="medium">中风险</option>
+                <option value="low">关注</option>
+            </select>
+            <select id="filterStatus" onchange="filterTable()">
+                <option value="">全部状态</option>
+                <option value="true">已启用</option>
+                <option value="false">已禁用</option>
+            </select>
+        </div>
+
+        <div class="table-card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>风险等级</th>
+                        <th>坐标点数</th>
+                        <th>视频数</th>
+                        <th>状态</th>
+                        <th>更新时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="hotspotTable"></tbody>
+            </table>
+            <div class="empty-state" id="emptyState" style="display:none;">暂无热点区域数据</div>
+        </div>
+    </div>
+
+    <!-- 新增/编辑模态框 -->
+    <div class="modal-overlay" id="hotspotModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">新增热点区域</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+
+                <div class="form-group">
+                    <label>热点名称 *</label>
+                    <input type="text" id="inputName" placeholder="如：加沙地带冲突">
+                </div>
+
+                <div class="form-group">
+                    <label>风险等级</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="riskLevel" value="high"> 高风险</label>
+                        <label><input type="radio" name="riskLevel" value="medium" checked> 中风险</label>
+                        <label><input type="radio" name="riskLevel" value="low"> 关注</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>态势描述</label>
+                    <textarea id="inputDesc" placeholder="输入态势描述信息..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>区域坐标（点击地图绘制多边形）</label>
+                    <p class="draw-hint">使用左侧工具栏绘制多边形，或点击已有多边形后编辑/删除</p>
+                    <div id="drawMap"></div>
+                    <div class="coords-display" id="coordsDisplay">未绘制区域</div>
+                </div>
+
+                <div class="form-group">
+                    <label>视频上传（支持 mp4, webm, mov）</label>
+                    <div class="video-upload-zone" id="uploadZone">
+                        点击选择视频文件 或 拖拽文件到此处
+                        <input type="file" id="videoInput" accept=".mp4,.webm,.mov" multiple style="display:none;">
+                    </div>
+                    <div class="upload-progress" id="uploadProgress" style="display:none;">
+                        <div class="upload-progress__bar" id="uploadBar"></div>
+                    </div>
+                    <div class="video-list" id="videoList"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="inputEnabled" checked> 启用显示
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal()" style="color:var(--text-muted);">取消</button>
+                <button class="btn btn-primary" onclick="saveHotspot()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <script>
+        // ==================== 全局状态 ====================
+        let allHotspots = [];
+        let drawMap = null;
+        let drawnItems = null;
+        let currentPolygonCoords = [];
+        let currentVideos = [];  // 已保存的视频 [{filename, path, title}]
+        let pendingFiles = [];   // 待上传的文件
+
+        // ==================== 数据加载 ====================
+
+        async function loadHotspots() {
+            try {
+                const resp = await fetch('/api/hotspots');
+                const result = await resp.json();
+                if (result.success) {
+                    allHotspots = result.data;
+                    renderTable(allHotspots);
+                }
+            } catch (e) {
+                showToast('加载数据失败', 'error');
+            }
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('hotspotTable');
+            const empty = document.getElementById('emptyState');
+
+            if (!data.length) {
+                tbody.innerHTML = '';
+                empty.style.display = '';
+                return;
+            }
+            empty.style.display = 'none';
+
+            const riskLabels = { high: '高风险', medium: '中风险', low: '关注' };
+            const riskClass = { high: 'risk-high', medium: 'risk-medium', low: 'risk-low' };
+
+            tbody.innerHTML = data.map(h => `
+                <tr>
+                    <td>${escHtml(h.name)}</td>
+                    <td><span class="risk-badge ${riskClass[h.risk_level] || ''}">${riskLabels[h.risk_level] || '未知'}</span></td>
+                    <td>${(h.coordinates || []).length}</td>
+                    <td>${(h.videos || []).length}</td>
+                    <td><span class="${h.enabled ? 'status-on' : 'status-off'}">${h.enabled ? '已启用' : '已禁用'}</span></td>
+                    <td>${h.updated_at ? new Date(h.updated_at).toLocaleString('zh-CN') : '-'}</td>
+                    <td class="actions">
+                        <button class="btn btn-primary btn-sm" onclick="openEditModal('${h._id}')">编辑</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteHotspot('${h._id}', '${escHtml(h.name)}')">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterTable() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const risk = document.getElementById('filterRisk').value;
+            const status = document.getElementById('filterStatus').value;
+
+            const filtered = allHotspots.filter(h => {
+                if (search && !h.name.toLowerCase().includes(search)) return false;
+                if (risk && h.risk_level !== risk) return false;
+                if (status === 'true' && !h.enabled) return false;
+                if (status === 'false' && h.enabled) return false;
+                return true;
+            });
+            renderTable(filtered);
+        }
+
+        // ==================== 模态框 ====================
+
+        function openCreateModal() {
+            document.getElementById('editId').value = '';
+            document.getElementById('modalTitle').textContent = '新增热点区域';
+            document.getElementById('inputName').value = '';
+            document.getElementById('inputDesc').value = '';
+            document.getElementById('inputEnabled').checked = true;
+            document.querySelector('input[name="riskLevel"][value="medium"]').checked = true;
+            currentPolygonCoords = [];
+            currentVideos = [];
+            pendingFiles = [];
+            renderVideoList();
+            updateCoordsDisplay();
+
+            document.getElementById('hotspotModal').classList.add('active');
+            setTimeout(() => initDrawMap(), 100);
+        }
+
+        function openEditModal(id) {
+            const h = allHotspots.find(x => x._id === id);
+            if (!h) return;
+
+            document.getElementById('editId').value = id;
+            document.getElementById('modalTitle').textContent = '编辑热点区域';
+            document.getElementById('inputName').value = h.name;
+            document.getElementById('inputDesc').value = h.description || '';
+            document.getElementById('inputEnabled').checked = h.enabled;
+
+            const riskRadio = document.querySelector(`input[name="riskLevel"][value="${h.risk_level}"]`);
+            if (riskRadio) riskRadio.checked = true;
+
+            currentPolygonCoords = h.coordinates || [];
+            currentVideos = (h.videos || []).map(v => ({...v}));
+            pendingFiles = [];
+            renderVideoList();
+            updateCoordsDisplay();
+
+            document.getElementById('hotspotModal').classList.add('active');
+            setTimeout(() => {
+                initDrawMap();
+                // 加载已有多边形
+                if (currentPolygonCoords.length >= 3) {
+                    const polygon = L.polygon(currentPolygonCoords, { color: '#ff4757' });
+                    drawnItems.addLayer(polygon);
+                    drawMap.fitBounds(polygon.getBounds(), { padding: [20, 20] });
+                }
+            }, 100);
+        }
+
+        function closeModal() {
+            document.getElementById('hotspotModal').classList.remove('active');
+            if (drawMap) {
+                drawMap.remove();
+                drawMap = null;
+            }
+        }
+
+        // ==================== 地图选点 ====================
+
+        function initDrawMap() {
+            if (drawMap) {
+                drawMap.remove();
+                drawMap = null;
+            }
+
+            drawMap = L.map('drawMap', {
+                center: [25, 20],
+                zoom: 2,
+                zoomControl: true,
+                attributionControl: false
+            });
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19
+            }).addTo(drawMap);
+
+            drawnItems = new L.FeatureGroup();
+            drawMap.addLayer(drawnItems);
+
+            const drawControl = new L.Control.Draw({
+                position: 'topleft',
+                draw: {
+                    polygon: {
+                        shapeOptions: { color: '#ff4757', fillOpacity: 0.3 },
+                        allowIntersection: false,
+                        showArea: true
+                    },
+                    polyline: false,
+                    rectangle: false,
+                    circle: false,
+                    circlemarker: false,
+                    marker: false
+                },
+                edit: {
+                    featureGroup: drawnItems
+                }
+            });
+            drawMap.addControl(drawControl);
+
+            drawMap.on(L.Draw.Event.CREATED, function (e) {
+                drawnItems.clearLayers();
+                drawnItems.addLayer(e.layer);
+                currentPolygonCoords = e.layer.getLatLngs()[0].map(ll => [ll.lat, ll.lng]);
+                updateCoordsDisplay();
+            });
+
+            drawMap.on(L.Draw.Event.EDITED, function () {
+                drawnItems.eachLayer(layer => {
+                    if (layer instanceof L.Polygon) {
+                        currentPolygonCoords = layer.getLatLngs()[0].map(ll => [ll.lat, ll.lng]);
+                    }
+                });
+                updateCoordsDisplay();
+            });
+
+            drawMap.on(L.Draw.Event.DELETED, function () {
+                currentPolygonCoords = [];
+                updateCoordsDisplay();
+            });
+        }
+
+        function updateCoordsDisplay() {
+            const el = document.getElementById('coordsDisplay');
+            if (currentPolygonCoords.length === 0) {
+                el.textContent = '未绘制区域';
+            } else {
+                el.textContent = `已选 ${currentPolygonCoords.length} 个坐标点: ${JSON.stringify(currentPolygonCoords.map(c => [+c[0].toFixed(4), +c[1].toFixed(4)]))}`;
+            }
+        }
+
+        // ==================== 视频上传 ====================
+
+        const uploadZone = document.getElementById('uploadZone');
+        const videoInput = document.getElementById('videoInput');
+
+        uploadZone.addEventListener('click', () => videoInput.click());
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        videoInput.addEventListener('change', () => {
+            handleFiles(videoInput.files);
+            videoInput.value = '';
+        });
+
+        function handleFiles(files) {
+            const allowed = ['.mp4', '.webm', '.mov'];
+            for (const f of files) {
+                const ext = f.name.substring(f.name.lastIndexOf('.')).toLowerCase();
+                if (!allowed.includes(ext)) {
+                    showToast(`不支持的格式: ${f.name}`, 'error');
+                    continue;
+                }
+                if (f.size > 100 * 1024 * 1024) {
+                    showToast(`文件过大: ${f.name} (最大100MB)`, 'error');
+                    continue;
+                }
+                pendingFiles.push(f);
+            }
+            renderVideoList();
+        }
+
+        function renderVideoList() {
+            const list = document.getElementById('videoList');
+            let html = '';
+
+            // 已保存的视频
+            currentVideos.forEach((v, i) => {
+                html += `<div class="video-item">
+                    <span>${escHtml(v.title || v.filename)}</span>
+                    <button class="remove-btn" onclick="removeSavedVideo(${i})">&times;</button>
+                </div>`;
+            });
+
+            // 待上传的文件
+            pendingFiles.forEach((f, i) => {
+                html += `<div class="video-item" style="opacity:0.7;">
+                    <span>${escHtml(f.name)} (待上传)</span>
+                    <button class="remove-btn" onclick="removePendingFile(${i})">&times;</button>
+                </div>`;
+            });
+
+            list.innerHTML = html;
+        }
+
+        function removeSavedVideo(index) {
+            currentVideos.splice(index, 1);
+            renderVideoList();
+        }
+
+        function removePendingFile(index) {
+            pendingFiles.splice(index, 1);
+            renderVideoList();
+        }
+
+        // ==================== 保存热点 ====================
+
+        async function saveHotspot() {
+            const id = document.getElementById('editId').value;
+            const name = document.getElementById('inputName').value.trim();
+            const description = document.getElementById('inputDesc').value.trim();
+            const risk_level = document.querySelector('input[name="riskLevel"]:checked').value;
+            const enabled = document.getElementById('inputEnabled').checked;
+
+            if (!name) {
+                showToast('请输入热点名称', 'error');
+                return;
+            }
+            if (currentPolygonCoords.length < 3) {
+                showToast('请在地图上绘制至少3个坐标点的多边形', 'error');
+                return;
+            }
+
+            const body = { name, description, risk_level, coordinates: currentPolygonCoords, enabled };
+
+            try {
+                let hotspotId = id;
+                if (id) {
+                    // 更新
+                    const resp = await fetch(`/api/hotspots/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const result = await resp.json();
+                    if (!result.success) throw new Error(result.error);
+                } else {
+                    // 新建
+                    const resp = await fetch('/api/hotspots', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const result = await resp.json();
+                    if (!result.success) throw new Error(result.error);
+                    hotspotId = result.data._id;
+                }
+
+                // 处理删除的视频（编辑模式下）
+                if (id) {
+                    const original = allHotspots.find(x => x._id === id);
+                    if (original) {
+                        const removedVideos = (original.videos || []).filter(
+                            ov => !currentVideos.find(cv => cv.filename === ov.filename)
+                        );
+                        for (const rv of removedVideos) {
+                            await fetch(`/api/hotspots/${id}/videos/${rv.filename}`, { method: 'DELETE' });
+                        }
+                    }
+                }
+
+                // 上传新视频
+                if (pendingFiles.length > 0) {
+                    const progressEl = document.getElementById('uploadProgress');
+                    const barEl = document.getElementById('uploadBar');
+                    progressEl.style.display = '';
+
+                    for (let i = 0; i < pendingFiles.length; i++) {
+                        barEl.style.width = `${((i + 1) / pendingFiles.length) * 100}%`;
+                        const formData = new FormData();
+                        formData.append('video', pendingFiles[i]);
+                        formData.append('title', pendingFiles[i].name);
+
+                        const resp = await fetch(`/api/hotspots/${hotspotId}/videos`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const result = await resp.json();
+                        if (!result.success) {
+                            showToast(`上传 ${pendingFiles[i].name} 失败`, 'error');
+                        }
+                    }
+                    progressEl.style.display = 'none';
+                }
+
+                showToast(id ? '热点已更新' : '热点已创建', 'success');
+                closeModal();
+                loadHotspots();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        // ==================== 删除热点 ====================
+
+        async function deleteHotspot(id, name) {
+            if (!confirm(`确定删除热点 "${name}" 吗？\n关联的视频文件也将被删除。`)) return;
+
+            try {
+                const resp = await fetch(`/api/hotspots/${id}`, { method: 'DELETE' });
+                const result = await resp.json();
+                if (result.success) {
+                    showToast('已删除', 'success');
+                    loadHotspots();
+                } else {
+                    showToast('删除失败: ' + result.error, 'error');
+                }
+            } catch (e) {
+                showToast('删除失败', 'error');
+            }
+        }
+
+        // ==================== 工具函数 ====================
+
+        function escHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function showToast(msg, type) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.className = `toast toast-${type} show`;
+            setTimeout(() => { el.classList.remove('show'); }, 3000);
+        }
+
+        // ==================== 初始化 ====================
+        loadHotspots();
+    </script>
+</body>
+</html>

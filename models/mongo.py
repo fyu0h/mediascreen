@@ -1182,3 +1182,140 @@ def get_sites_health() -> list:
         return list(col.find({}, {'_id': 0}).sort('consecutive_failures', -1))
     except Exception:
         return []
+
+
+# ==================== 热点区域操作 ====================
+
+def get_hotspots_collection() -> Collection:
+    """获取热点区域集合"""
+    return get_db()[Config.COLLECTION_HOTSPOTS]
+
+
+def ensure_hotspots_indexes() -> None:
+    """确保热点区域集合索引"""
+    try:
+        col = get_hotspots_collection()
+        col.create_index('enabled')
+        col.create_index('risk_level')
+    except Exception:
+        pass
+
+
+def get_hotspots(enabled: Optional[bool] = None, risk_level: Optional[str] = None) -> List[Dict[str, Any]]:
+    """获取热点区域列表"""
+    try:
+        col = get_hotspots_collection()
+        query: Dict[str, Any] = {}
+        if enabled is not None:
+            query['enabled'] = enabled
+        if risk_level:
+            query['risk_level'] = risk_level
+
+        results = list(col.find(query).sort('updated_at', -1))
+        for r in results:
+            r['_id'] = str(r['_id'])
+        return results
+    except Exception:
+        return []
+
+
+def get_hotspot_by_id(hotspot_id: str) -> Optional[Dict[str, Any]]:
+    """根据 ID 获取单个热点"""
+    try:
+        from bson import ObjectId
+        col = get_hotspots_collection()
+        result = col.find_one({'_id': ObjectId(hotspot_id)})
+        if result:
+            result['_id'] = str(result['_id'])
+        return result
+    except Exception:
+        return None
+
+
+def create_hotspot(data: Dict[str, Any]) -> Optional[str]:
+    """创建热点区域，返回新建文档的 ID"""
+    try:
+        col = get_hotspots_collection()
+        now = datetime.utcnow()
+        doc = {
+            'name': data['name'],
+            'description': data.get('description', ''),
+            'risk_level': data.get('risk_level', 'medium'),
+            'coordinates': data.get('coordinates', []),
+            'videos': data.get('videos', []),
+            'enabled': data.get('enabled', True),
+            'created_at': now,
+            'updated_at': now,
+        }
+        result = col.insert_one(doc)
+        return str(result.inserted_id)
+    except Exception:
+        return None
+
+
+def update_hotspot(hotspot_id: str, data: Dict[str, Any]) -> bool:
+    """更新热点区域"""
+    try:
+        from bson import ObjectId
+        col = get_hotspots_collection()
+        update_fields: Dict[str, Any] = {'updated_at': datetime.utcnow()}
+        allowed = ['name', 'description', 'risk_level', 'coordinates', 'enabled']
+        for key in allowed:
+            if key in data:
+                update_fields[key] = data[key]
+
+        result = col.update_one(
+            {'_id': ObjectId(hotspot_id)},
+            {'$set': update_fields}
+        )
+        return result.modified_count > 0
+    except Exception:
+        return False
+
+
+def delete_hotspot(hotspot_id: str) -> Optional[Dict[str, Any]]:
+    """删除热点区域，返回被删除的文档（用于清理视频文件）"""
+    try:
+        from bson import ObjectId
+        col = get_hotspots_collection()
+        result = col.find_one_and_delete({'_id': ObjectId(hotspot_id)})
+        if result:
+            result['_id'] = str(result['_id'])
+        return result
+    except Exception:
+        return None
+
+
+def add_hotspot_video(hotspot_id: str, video_info: Dict[str, Any]) -> bool:
+    """向热点添加视频记录"""
+    try:
+        from bson import ObjectId
+        col = get_hotspots_collection()
+        video_info['upload_time'] = datetime.utcnow()
+        result = col.update_one(
+            {'_id': ObjectId(hotspot_id)},
+            {
+                '$push': {'videos': video_info},
+                '$set': {'updated_at': datetime.utcnow()}
+            }
+        )
+        return result.modified_count > 0
+    except Exception:
+        return False
+
+
+def remove_hotspot_video(hotspot_id: str, filename: str) -> bool:
+    """从热点移除视频记录"""
+    try:
+        from bson import ObjectId
+        col = get_hotspots_collection()
+        result = col.update_one(
+            {'_id': ObjectId(hotspot_id)},
+            {
+                '$pull': {'videos': {'filename': filename}},
+                '$set': {'updated_at': datetime.utcnow()}
+            }
+        )
+        return result.modified_count > 0
+    except Exception:
+        return False

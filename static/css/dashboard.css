@@ -486,6 +486,8 @@ html, body {
 .map-body {
     padding: 0;
     height: calc(100% - 40px);
+    position: relative;
+    overflow: hidden;
 }
 
 #worldMap {
@@ -493,6 +495,259 @@ html, body {
     height: 100%;
     background: linear-gradient(180deg, rgba(10, 21, 37, 0.95) 0%, rgba(13, 26, 48, 0.95) 100%);
     border-radius: 0 0 8px 8px;
+}
+
+/* 地图图层切换 */
+.map-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease-in-out;
+    background: linear-gradient(180deg, rgba(10, 21, 37, 0.95) 0%, rgba(13, 26, 48, 0.95) 100%);
+    border-radius: 0 0 8px 8px;
+}
+
+.map-layer--active {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+/* 地图切换滑块 */
+.map-toggle-wrap {
+    margin-left: auto;
+    margin-right: 12px;
+}
+
+.map-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.map-toggle input {
+    display: none;
+}
+
+.map-toggle-slider {
+    position: relative;
+    width: 36px;
+    height: 18px;
+    background: rgba(0, 240, 255, 0.15);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: 9px;
+    transition: background 0.3s, border-color 0.3s;
+}
+
+.map-toggle-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background: var(--primary);
+    border-radius: 50%;
+    transition: transform 0.3s;
+    box-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
+}
+
+.map-toggle input:checked + .map-toggle-slider {
+    background: rgba(255, 71, 87, 0.15);
+    border-color: rgba(255, 71, 87, 0.3);
+}
+
+.map-toggle input:checked + .map-toggle-slider::after {
+    transform: translateX(18px);
+    background: #ff4757;
+    box-shadow: 0 0 6px rgba(255, 71, 87, 0.5);
+}
+
+.map-toggle-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    transition: color 0.3s;
+}
+
+.map-toggle-label--left {
+    color: var(--primary);
+}
+
+.map-toggle input:checked ~ .map-toggle-label--left {
+    color: var(--text-muted);
+}
+
+.map-toggle input:checked ~ .map-toggle-label--right {
+    color: #ff4757;
+}
+
+/* 热点详情卡片 */
+.hotspot-detail {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 380px;
+    max-height: calc(100% - 40px);
+    background: rgba(10, 20, 40, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 240, 255, 0.08);
+    z-index: 10;
+    overflow-y: auto;
+    color: var(--text-primary);
+}
+
+.hotspot-detail__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hotspot-detail__name {
+    font-size: 14px;
+    font-weight: 600;
+    flex: 1;
+}
+
+.hotspot-detail__risk {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.hotspot-detail__risk--high {
+    background: rgba(255, 71, 87, 0.2);
+    color: #ff4757;
+    border: 1px solid rgba(255, 71, 87, 0.3);
+}
+
+.hotspot-detail__risk--medium {
+    background: rgba(255, 165, 2, 0.2);
+    color: #ffa502;
+    border: 1px solid rgba(255, 165, 2, 0.3);
+}
+
+.hotspot-detail__risk--low {
+    background: rgba(255, 234, 0, 0.2);
+    color: #ffea00;
+    border: 1px solid rgba(255, 234, 0, 0.3);
+}
+
+.hotspot-detail__close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+.hotspot-detail__close:hover {
+    color: var(--text-primary);
+}
+
+.hotspot-detail__desc {
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    white-space: pre-line;
+}
+
+.hotspot-detail__time {
+    padding: 6px 14px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 视频轮播 */
+.hotspot-detail__videos {
+    position: relative;
+    padding: 10px 14px 14px;
+}
+
+.hotspot-video__container {
+    overflow: hidden;
+    border-radius: 6px;
+}
+
+.hotspot-video__track {
+    display: flex;
+    transition: transform 0.4s ease;
+}
+
+.hotspot-video__track video {
+    flex: 0 0 100%;
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    background: #000;
+    border-radius: 6px;
+}
+
+.hotspot-video__arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: background 0.2s;
+}
+
+.hotspot-video__arrow:hover {
+    background: rgba(0, 240, 255, 0.3);
+}
+
+.hotspot-video__arrow--left {
+    left: 18px;
+}
+
+.hotspot-video__arrow--right {
+    right: 18px;
+}
+
+.hotspot-video__dots {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.hotspot-video__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.hotspot-video__dot--active {
+    background: var(--primary);
+    box-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
 }
 
 .map-legend {
