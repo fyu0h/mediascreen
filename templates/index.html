@@ -1701,6 +1701,118 @@
         </button>
     </nav>
 
+    <!-- 侧边栏工具面板 -->
+    <!-- 触发按钮 -->
+    <div class="sidebar-trigger" id="sidebarTrigger">
+        <i class="arrow-icon">◀</i>
+    </div>
+
+    <!-- 遮罩层 -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- 侧边栏主体 -->
+    <aside class="sidebar-panel" id="sidebarPanel" role="complementary" aria-label="工具面板">
+        <div class="sidebar-header">
+            <h3 class="sidebar-title">智能工具箱</h3>
+            <button class="sidebar-close" id="sidebarClose" aria-label="关闭工具面板">
+                <i class="close-icon">✕</i>
+            </button>
+        </div>
+        <div class="sidebar-body">
+            <div class="tool-list">
+                <!-- AI 相关功能 -->
+                <div class="tool-item" data-tool="ai-analysis">
+                    <div class="tool-icon">🤖</div>
+                    <div class="tool-info">
+                        <div class="tool-name">AI 智能分析</div>
+                        <div class="tool-desc">深度学习舆情预测</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="ai-qa">
+                    <div class="tool-icon">🧠</div>
+                    <div class="tool-info">
+                        <div class="tool-name">智能问答助手</div>
+                        <div class="tool-desc">自然语言查询</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="ai-insight">
+                    <div class="tool-icon">📊</div>
+                    <div class="tool-info">
+                        <div class="tool-name">AI 数据洞察</div>
+                        <div class="tool-desc">自动生成分析报告</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="ai-recommend">
+                    <div class="tool-icon">🎯</div>
+                    <div class="tool-info">
+                        <div class="tool-name">智能推荐引擎</div>
+                        <div class="tool-desc">个性化内容推送</div>
+                    </div>
+                </div>
+
+                <!-- 工作流相关 -->
+                <div class="tool-item" data-tool="workflow">
+                    <div class="tool-icon">⚡</div>
+                    <div class="tool-info">
+                        <div class="tool-name">自动化工作流</div>
+                        <div class="tool-desc">可视化流程编排</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="scheduler">
+                    <div class="tool-icon">📋</div>
+                    <div class="tool-info">
+                        <div class="tool-name">任务调度中心</div>
+                        <div class="tool-desc">定时任务管理</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="alert-engine">
+                    <div class="tool-icon">🔔</div>
+                    <div class="tool-info">
+                        <div class="tool-name">智能告警引擎</div>
+                        <div class="tool-desc">多维度预警系统</div>
+                    </div>
+                </div>
+
+                <!-- 其他高级功能 -->
+                <div class="tool-item" data-tool="data-fusion">
+                    <div class="tool-icon">🌐</div>
+                    <div class="tool-info">
+                        <div class="tool-name">多源数据融合</div>
+                        <div class="tool-desc">跨平台数据整合</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="trend-predict">
+                    <div class="tool-icon">📈</div>
+                    <div class="tool-info">
+                        <div class="tool-name">实时趋势预测</div>
+                        <div class="tool-desc">时序分析预测</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="deep-search">
+                    <div class="tool-icon">🔍</div>
+                    <div class="tool-info">
+                        <div class="tool-name">深度搜索引擎</div>
+                        <div class="tool-desc">全文检索分析</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="export-center">
+                    <div class="tool-icon">💾</div>
+                    <div class="tool-info">
+                        <div class="tool-name">数据导出中心</div>
+                        <div class="tool-desc">多格式报表导出</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="config-center">
+                    <div class="tool-icon">⚙️</div>
+                    <div class="tool-info">
+                        <div class="tool-name">系统配置中心</div>
+                        <div class="tool-desc">高级设置管理</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
     <!-- 自定义脚本 -->
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
