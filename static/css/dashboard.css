@@ -9182,3 +9182,203 @@ body.resizing .chart-container-sm {
     white-space: nowrap;
 }
 
+/* ========== 侧边栏工具面板 ========== */
+
+/* 触发按钮 */
+.sidebar-trigger {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 80px;
+    background: linear-gradient(135deg, #00f0ff, #00a8b3);
+    border-radius: 8px 0 0 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 999;
+    box-shadow: -2px 0 10px rgba(0, 240, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.sidebar-trigger:hover {
+    width: 45px;
+    box-shadow: -4px 0 20px rgba(0, 240, 255, 0.5);
+}
+
+.arrow-icon {
+    font-size: 20px;
+    color: white;
+    font-style: normal;
+}
+
+/* 遮罩层 */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 侧边栏主体 */
+.sidebar-panel {
+    position: fixed;
+    right: -350px;
+    top: 0;
+    width: 320px;
+    height: 100vh;
+    background: rgba(10, 20, 40, 0.95);
+    backdrop-filter: blur(10px);
+    border-left: 1px solid rgba(0, 240, 255, 0.3);
+    z-index: 1001;
+    transition: right 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    box-shadow: -5px 0 30px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    will-change: transform;
+}
+
+.sidebar-panel.active {
+    right: 0;
+}
+
+/* 侧边栏头部 */
+.sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--primary);
+    margin: 0;
+}
+
+.sidebar-close {
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 240, 255, 0.1);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.sidebar-close:hover {
+    background: rgba(0, 240, 255, 0.2);
+    border-color: var(--primary);
+}
+
+.close-icon {
+    font-size: 18px;
+    color: white;
+    font-style: normal;
+}
+
+/* 侧边栏内容区 */
+.sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.sidebar-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-body::-webkit-scrollbar-thumb {
+    background: rgba(0, 240, 255, 0.3);
+    border-radius: 3px;
+}
+
+.sidebar-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 240, 255, 0.5);
+}
+
+.tool-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 工具图标项 */
+.tool-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background: rgba(0, 240, 255, 0.05);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.tool-item:hover {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: var(--primary);
+    transform: translateX(-5px);
+    box-shadow: 0 4px 15px rgba(0, 240, 255, 0.2);
+}
+
+.tool-icon {
+    font-size: 32px;
+    margin-right: 15px;
+    flex-shrink: 0;
+}
+
+.tool-info {
+    flex: 1;
+}
+
+.tool-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.tool-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .sidebar-panel {
+        width: 280px;
+        right: -300px;
+    }
+}
+
+@media (max-width: 480px) {
+    .sidebar-panel {
+        width: 100%;
+        right: -100%;
+    }
+
+    .sidebar-trigger {
+        width: 35px;
+        height: 70px;
+    }
+}
+
