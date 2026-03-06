@@ -54,7 +54,8 @@
       "password_set": false,
       "username_masked": "",
       "username_set": false
-    }
+    },
+    "curl_cffi_impersonate": "chrome120"
   },
   "duty": {
     "leaders": [],
@@ -106,27 +107,31 @@
       }
     }
   },
-  "updated_at": "2026-03-01 06:12:02",
+  "updated_at": "2026-03-06 01:12:57",
   "layout": {
     "panels": {
       "panel-left": {
-        "width": "21.40%"
+        "width": "20.90%"
       },
       "panel-right": {
-        "width": "24.32%"
+        "width": "23.75%"
       }
     },
     "cards": {
+      "stats-and-chart": {
+        "flex": "0.2814 1 0%",
+        "height": null
+      },
+      "latest-articles": {
+        "flex": "0.7186 1 0%",
+        "height": null
+      },
       "world-map": {
         "flex": "0.8947 1 0%",
         "height": null
       },
       "achievements": {
         "flex": "0.57 1 0%",
-        "height": null
-      },
-      "telegram": {
-        "flex": "0.43 1 0%",
         "height": null
       },
       "keyword-chart": {
