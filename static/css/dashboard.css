@@ -6384,7 +6384,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .events-timeline-card .card-title {
     font-size: 13px;
     color: #00ff41;
-    font-family: 'Courier New', 'Consolas', monospace;
     letter-spacing: 0.05em;
 }
 
@@ -6424,7 +6423,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     cursor: pointer;
     transition: all 0.2s ease;
     text-transform: uppercase;
-    font-family: 'Courier New', 'Consolas', monospace;
 }
 
 .events-filter-btn:hover {
@@ -6440,7 +6438,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .events-update-time {
     font-size: 11px;
     color: var(--text-muted);
-    font-family: 'Courier New', 'Consolas', monospace;
 }
 
 .events-timeline-body {
@@ -6487,7 +6484,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 /* 详情面板内容 */
 .event-detail-content {
-    font-family: 'Courier New', 'Consolas', monospace;
 }
 
 .event-detail-severity {
@@ -6632,7 +6628,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     padding: 40px 20px;
     color: var(--text-muted);
     font-size: 12px;
-    font-family: 'Courier New', 'Consolas', monospace;
 }
 
 /* 时间轴事件项 */
@@ -6708,7 +6703,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     font-size: 11px;
     font-weight: 700;
     color: #00ff41;
-    font-family: 'Courier New', 'Consolas', monospace;
     text-transform: uppercase;
     flex-shrink: 0;
     max-width: 100px;
@@ -6730,7 +6724,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     border-radius: 2px;
     text-transform: uppercase;
     margin-left: auto;
-    font-family: 'Courier New', 'Consolas', monospace;
     flex-shrink: 0;
 }
 
@@ -6764,7 +6757,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     font-size: 10px;
     color: var(--text-muted);
     margin-bottom: 3px;
-    font-family: 'Courier New', 'Consolas', monospace;
 }
 
 .event-item-desc {
@@ -6782,7 +6774,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     color: var(--text-muted);
     margin-top: 3px;
     text-align: right;
-    font-family: 'Courier New', 'Consolas', monospace;
 }
 
 /* severity 筛选徽章颜色 */
@@ -6794,7 +6785,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     margin-left: 6px;
     font-weight: 600;
     text-transform: uppercase;
-    font-family: 'Courier New', 'Consolas', monospace;
 }
 
 .event-severity-badge.sev-5 {

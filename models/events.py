@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 全球事件链数据模型
+适配 world-monitor.com/api/events 的 markers 数据结构
 """
 
 from datetime import datetime
@@ -44,47 +45,60 @@ def save_event(event_data: Dict) -> bool:
         return False
 
 
-def get_all_events(skip: int = 0, limit: int = 20) -> List[Dict]:
-    """获取所有事件（按时间排序）"""
+def save_events_bulk(events: List[Dict]) -> int:
+    """批量保存事件，返回成功数量"""
+    count = 0
+    for event_data in events:
+        if save_event(event_data):
+            count += 1
+    return count
+
+
+def get_all_events(skip: int = 0, limit: int = 0, severity: int = None) -> List[Dict]:
+    """获取所有事件（按 relevanceScore 降序）"""
     collection = get_events_collection()
-    cursor = collection.find().sort('timestamp_sort', -1).skip(skip).limit(limit)
+    query = {}
+    if severity is not None:
+        query['severity'] = severity
+
+    cursor = collection.find(query).sort('relevance_score', -1)
+    if skip > 0:
+        cursor = cursor.skip(skip)
+    if limit > 0:
+        cursor = cursor.limit(limit)
     return list(cursor)
 
 
-def get_events_count() -> int:
+def get_events_count(severity: int = None) -> int:
     """获取事件总数"""
     collection = get_events_collection()
-    return collection.count_documents({})
+    query = {}
+    if severity is not None:
+        query['severity'] = severity
+    return collection.count_documents(query)
 
 
 def get_untranslated_events(limit: int = 10) -> List[Dict]:
-    """获取未翻译的事件"""
+    """获取未翻译的事件（headline 未翻译）"""
     collection = get_events_collection()
     cursor = collection.find({
         '$or': [
-            {'title_cn': {'$exists': False}},
-            {'title_cn': ''},
-            {'description_cn': {'$exists': False}},
-            {'description_cn': ''}
+            {'headline_cn': {'$exists': False}},
+            {'headline_cn': None},
+            {'headline_cn': ''}
         ]
-    }).limit(limit)
+    }).sort('relevance_score', -1).limit(limit)
     return list(cursor)
 
 
-def mark_event_translated(event_id: str, title_cn: str, description_cn: str, location_cn: str) -> bool:
-    """标记事件已翻译"""
+def mark_event_translated(event_id: str, translated_fields: Dict) -> bool:
+    """标记事件已翻译，保存翻译字段"""
     try:
         collection = get_events_collection()
+        translated_fields['translated_at'] = datetime.now()
         collection.update_one(
             {'event_id': event_id},
-            {
-                '$set': {
-                    'title_cn': title_cn,
-                    'description_cn': description_cn,
-                    'location_cn': location_cn,
-                    'translated_at': datetime.now()
-                }
-            }
+            {'$set': translated_fields}
         )
         return True
     except Exception as e:
@@ -101,4 +115,15 @@ def delete_old_events(days: int = 30) -> int:
         return result.deleted_count
     except Exception as e:
         print(f"删除旧事件失败: {e}")
+        return 0
+
+
+def clear_all_events() -> int:
+    """清空所有事件"""
+    try:
+        collection = get_events_collection()
+        result = collection.delete_many({})
+        return result.deleted_count
+    except Exception as e:
+        print(f"清空事件失败: {e}")
         return 0

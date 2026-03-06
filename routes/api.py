@@ -4618,62 +4618,72 @@ def _translate_text(text: str, config: dict) -> str:
         return text
 
 
-# ==================== 全球事件链代理 API ====================
-
-# 事件代理缓存
-_events_proxy_cache = {
-    'data': None,
-    'timestamp': 0
-}
-_EVENTS_CACHE_TTL = 300  # 5分钟缓存
+# ==================== 全球事件链 API（从 MongoDB 读取） ====================
 
 @api_bp.route('/events/proxy', methods=['GET'])
 def events_proxy():
-    """代理请求 world-monitor.com/api/events，缓存5分钟"""
+    """从 MongoDB 读取事件数据（后台服务定时获取并翻译）"""
     if 'user' not in session:
         return error_response('未登录', 401)
 
     try:
-        import requests as http_requests
-        import time
+        from models.events import get_all_events, get_events_count
 
-        now = time.time()
+        # 获取参数
+        severity = request.args.get('severity')
+        severity_int = int(severity) if severity and severity.isdigit() else None
 
-        # 检查缓存是否有效
-        if _events_proxy_cache['data'] and (now - _events_proxy_cache['timestamp']) < _EVENTS_CACHE_TTL:
-            log_system("使用事件代理缓存数据")
-            return success_response(_events_proxy_cache['data'])
+        # 从数据库读取事件
+        events = get_all_events(severity=severity_int)
+        total = get_events_count(severity=severity_int)
 
-        # 请求外部 API
-        log_system("从 world-monitor.com 获取事件数据")
-        resp = http_requests.get(
-            'https://world-monitor.com/api/events',
-            timeout=30,
-            verify=False,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        # 转换为前端格式
+        markers = []
+        has_untranslated = False
+        for event in events:
+            # ObjectId 转字符串
+            if '_id' in event:
+                event['_id'] = str(event['_id'])
+
+            is_translated = bool(event.get('headline_cn'))
+            if not is_translated:
+                has_untranslated = True
+
+            marker = {
+                'id': event.get('event_id', ''),
+                'actor1': event.get('actor1', ''),
+                'actor2': event.get('actor2', ''),
+                # 优先使用中文翻译
+                'country': event.get('country_cn') or event.get('country', ''),
+                'headline': event.get('headline_cn') or event.get('headline', ''),
+                'location': event.get('location_cn') or event.get('location', ''),
+                'notes': event.get('notes_cn') or event.get('notes', ''),
+                'position': event.get('position', []),
+                'relevanceScore': event.get('relevance_score', 0),
+                'severity': event.get('severity', 1),
+                'source': event.get('source', ''),
+                'sourceUrl': event.get('source_url', ''),
+                'subEventType': event.get('sub_event_type_cn') or event.get('sub_event_type', ''),
+                'timestamp': event.get('timestamp', ''),
+                'title': event.get('title', ''),
+                'type': event.get('type', ''),
+                'is_translated': is_translated,
+                # 保留英文原文供详情面板使用
+                'headline_en': event.get('headline', ''),
+                'notes_en': event.get('notes', ''),
+                'country_en': event.get('country', ''),
+                'location_en': event.get('location', ''),
             }
-        )
+            markers.append(marker)
 
-        if resp.status_code != 200:
-            log_error("事件代理请求失败", f"状态码: {resp.status_code}")
-            return error_response(f'外部 API 请求失败: {resp.status_code}', 502)
-
-        data = resp.json()
-        log_system(f"获取到 {data.get('count', 0)} 个事件")
-
-        # 更新缓存
-        _events_proxy_cache['data'] = data
-        _events_proxy_cache['timestamp'] = now
-
-        return success_response(data)
+        return success_response({
+            'markers': markers,
+            'count': total,
+            'has_untranslated': has_untranslated
+        })
 
     except Exception as e:
-        log_error("事件代理请求异常", str(e))
-        # 如果有缓存数据，在请求失败时返回缓存
-        if _events_proxy_cache['data']:
-            log_system("外部请求失败，返回过期缓存数据")
-            return success_response(_events_proxy_cache['data'])
+        log_error("读取事件数据失败", str(e))
         return error_response(f'获取事件失败: {str(e)}', 500)
 
 
