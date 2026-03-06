@@ -4131,80 +4131,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 
-/* ========== 成果弹窗样式 ========== */
-.image-upload-area {
-    border: 2px dashed var(--border-color);
-    border-radius: 10px;
-    padding: 20px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
-    min-height: 120px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.image-upload-area:hover {
-    border-color: var(--primary);
-    background: rgba(0, 240, 255, 0.05);
-}
-
-.upload-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-muted);
-}
-
-.upload-placeholder svg {
-    opacity: 0.5;
-}
-
-.upload-placeholder span {
-    font-size: 13px;
-}
-
-.upload-hint {
-    font-size: 11px !important;
-    opacity: 0.6;
-}
-
-.image-preview {
-    max-width: 100%;
-    max-height: 200px;
-    border-radius: 8px;
-    object-fit: contain;
-}
-
-.btn-remove-image {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: rgba(255, 71, 87, 0.9);
-    color: white;
-    border: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    font-size: 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-
-.btn-remove-image:hover {
-    background: var(--risk-high);
-    transform: scale(1.1);
-}
-
-.required {
-    color: var(--risk-high);
-}
 
 .form-textarea {
     width: 100%;
@@ -8704,11 +8630,6 @@ body.resizing .chart-container-sm {
 
     .search-shortcut {
         display: none;
-    }
-
-    /* 成果弹窗 */
-    .image-upload-area {
-        min-height: 120px;
     }
 
     /* 关键词管理弹窗 */
