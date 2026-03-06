@@ -7926,4 +7926,77 @@ function closeEventDetailModal() {
 // }
 // setInterval(loadDefconLevel, 5 * 60 * 1000);
 
+// ========== 侧边栏工具面板 ==========
+
+(function() {
+    // 获取元素
+    const sidebarTrigger = document.getElementById('sidebarTrigger');
+    const sidebarPanel = document.getElementById('sidebarPanel');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const sidebarClose = document.getElementById('sidebarClose');
+
+    // 防止重复触发的标志
+    let isAnimating = false;
+
+    // 展开侧边栏
+    function openSidebar() {
+        if (isAnimating) return;
+        isAnimating = true;
+
+        sidebarPanel.classList.add('active');
+        sidebarOverlay.classList.add('active');
+        sidebarTrigger.style.display = 'none';
+
+        setTimeout(() => {
+            isAnimating = false;
+        }, 500);
+    }
+
+    // 收起侧边栏
+    function closeSidebar() {
+        if (isAnimating) return;
+        isAnimating = true;
+
+        sidebarPanel.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+
+        setTimeout(() => {
+            sidebarTrigger.style.display = 'flex';
+            isAnimating = false;
+        }, 500);
+    }
+
+    // 事件监听
+    if (sidebarTrigger) {
+        sidebarTrigger.addEventListener('click', openSidebar);
+    }
+
+    if (sidebarClose) {
+        sidebarClose.addEventListener('click', closeSidebar);
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeSidebar);
+    }
+
+    // ESC 键关闭
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebarPanel && sidebarPanel.classList.contains('active')) {
+            closeSidebar();
+        }
+    });
+
+    // 工具图标点击事件（占位功能）
+    const toolItems = document.querySelectorAll('.tool-item');
+    toolItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            // 防止冒泡到遮罩层
+            e.stopPropagation();
+
+            const toolName = item.querySelector('.tool-name').textContent;
+            alert(`${toolName} 功能即将上线，敬请期待！`);
+        });
+    });
+})();
+
 
