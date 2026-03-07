@@ -4720,6 +4720,7 @@ let articlesPageSize = 20;             // 每页数量
 let articlesTotal = 0;                 // 总数
 let articleDateFilter = null;          // 日期筛选
 let articleSearchKeyword = '';         // 搜索关键词
+let articleExpandedKeywords = null;    // 同义词扩展后的关键词
 let articleSearchDebounceTimer = null; // 搜索防抖定时器
 
 // 文章日历相关
@@ -4732,6 +4733,7 @@ function openSourceArticlesModal(sourceName) {
     articlesCurrentPage = 1;
     articleDateFilter = null;
     articleSearchKeyword = '';
+    articleExpandedKeywords = null;
 
     // 更新标题
     document.getElementById('sourceArticlesTitle').textContent = sourceName;
@@ -4788,6 +4790,7 @@ async function loadSourceArticles() {
 
     articlesData = data.items || [];
     articlesTotal = data.total || 0;
+    articleExpandedKeywords = data.expanded_keywords || null;
 
     countEl.textContent = articlesTotal;
 
@@ -4824,10 +4827,12 @@ function renderSourceArticles() {
             }
         }
 
-        // 标题高亮搜索关键词
+        // 标题高亮搜索关键词（含同义词扩展）
         let titleHtml = escapeHtml(article.title || '无标题');
         if (articleSearchKeyword) {
-            titleHtml = highlightKeyword(titleHtml, articleSearchKeyword);
+            titleHtml = articleExpandedKeywords
+                ? highlightKeywordList(titleHtml, articleExpandedKeywords)
+                : highlightKeyword(titleHtml, articleSearchKeyword);
         }
 
         // URL 截断显示
@@ -5884,6 +5889,7 @@ let globalSearchTotal = 0;
 let globalSearchLoading = false;
 const GLOBAL_SEARCH_PAGE_SIZE = 20;
 let globalSearchMode = 'or';  // 搜索模式：'and' 或 'or'
+let globalSearchExpandedKeywords = null;  // 同义词扩展后的关键词列表
 let globalSearchSourcesLoaded = false;  // 来源列表是否已加载
 let searchActiveIndex = -1;  // 键盘导航当前选中索引
 const SEARCH_HISTORY_KEY = 'global_search_history';
@@ -6019,6 +6025,7 @@ function closeGlobalSearch() {
     document.getElementById('globalSearchInput').value = '';
     document.getElementById('searchClearBtn').style.display = 'none';
     globalSearchKeyword = '';
+    globalSearchExpandedKeywords = null;
     globalSearchPage = 1;
     globalSearchTotal = 0;
     searchActiveIndex = -1;
@@ -6033,6 +6040,7 @@ function clearGlobalSearch() {
     document.getElementById('globalSearchInput').value = '';
     document.getElementById('searchClearBtn').style.display = 'none';
     globalSearchKeyword = '';
+    globalSearchExpandedKeywords = null;
     globalSearchPage = 1;
     searchActiveIndex = -1;
 
@@ -6104,6 +6112,9 @@ async function performGlobalSearch(append = false) {
 
         const data = result.data;
         globalSearchTotal = data.total;
+
+        // 记录同义词扩展关键词（用于高亮）
+        globalSearchExpandedKeywords = data.expanded_keywords || null;
 
         // 记录搜索历史
         addSearchHistory(globalSearchKeyword);
@@ -6279,8 +6290,10 @@ function renderSearchResultItem(item) {
     const countryCode = item.country_code || item.country || '';
     const flag = countryCodeToFlag(countryCode);
 
-    // 高亮关键词
-    const highlightedTitle = highlightKeyword(title, globalSearchKeyword);
+    // 高亮关键词（含同义词扩展）
+    const highlightedTitle = globalSearchExpandedKeywords
+        ? highlightKeywordList(title, globalSearchExpandedKeywords)
+        : highlightKeyword(title, globalSearchKeyword);
 
     return `
         <a href="${escapeHtml(url)}" target="_blank" class="search-result-item">
@@ -6325,6 +6338,20 @@ function highlightKeyword(text, keyword) {
     const regex = new RegExp(`(${pattern})`, 'gi');
 
     // 先转义HTML，再添加高亮标记
+    const escaped = escapeHtml(text);
+    return escaped.replace(regex, '<mark>$1</mark>');
+}
+
+// 高亮关键词列表（用于同义词扩展后的多词高亮）
+function highlightKeywordList(text, keywordList) {
+    if (!keywordList || keywordList.length === 0) return escapeHtml(text);
+
+    const escapedKeywords = keywordList.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    // 按长度降序排列，优先匹配较长的词，避免短词截断长词
+    escapedKeywords.sort((a, b) => b.length - a.length);
+    const pattern = escapedKeywords.join('|');
+    const regex = new RegExp(`(${pattern})`, 'gi');
+
     const escaped = escapeHtml(text);
     return escaped.replace(regex, '<mark>$1</mark>');
 }

@@ -404,11 +404,15 @@ def search_articles(
     if source:
         query['source_name'] = source
 
+    # 记录所有用于匹配的关键词（含同义词扩展），用于前端高亮
+    all_highlight_keywords: List[str] = []
+
     if keyword:
         # 按空格分割多关键词
         keywords = keyword.strip().split()
         # 查询扩展：每个关键词查同义词
         expanded = expand_keywords(keywords)
+        all_highlight_keywords = list(expanded)
         if len(expanded) <= 1:
             # 单关键词：直接模糊搜索
             query['title'] = {'$regex': re.escape(expanded[0]), '$options': 'i'}
@@ -420,6 +424,10 @@ def search_articles(
                 kw_expanded = expand_keywords([kw])
                 group_pattern = '|'.join(re.escape(w) for w in kw_expanded)
                 and_patterns.append(f'(?=.*(?:{group_pattern}))')
+                # 收集 AND 模式下每个分组的扩展词
+                for w in kw_expanded:
+                    if w not in all_highlight_keywords:
+                        all_highlight_keywords.append(w)
             pattern = ''.join(and_patterns)
             query['title'] = {'$regex': pattern, '$options': 'i'}
         else:
@@ -468,13 +476,19 @@ def search_articles(
                 item['pub_date'] = str(pub_date)[:16]
         items.append(item)
 
-    return {
+    result = {
         'items': items,
         'total': total,
         'page': page,
         'page_size': page_size,
         'total_pages': (total + page_size - 1) // page_size
     }
+
+    # 如果有同义词扩展，返回扩展后的关键词列表供前端高亮
+    if all_highlight_keywords and len(all_highlight_keywords) > len(keyword.strip().split() if keyword else []):
+        result['expanded_keywords'] = all_highlight_keywords
+
+    return result
 
 
 # ==================== 地图数据 ====================
