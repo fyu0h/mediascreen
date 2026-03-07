@@ -1503,3 +1503,137 @@ def expand_keywords(keywords: List[str]) -> List[str]:
                 expanded.append(kw)
 
     return expanded
+
+
+def init_default_synonyms() -> int:
+    """
+    初始化默认同义词组（如果集合为空）
+    返回：插入的同义词组数量
+    """
+    collection = get_synonyms_collection()
+
+    # 如果已有数据则跳过
+    if collection.count_documents({}) > 0:
+        return 0
+
+    now = datetime.now()
+
+    # 常用同义词组：国家/地区、组织、人物、概念
+    default_groups = [
+        # === 国家/地区 ===
+        ["美国", "美利坚", "US", "USA", "United States", "America"],
+        ["中国", "中华人民共和国", "China", "PRC", "大陆"],
+        ["俄罗斯", "俄联邦", "Russia", "莫斯科当局"],
+        ["英国", "UK", "Britain", "United Kingdom", "英伦"],
+        ["日本", "Japan", "东京当局", "东瀛"],
+        ["韩国", "南韩", "South Korea", "首尔"],
+        ["朝鲜", "北韩", "DPRK", "North Korea", "平壤"],
+        ["台湾", "台当局", "Taiwan", "台北"],
+        ["香港", "Hong Kong", "港府", "特区政府"],
+        ["以色列", "Israel", "以方", "特拉维夫"],
+        ["巴勒斯坦", "Palestine", "巴方", "巴解"],
+        ["乌克兰", "Ukraine", "乌方", "基辅"],
+        ["伊朗", "Iran", "德黑兰", "波斯"],
+        ["印度", "India", "新德里", "印方"],
+        ["巴基斯坦", "Pakistan", "巴方", "伊斯兰堡"],
+        ["德国", "Germany", "Deutschland", "柏林"],
+        ["法国", "France", "巴黎", "法兰西"],
+        ["澳大利亚", "澳洲", "Australia", "堪培拉"],
+        ["加拿大", "Canada", "渥太华"],
+        ["土耳其", "Türkiye", "Turkey", "安卡拉"],
+        ["沙特", "沙特阿拉伯", "Saudi Arabia", "利雅得"],
+        ["菲律宾", "Philippines", "菲方", "马尼拉"],
+        ["越南", "Vietnam", "河内"],
+        ["泰国", "Thailand", "曼谷"],
+        ["新加坡", "Singapore", "狮城"],
+        ["马来西亚", "Malaysia", "大马", "吉隆坡"],
+        ["缅甸", "Myanmar", "Burma", "内比都"],
+        ["阿富汗", "Afghanistan", "喀布尔"],
+
+        # === 国际组织 ===
+        ["联合国", "UN", "United Nations"],
+        ["北约", "NATO", "北大西洋公约组织"],
+        ["欧盟", "EU", "European Union", "欧洲联盟"],
+        ["东盟", "ASEAN", "东南亚国家联盟"],
+        ["世卫组织", "WHO", "世界卫生组织", "World Health Organization"],
+        ["世贸组织", "WTO", "世界贸易组织"],
+        ["国际货币基金组织", "IMF"],
+        ["世界银行", "World Bank", "世行"],
+        ["G7", "七国集团"],
+        ["G20", "二十国集团"],
+        ["金砖国家", "BRICS", "金砖"],
+        ["上合组织", "SCO", "上海合作组织"],
+
+        # === 军事/安全 ===
+        ["导弹", "missile", "飞弹"],
+        ["无人机", "drone", "UAV", "无人驾驶飞机"],
+        ["航母", "航空母舰", "aircraft carrier"],
+        ["核武器", "nuclear weapon", "核弹", "原子弹"],
+        ["制裁", "sanctions", "经济制裁"],
+        ["恐怖主义", "terrorism", "恐怖活动"],
+        ["网络攻击", "cyberattack", "cyber attack", "黑客攻击"],
+
+        # === 经济/科技 ===
+        ["人工智能", "AI", "Artificial Intelligence"],
+        ["半导体", "芯片", "chip", "semiconductor"],
+        ["加密货币", "cryptocurrency", "虚拟货币", "数字货币"],
+        ["比特币", "Bitcoin", "BTC"],
+        ["通货膨胀", "inflation", "通胀"],
+        ["股市", "stock market", "证券市场"],
+        ["GDP", "国内生产总值"],
+        ["关税", "tariff", "tariffs"],
+        ["供应链", "supply chain"],
+
+        # === 移民/出入境（与平台业务相关）===
+        ["签证", "visa", "入境许可"],
+        ["护照", "passport", "旅行证件"],
+        ["难民", "refugee", "refugees", "避难者"],
+        ["移民", "immigration", "immigrant", "移居"],
+        ["遣返", "deportation", "deport", "遣送"],
+        ["偷渡", "smuggling", "人口走私", "非法入境"],
+        ["庇护", "asylum", "避难", "政治庇护"],
+        ["边境", "border", "国境", "口岸"],
+        ["海关", "customs", "关口"],
+        ["出入境", "immigration control", "边检"],
+        ["绿卡", "green card", "永久居留"],
+
+        # === 社会/政治 ===
+        ["选举", "election", "大选", "投票"],
+        ["抗议", "protest", "示威", "游行"],
+        ["罢工", "strike", "工人罢工"],
+        ["政变", "coup", "coup d'état", "军事政变"],
+        ["内战", "civil war"],
+        ["疫情", "pandemic", "epidemic", "传染病"],
+        ["地震", "earthquake", "震灾"],
+        ["台风", "typhoon", "hurricane", "飓风"],
+        ["洪水", "flood", "水灾", "洪灾"],
+
+        # === 知名公司 ===
+        ["苹果公司", "Apple", "苹果"],
+        ["谷歌", "Google", "Alphabet"],
+        ["微软", "Microsoft"],
+        ["特斯拉", "Tesla"],
+        ["华为", "Huawei"],
+        ["三星", "Samsung"],
+        ["台积电", "TSMC", "台湾积体电路"],
+        ["英伟达", "NVIDIA", "英伟达公司"],
+        ["OpenAI", "ChatGPT"],
+        ["Meta", "Facebook", "脸书"],
+        ["亚马逊", "Amazon"],
+        ["推特", "Twitter", "X平台"],
+        ["TikTok", "抖音国际版", "字节跳动"],
+    ]
+
+    docs = []
+    for words in default_groups:
+        docs.append({
+            'words': words,
+            'enabled': True,
+            'created_at': now,
+            'updated_at': now
+        })
+
+    if docs:
+        collection.insert_many(docs)
+
+    return len(docs)
