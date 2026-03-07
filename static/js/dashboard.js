@@ -66,21 +66,21 @@ const MAP_TILE_SOURCES = {
         group: '国内',
         type: 'raster',
         url: 'https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',
-        options: { maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
+        options: { minZoom: 3, maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
     },
     'gaode-sat': {
         name: '高德卫星',
         group: '国内',
         type: 'raster',
         url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
-        options: { maxZoom: 18, subdomains: '1234' }
+        options: { minZoom: 3, maxZoom: 18, subdomains: '1234' }
     },
     'gaode-dark': {
         name: '高德暗色',
         group: '国内',
         type: 'raster',
         url: 'https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=8&ltype=11',
-        options: { maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
+        options: { minZoom: 3, maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
     },
     'tianditu-vec': {
         name: '天地图矢量',
@@ -140,6 +140,13 @@ function _applyTileSource(map, mapId, sourceId) {
 
     // 移除旧图层
     _removeCurrentTileLayer(map, mapId);
+
+    // 根据瓦片源的 minZoom 限制地图最小缩放级别
+    var srcMinZoom = (src.options && src.options.minZoom) || 1;
+    map.setMinZoom(srcMinZoom);
+    if (map.getZoom() < srcMinZoom) {
+        map.setZoom(srcMinZoom);
+    }
 
     console.log('[地图] 加载地图源: ' + src.name);
 
@@ -257,6 +264,10 @@ function _autoFallbackTileLayer(map, mapId, startIndex) {
     }
 
     console.log('[地图] 自动回退尝试: ' + src.name);
+    var srcMinZoom = (src.options && src.options.minZoom) || 1;
+    map.setMinZoom(srcMinZoom);
+    if (map.getZoom() < srcMinZoom) map.setZoom(srcMinZoom);
+
     var tileOpts = Object.assign({}, src.options);
     var layer = L.tileLayer(src.url, tileOpts);
     var errorCount = 0;
