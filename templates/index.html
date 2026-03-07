@@ -1670,8 +1670,14 @@
                 <div class="search-results-info" id="searchResultsInfo" style="display: none;">
                     <span class="search-hint">输入关键词开始搜索（多关键词用空格分隔）</span>
                 </div>
-                <div class="search-results-list" id="globalSearchResults">
-                    <!-- 搜索结果将动态填充 -->
+                <div class="search-results-scroll" id="searchResultsScroll">
+                    <div class="search-results-list" id="globalSearchResults">
+                        <!-- 搜索结果将动态填充 -->
+                    </div>
+                    <div class="search-load-more" id="searchLoadMore" style="display: none;">
+                        <div class="search-load-spinner"></div>
+                        <span>加载更多...</span>
+                    </div>
                 </div>
                 <!-- 初始状态：搜索历史 + 提示 -->
                 <div id="searchInitialState">
@@ -1703,9 +1709,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="search-load-more" id="searchLoadMore" style="display: none;">
-                    <button class="btn btn-outline btn-sm" onclick="loadMoreSearchResults()">加载更多</button>
                 </div>
             </div>
         </div>

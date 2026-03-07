@@ -6468,9 +6468,33 @@ function highlightKeywordList(text, keywordList) {
 function loadMoreSearchResults() {
     if (globalSearchLoading) return;
 
+    const hasMore = globalSearchPage * GLOBAL_SEARCH_PAGE_SIZE < globalSearchTotal;
+    if (!hasMore) return;
+
     globalSearchPage++;
     performGlobalSearch(true);
 }
+
+// 无限滚动：滑动到底部自动加载更多
+(function initSearchInfiniteScroll() {
+    document.addEventListener('DOMContentLoaded', () => {
+        const scrollContainer = document.getElementById('searchResultsScroll');
+        if (!scrollContainer) return;
+
+        scrollContainer.addEventListener('scroll', () => {
+            if (globalSearchLoading || !globalSearchKeyword) return;
+
+            const hasMore = globalSearchPage * GLOBAL_SEARCH_PAGE_SIZE < globalSearchTotal;
+            if (!hasMore) return;
+
+            // 距离底部 150px 时触发
+            const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+            if (scrollHeight - scrollTop - clientHeight < 150) {
+                loadMoreSearchResults();
+            }
+        });
+    });
+})();
 
 // ========== 键盘导航 ==========
 function updateSearchActiveItem(newIndex) {
