@@ -1153,6 +1153,11 @@ html, body {
     font-family: inherit;
 }
 
+/* OSM 反色暗色兜底：普通瓦片通过 CSS filter 变为暗色 */
+.dark-tiles-invert {
+    filter: invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%);
+}
+
 /* 地图瓦片不再需要 CSS 滤镜反色（PMTiles dark 和 CartoDB dark_all 自带暗色风格） */
 
 .leaflet-control-attribution {

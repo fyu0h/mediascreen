@@ -78,30 +78,55 @@ function addDarkTileLayer(map) {
     _addFallbackTileLayer(map);
 }
 
-/** 回退瓦片层：多源尝试，带加载错误检测 */
+/**
+ * 回退瓦片层：依次尝试多个暗色瓦片源
+ * 1. Stadia Alidade Smooth Dark
+ * 2. CartoDB Dark
+ * 3. OSM + CSS 反色（终极兜底，永远可用）
+ */
 function _addFallbackTileLayer(map) {
-    // CartoDB Dark（最稳定的暗色瓦片源）
-    var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        subdomains: 'abcd'
-    });
+    _tryTileSource(map, [
+        {
+            name: 'Stadia Dark',
+            url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+            options: { maxZoom: 20 }
+        },
+        {
+            name: 'CartoDB Dark',
+            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            options: { maxZoom: 19, subdomains: 'abcd' }
+        },
+        {
+            name: 'OSM (反色)',
+            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            options: { maxZoom: 19, className: 'dark-tiles-invert' }
+        }
+    ], 0);
+}
 
-    // 监听瓦片加载错误，如果 CartoDB 也不行就尝试 OSM
+/** 依次尝试瓦片源列表，失败则切换下一个 */
+function _tryTileSource(map, sources, index) {
+    if (index >= sources.length) return;
+
+    var src = sources[index];
+    console.log('[地图] 尝试加载: ' + src.name);
+
+    var layer = L.tileLayer(src.url, src.options);
     var errorCount = 0;
-    cartoLayer.on('tileerror', function() {
+    var settled = false;
+
+    layer.on('tileerror', function() {
         errorCount++;
-        // 连续多个瓦片加载失败，切换到 OSM
-        if (errorCount >= 3) {
-            cartoLayer.off('tileerror');
-            console.warn('[地图] CartoDB 加载失败，切换到 OpenStreetMap');
-            map.removeLayer(cartoLayer);
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19
-            }).addTo(map);
+        if (errorCount >= 3 && !settled) {
+            settled = true;
+            console.warn('[地图] ' + src.name + ' 加载失败，尝试下一个源');
+            layer.off('tileerror');
+            map.removeLayer(layer);
+            _tryTileSource(map, sources, index + 1);
         }
     });
 
-    cartoLayer.addTo(map);
+    layer.addTo(map);
 }
 
 // 国家代码映射（扩展中文名称）
