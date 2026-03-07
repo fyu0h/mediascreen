@@ -6406,13 +6406,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     padding: 14px 20px;
     border-bottom: 1px solid rgba(0, 240, 255, 0.08);
     background: rgba(0, 240, 255, 0.02);
-    animation: advSlideDown 0.2s ease;
     box-sizing: border-box;
-}
-
-@keyframes advSlideDown {
-    from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
-    to   { opacity: 1; max-height: 200px; }
 }
 
 .advanced-search-row {
@@ -6553,6 +6547,213 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(0, 240, 255, 0.1);
     color: var(--primary);
     border: 1px solid rgba(0, 240, 255, 0.15);
+}
+
+/* ========== 搜索结果键盘导航 ========== */
+.search-result-item.keyboard-active {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.12) 0%, rgba(0, 240, 255, 0.04) 100%);
+    border-left-color: var(--primary);
+}
+
+.search-result-item.keyboard-active .search-result-icon {
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.25) 0%, rgba(0, 200, 255, 0.15) 100%);
+    border-color: rgba(0, 240, 255, 0.25);
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+}
+
+.search-result-item.keyboard-active .search-result-title {
+    color: #fff;
+}
+
+.search-result-item.keyboard-active .search-result-arrow {
+    opacity: 1;
+    transform: translateX(3px);
+}
+
+/* ========== 骨架屏加载 ========== */
+.search-skeleton {
+    padding: 14px 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+.search-skeleton-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+}
+
+.search-skeleton-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.search-skeleton-title {
+    height: 16px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.search-skeleton-title:first-child {
+    width: 85%;
+}
+
+.search-skeleton-title:nth-child(2) {
+    width: 60%;
+}
+
+.search-skeleton-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 2px;
+}
+
+.search-skeleton-tag {
+    height: 12px;
+    width: 70px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+@keyframes skeletonPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ========== 搜索历史 ========== */
+.search-history-section {
+    padding: 16px 24px;
+}
+
+.search-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.search-history-header span {
+    font-size: 12px;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.search-history-clear {
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.5;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.search-history-clear:hover {
+    opacity: 1;
+    color: var(--primary);
+    background: rgba(0, 240, 255, 0.08);
+}
+
+.search-history-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.search-history-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.search-history-item:hover {
+    color: var(--primary);
+    background: rgba(0, 240, 255, 0.08);
+    border-color: rgba(0, 240, 255, 0.2);
+}
+
+.search-history-item svg {
+    opacity: 0.5;
+    flex-shrink: 0;
+}
+
+/* ========== 搜索提示（初始状态） ========== */
+.search-tips {
+    padding: 20px 24px 8px;
+}
+
+.search-tips-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    opacity: 0.6;
+    margin-bottom: 10px;
+}
+
+.search-tips-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.search-tip-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    opacity: 0.7;
+    padding: 4px 0;
+}
+
+.search-tip-item kbd {
+    font-size: 10px;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    color: var(--primary);
+}
+
+/* ========== 搜索结果国家标识 ========== */
+.search-result-country {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+/* ========== 高级搜索面板平滑动画 ========== */
+.advanced-search-panel {
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+}
+
+.advanced-search-panel.collapsed {
+    max-height: 0 !important;
+    opacity: 0;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom-color: transparent !important;
+}
+
+.advanced-search-panel.expanded {
+    max-height: 200px;
+    opacity: 1;
 }
 
 /* ========== 全球事件链模块（signal-markers 样式） ========== */

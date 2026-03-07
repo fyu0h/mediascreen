@@ -5686,20 +5686,126 @@ let globalSearchLoading = false;
 const GLOBAL_SEARCH_PAGE_SIZE = 20;
 let globalSearchMode = 'or';  // 搜索模式：'and' 或 'or'
 let globalSearchSourcesLoaded = false;  // 来源列表是否已加载
+let searchActiveIndex = -1;  // 键盘导航当前选中索引
+const SEARCH_HISTORY_KEY = 'global_search_history';
+const SEARCH_HISTORY_MAX = 8;
+
+// 国家代码转国旗 emoji
+function countryCodeToFlag(code) {
+    if (!code || code.length !== 2) return '';
+    const offset = 127397;
+    return String.fromCodePoint(...[...code.toUpperCase()].map(c => c.charCodeAt(0) + offset));
+}
+
+// ========== 搜索历史管理 ==========
+function getSearchHistory() {
+    try {
+        return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+    } catch { return []; }
+}
+
+function addSearchHistory(keyword) {
+    if (!keyword || !keyword.trim()) return;
+    let history = getSearchHistory();
+    // 去重，移到最前
+    history = history.filter(h => h !== keyword.trim());
+    history.unshift(keyword.trim());
+    if (history.length > SEARCH_HISTORY_MAX) history = history.slice(0, SEARCH_HISTORY_MAX);
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+}
+
+function clearSearchHistory() {
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
+    renderSearchInitialState();
+}
+
+function renderSearchInitialState() {
+    const historySection = document.getElementById('searchHistorySection');
+    const historyList = document.getElementById('searchHistoryList');
+    const history = getSearchHistory();
+
+    if (history.length > 0) {
+        historySection.style.display = 'block';
+        historyList.innerHTML = history.map(h => `
+            <button class="search-history-item" onclick="useSearchHistory('${escapeHtml(h)}')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                ${escapeHtml(h)}
+            </button>
+        `).join('');
+    } else {
+        historySection.style.display = 'none';
+    }
+}
+
+function useSearchHistory(keyword) {
+    const input = document.getElementById('globalSearchInput');
+    input.value = keyword;
+    document.getElementById('searchClearBtn').style.display = 'block';
+    globalSearchKeyword = keyword;
+    globalSearchPage = 1;
+    showSearchResultsState();
+    showSearchSkeletons();
+    performGlobalSearch(false);
+}
+
+// ========== 骨架屏 ==========
+function showSearchSkeletons() {
+    const container = document.getElementById('globalSearchResults');
+    let html = '';
+    for (let i = 0; i < 5; i++) {
+        html += `
+            <div class="search-skeleton">
+                <div class="search-skeleton-icon"></div>
+                <div class="search-skeleton-content">
+                    <div class="search-skeleton-title"></div>
+                    <div class="search-skeleton-title"></div>
+                    <div class="search-skeleton-meta">
+                        <div class="search-skeleton-tag"></div>
+                        <div class="search-skeleton-tag"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    container.innerHTML = html;
+}
+
+// ========== 状态切换：初始 / 搜索结果 ==========
+function showSearchInitialState() {
+    document.getElementById('searchInitialState').style.display = 'block';
+    document.getElementById('searchResultsInfo').style.display = 'none';
+    document.getElementById('globalSearchResults').innerHTML = '';
+    document.getElementById('searchLoadMore').style.display = 'none';
+    renderSearchInitialState();
+}
+
+function showSearchResultsState() {
+    document.getElementById('searchInitialState').style.display = 'none';
+    document.getElementById('searchResultsInfo').style.display = 'flex';
+}
 
 // 打开全局搜索
 function openGlobalSearch() {
     const modal = document.getElementById('globalSearchModal');
     modal.classList.add('active');
+    searchActiveIndex = -1;
 
     // 首次打开时加载新闻来源列表
     if (!globalSearchSourcesLoaded) {
         loadSearchSources();
     }
 
+    // 如果输入框为空，显示初始状态
+    const input = document.getElementById('globalSearchInput');
+    if (!input.value.trim()) {
+        showSearchInitialState();
+    }
+
     // 聚焦输入框
     setTimeout(() => {
-        const input = document.getElementById('globalSearchInput');
         input.focus();
         input.select();
     }, 100);
@@ -5716,9 +5822,9 @@ function closeGlobalSearch() {
     globalSearchKeyword = '';
     globalSearchPage = 1;
     globalSearchTotal = 0;
+    searchActiveIndex = -1;
 
     // 重置显示
-    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索（多关键词用空格分隔）</span>';
     document.getElementById('globalSearchResults').innerHTML = '';
     document.getElementById('searchLoadMore').style.display = 'none';
 }
@@ -5729,11 +5835,9 @@ function clearGlobalSearch() {
     document.getElementById('searchClearBtn').style.display = 'none';
     globalSearchKeyword = '';
     globalSearchPage = 1;
+    searchActiveIndex = -1;
 
-    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索（多关键词用空格分隔）</span>';
-    document.getElementById('globalSearchResults').innerHTML = '';
-    document.getElementById('searchLoadMore').style.display = 'none';
-
+    showSearchInitialState();
     document.getElementById('globalSearchInput').focus();
 }
 
@@ -5750,26 +5854,25 @@ function handleGlobalSearchInput(e) {
     }
 
     if (!keyword) {
-        document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索</span>';
-        document.getElementById('globalSearchResults').innerHTML = '';
-        document.getElementById('searchLoadMore').style.display = 'none';
         globalSearchKeyword = '';
+        searchActiveIndex = -1;
+        showSearchInitialState();
         return;
     }
 
-    // 显示加载状态
+    // 切换到搜索结果状态
+    showSearchResultsState();
+    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">搜索中...</span>';
+
+    // 显示骨架屏加载
     if (keyword !== globalSearchKeyword) {
-        document.getElementById('globalSearchResults').innerHTML = `
-            <div class="search-loading">
-                <div class="spinner"></div>
-                <span>搜索中...</span>
-            </div>
-        `;
+        showSearchSkeletons();
     }
 
     globalSearchDebounceTimer = setTimeout(() => {
         globalSearchKeyword = keyword;
         globalSearchPage = 1;
+        searchActiveIndex = -1;
         performGlobalSearch(false);
     }, 200);  // 200ms 防抖，快速响应
 }
@@ -5803,6 +5906,12 @@ async function performGlobalSearch(append = false) {
         const data = result.data;
         globalSearchTotal = data.total;
 
+        // 记录搜索历史
+        addSearchHistory(globalSearchKeyword);
+
+        // 确保在搜索结果状态
+        showSearchResultsState();
+
         // 更新结果信息（包含筛选条件标签）
         if (data.total > 0) {
             let infoHtml = `找到 <span class="search-results-count">${data.total}</span> 条相关结果`;
@@ -5819,6 +5928,7 @@ async function performGlobalSearch(append = false) {
 
         if (!append) {
             resultsContainer.innerHTML = '';
+            searchActiveIndex = -1;
         }
 
         if (data.items.length === 0 && !append) {
@@ -5876,14 +5986,21 @@ function buildFilterTags(source, startDate, endDate) {
     return tags;
 }
 
-// 切换高级搜索面板显示/隐藏
+// 切换高级搜索面板显示/隐藏（平滑动画）
 function toggleAdvancedSearch() {
     const panel = document.getElementById('advancedSearchPanel');
     const toggle = document.getElementById('advancedSearchToggle');
-    const isVisible = panel.style.display !== 'none';
+    const isExpanded = panel.classList.contains('expanded');
 
-    panel.style.display = isVisible ? 'none' : 'block';
-    toggle.classList.toggle('active', !isVisible);
+    if (isExpanded) {
+        panel.classList.remove('expanded');
+        panel.classList.add('collapsed');
+        toggle.classList.remove('active');
+    } else {
+        panel.classList.remove('collapsed');
+        panel.classList.add('expanded');
+        toggle.classList.add('active');
+    }
 }
 
 // 加载新闻来源列表到下拉框
@@ -5939,6 +6056,8 @@ function renderSearchResultItem(item) {
     const url = item.url || '#';
     const source = item.source || '未知来源';
     const pubDate = item.pub_date || '';
+    const countryCode = item.country_code || item.country || '';
+    const flag = countryCodeToFlag(countryCode);
 
     // 高亮关键词
     const highlightedTitle = highlightKeyword(title, globalSearchKeyword);
@@ -5964,6 +6083,7 @@ function renderSearchResultItem(item) {
                         </svg>
                         ${escapeHtml(source)}
                     </span>
+                    ${flag ? `<span class="search-result-country">${flag}</span>` : ''}
                     ${pubDate ? `<span class="search-result-date">${escapeHtml(pubDate)}</span>` : ''}
                 </div>
             </div>
@@ -5997,6 +6117,26 @@ function loadMoreSearchResults() {
     performGlobalSearch(true);
 }
 
+// ========== 键盘导航 ==========
+function updateSearchActiveItem(newIndex) {
+    const items = document.querySelectorAll('#globalSearchResults .search-result-item');
+    if (items.length === 0) return;
+
+    // 移除旧的高亮
+    items.forEach(item => item.classList.remove('keyboard-active'));
+
+    // 边界处理
+    if (newIndex < 0) newIndex = items.length - 1;
+    if (newIndex >= items.length) newIndex = 0;
+
+    searchActiveIndex = newIndex;
+    const activeItem = items[searchActiveIndex];
+    activeItem.classList.add('keyboard-active');
+
+    // 滚动到可视区域
+    activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
 // 全局键盘事件监听
 document.addEventListener('keydown', function (e) {
     // Ctrl+F 或 Cmd+F 打开全局搜索
@@ -6005,11 +6145,29 @@ document.addEventListener('keydown', function (e) {
         openGlobalSearch();
     }
 
+    // 以下快捷键仅在搜索弹窗打开时生效
+    const modal = document.getElementById('globalSearchModal');
+    if (!modal || !modal.classList.contains('active')) return;
+
     // ESC 关闭全局搜索
     if (e.key === 'Escape') {
-        const modal = document.getElementById('globalSearchModal');
-        if (modal && modal.classList.contains('active')) {
-            closeGlobalSearch();
+        closeGlobalSearch();
+        return;
+    }
+
+    // 方向键上下：导航搜索结果
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        updateSearchActiveItem(searchActiveIndex + 1);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        updateSearchActiveItem(searchActiveIndex - 1);
+    } else if (e.key === 'Enter' && searchActiveIndex >= 0) {
+        // Enter：打开当前选中的结果
+        e.preventDefault();
+        const items = document.querySelectorAll('#globalSearchResults .search-result-item');
+        if (items[searchActiveIndex]) {
+            items[searchActiveIndex].click();
         }
     }
 });

@@ -1580,7 +1580,7 @@
                 </div>
             </div>
             <!-- 高级搜索面板 - 独立于 modal-header -->
-            <div class="advanced-search-panel" id="advancedSearchPanel" style="display: none;">
+            <div class="advanced-search-panel collapsed" id="advancedSearchPanel">
                 <div class="advanced-search-row">
                     <div class="advanced-search-field">
                         <label>搜索模式</label>
@@ -1617,11 +1617,42 @@
                 </div>
             </div>
             <div class="modal-body global-search-body">
-                <div class="search-results-info" id="searchResultsInfo">
+                <div class="search-results-info" id="searchResultsInfo" style="display: none;">
                     <span class="search-hint">输入关键词开始搜索（多关键词用空格分隔）</span>
                 </div>
                 <div class="search-results-list" id="globalSearchResults">
                     <!-- 搜索结果将动态填充 -->
+                </div>
+                <!-- 初始状态：搜索历史 + 提示 -->
+                <div id="searchInitialState">
+                    <div class="search-history-section" id="searchHistorySection" style="display: none;">
+                        <div class="search-history-header">
+                            <span>最近搜索</span>
+                            <button class="search-history-clear" onclick="clearSearchHistory()">清除</button>
+                        </div>
+                        <div class="search-history-list" id="searchHistoryList"></div>
+                    </div>
+                    <div class="search-tips">
+                        <div class="search-tips-title">搜索技巧</div>
+                        <div class="search-tips-list">
+                            <div class="search-tip-item">
+                                <kbd>空格</kbd> 分隔多个关键词
+                            </div>
+                            <div class="search-tip-item">
+                                <kbd>↑</kbd> <kbd>↓</kbd> 键盘选择结果，<kbd>Enter</kbd> 打开
+                            </div>
+                            <div class="search-tip-item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5">
+                                    <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line>
+                                    <line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line>
+                                    <line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line>
+                                    <line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line>
+                                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                                </svg>
+                                展开高级搜索，按来源、日期筛选
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="search-load-more" id="searchLoadMore" style="display: none;">
                     <button class="btn btn-outline btn-sm" onclick="loadMoreSearchResults()">加载更多</button>
