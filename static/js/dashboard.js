@@ -7509,6 +7509,11 @@ function showEventDetail(eventId) {
     const panel = document.getElementById('eventsDetailPanel');
     if (!panel) return;
 
+    // 滑出详情面板
+    if (!panel.classList.contains('open')) {
+        panel.classList.add('open');
+    }
+
     const intensity = loc.intensity || 1;
     const label = INTENSITY_LABELS[intensity] || 'NOTICE';
     const mentionCount = loc.mention_count || 0;
