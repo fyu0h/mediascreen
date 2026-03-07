@@ -247,9 +247,10 @@ def articles():
     分页文章列表（支持筛选）
     参数：
         source - 新闻源名称
-        keyword - 关键词（标题搜索）
+        keyword - 关键词（标题搜索，多关键词用空格分隔）
         start_date - 开始日期 (YYYY-MM-DD)
         end_date - 结束日期 (YYYY-MM-DD)
+        mode - 多关键词搜索模式：and（全部匹配）/ or（任意匹配，默认）
         page - 页码（默认1）
         page_size - 每页数量（默认20，最大100）
     返回：{items: [...], total: 总数, page: 当前页, page_size: 每页数量, total_pages: 总页数}
@@ -259,12 +260,15 @@ def articles():
         keyword = request.args.get('keyword', None)
         start_date = request.args.get('start_date', None)
         end_date = request.args.get('end_date', None)
+        mode = request.args.get('mode', 'or')
         page = request.args.get('page', 1, type=int)
         page_size = request.args.get('page_size', Config.DEFAULT_PAGE_SIZE, type=int)
 
         # 参数验证
         page = max(1, page)
         page_size = max(1, min(page_size, Config.MAX_PAGE_SIZE))
+        if mode not in ('and', 'or'):
+            mode = 'or'
 
         data = search_articles(
             source=source,
@@ -272,7 +276,8 @@ def articles():
             start_date=start_date,
             end_date=end_date,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            mode=mode
         )
         return success_response(data)
     except Exception as e:
@@ -430,20 +435,23 @@ def risk_alerts():
     """
     获取风控告警列表
     参数：
-        limit - 返回数量（默认50，最大500）
+        limit - 返回数量（默认0=不限制，最大2000）
+        days - 近N天范围（可选，优先于date）
         date - 指定日期 (YYYY-MM-DD)，可选
         keyword - 筛选关键词，可选
     返回：匹配风控关键词的文章列表
     """
     try:
-        limit = request.args.get('limit', 50, type=int)
-        limit = min(limit, 500)  # 最大500条
+        limit = request.args.get('limit', 0, type=int)
+        limit = min(limit, 2000) if limit > 0 else 0
+        days = request.args.get('days', None, type=int)
         date_str = request.args.get('date', None)
         filter_keyword = request.args.get('keyword', None)
 
         # 从数据库获取关键词
         keywords = get_risk_keywords_flat()
-        data = get_risk_alerts(keywords, limit, date_str=date_str, filter_keyword=filter_keyword)
+        data = get_risk_alerts(keywords, limit, date_str=date_str,
+                               filter_keyword=filter_keyword, days=days)
         return success_response(data)
     except Exception as e:
         log_error(action='获取风控告警失败', error=str(e))

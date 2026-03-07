@@ -376,17 +376,19 @@ def search_articles(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     page: int = 1,
-    page_size: int = 20
+    page_size: int = 20,
+    mode: str = 'or'
 ) -> Dict[str, Any]:
     """
     搜索文章
     参数：
         source: 新闻源名称
-        keyword: 关键词（标题模糊搜索）
+        keyword: 关键词（标题模糊搜索，多关键词用空格分隔）
         start_date: 开始日期 (YYYY-MM-DD)
         end_date: 结束日期 (YYYY-MM-DD)
         page: 页码
         page_size: 每页数量
+        mode: 多关键词搜索模式，'and'（全部匹配）或 'or'（任意匹配，默认）
     返回：包含文章列表和分页信息的字典
     """
     articles = get_articles_collection()
@@ -398,8 +400,19 @@ def search_articles(
         query['source_name'] = source
 
     if keyword:
-        # 使用正则表达式进行模糊搜索（中文兼容性好）
-        query['title'] = {'$regex': re.escape(keyword), '$options': 'i'}
+        # 按空格分割多关键词
+        keywords = keyword.strip().split()
+        if len(keywords) <= 1:
+            # 单关键词：直接模糊搜索
+            query['title'] = {'$regex': re.escape(keyword.strip()), '$options': 'i'}
+        elif mode == 'and':
+            # AND 模式：使用 lookahead 确保标题同时包含所有关键词
+            pattern = ''.join(f'(?=.*{re.escape(kw)})' for kw in keywords)
+            query['title'] = {'$regex': pattern, '$options': 'i'}
+        else:
+            # OR 模式：用 | 连接，匹配任一关键词
+            pattern = '|'.join(re.escape(kw) for kw in keywords)
+            query['title'] = {'$regex': pattern, '$options': 'i'}
 
     if start_date or end_date:
         date_query: Dict[str, Any] = {}
@@ -604,15 +617,17 @@ def get_keyword_stats(keywords: List[str], days: int = 7) -> Dict[str, Any]:
     return results
 
 
-def get_risk_alerts(keywords_by_level: Dict[str, List[str]], limit: int = 50,
-                    date_str: str = None, filter_keyword: str = None) -> List[Dict[str, Any]]:
+def get_risk_alerts(keywords_by_level: Dict[str, List[str]], limit: int = 0,
+                    date_str: str = None, filter_keyword: str = None,
+                    days: int = None) -> List[Dict[str, Any]]:
     """
     获取风控告警文章列表
     参数：
         keywords_by_level: 按风险等级分类的关键词 {"high": [...], "medium": [...], "low": [...]}
-        limit: 返回数量限制
+        limit: 返回数量限制（0=不限制）
         date_str: 指定日期 (YYYY-MM-DD)，可选
         filter_keyword: 筛选关键词，可选
+        days: 近N天范围（可选，优先于date_str）
     返回：匹配风控关键词的文章列表（按时间降序）
     """
     articles = get_articles_collection()
@@ -639,8 +654,11 @@ def get_risk_alerts(keywords_by_level: Dict[str, List[str]], limit: int = 50,
         'title': {'$regex': regex_pattern, '$options': 'i'}
     }
 
-    # 添加日期筛选
-    if date_str:
+    # 添加日期筛选（days 优先于 date_str）
+    if days is not None and days > 0:
+        start_date = datetime.now() - timedelta(days=days)
+        query['pub_date'] = {'$gte': start_date}
+    elif date_str:
         try:
             target_date = datetime.strptime(date_str, '%Y-%m-%d')
             next_date = target_date + timedelta(days=1)
@@ -651,7 +669,9 @@ def get_risk_alerts(keywords_by_level: Dict[str, List[str]], limit: int = 50,
         except ValueError:
             pass  # 日期格式错误，忽略日期筛选
 
-    cursor = articles.find(query).sort('pub_date', -1).limit(limit)
+    cursor = articles.find(query).sort('pub_date', -1)
+    if limit > 0:
+        cursor = cursor.limit(limit)
 
     # 先收集所有结果和URL
     results = []

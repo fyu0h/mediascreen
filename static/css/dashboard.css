@@ -367,7 +367,7 @@ html, body {
 
 .chart-container-sm {
     width: 100%;
-    height: 200px;
+    min-height: 150px;
 }
 
 /* ========== 最新文章列表 ========== */
@@ -6370,6 +6370,194 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(0, 0, 0, 0.1);
 }
 
+/* ========== 高级搜索面板 ========== */
+
+.advanced-search-toggle-wrapper {
+    padding: 0 24px 12px;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.08);
+}
+
+.advanced-search-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid rgba(0, 240, 255, 0.12);
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 5px 12px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.advanced-search-toggle:hover {
+    color: var(--primary);
+    border-color: rgba(0, 240, 255, 0.3);
+    background: rgba(0, 240, 255, 0.05);
+}
+
+.advanced-search-toggle.active {
+    color: var(--primary);
+    border-color: rgba(0, 240, 255, 0.3);
+    background: rgba(0, 240, 255, 0.08);
+}
+
+.advanced-search-toggle .toggle-arrow {
+    transition: transform 0.2s ease;
+}
+
+.advanced-search-toggle.active .toggle-arrow {
+    transform: rotate(180deg);
+}
+
+.advanced-search-panel {
+    padding: 14px 24px;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.08);
+    background: rgba(0, 0, 0, 0.15);
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.advanced-search-row {
+    display: flex;
+    gap: 14px;
+    align-items: flex-end;
+}
+
+.advanced-search-row + .advanced-search-row {
+    margin-top: 10px;
+}
+
+.advanced-search-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.advanced-search-field label {
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.8;
+    letter-spacing: 0.5px;
+}
+
+.advanced-search-field select,
+.advanced-search-field input[type="date"] {
+    background: rgba(0, 240, 255, 0.05);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    outline: none;
+    transition: all 0.2s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.advanced-search-field select:focus,
+.advanced-search-field input[type="date"]:focus {
+    border-color: rgba(0, 240, 255, 0.4);
+    background: rgba(0, 240, 255, 0.08);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+}
+
+.advanced-search-field select option {
+    background: #1a1f2e;
+    color: var(--text-primary);
+}
+
+/* 日期输入框日历图标颜色适配 */
+.advanced-search-field input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+    cursor: pointer;
+}
+
+.search-mode-toggle {
+    display: flex;
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.search-mode-toggle .mode-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.search-mode-toggle .mode-btn:first-child {
+    border-right: 1px solid rgba(0, 240, 255, 0.15);
+}
+
+.search-mode-toggle .mode-btn:hover {
+    background: rgba(0, 240, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.search-mode-toggle .mode-btn.active {
+    background: rgba(0, 240, 255, 0.15);
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.advanced-search-actions {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+}
+
+.btn-clear-filters {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-clear-filters:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 搜索结果筛选条件标签 */
+.search-filter-tags {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: 8px;
+}
+
+.search-filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0, 240, 255, 0.1);
+    color: var(--primary);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+}
+
 /* ========== 全球事件链模块（signal-markers 样式） ========== */
 
 /* 事件链卡片 - 加宽以适配双栏 */
@@ -6507,7 +6695,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     border: 1px solid;
 }
 
-.event-detail-badge.intensity-5 { color: #00ff41; border-color: rgba(0,255,65,0.5); background: rgba(0,255,65,0.12); }
+.event-detail-badge.intensity-5 { color: #ff4757; border-color: rgba(255,71,87,0.5); background: rgba(255,71,87,0.12); }
 .event-detail-badge.intensity-4 { color: #ff8800; border-color: rgba(255,136,0,0.5); background: rgba(255,136,0,0.12); }
 .event-detail-badge.intensity-3 { color: #ffd700; border-color: rgba(255,215,0,0.5); background: rgba(255,215,0,0.12); }
 .event-detail-badge.intensity-2 { color: #00d4ff; border-color: rgba(0,212,255,0.5); background: rgba(0,212,255,0.12); }
@@ -6653,7 +6841,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* intensity 等级改变圆点颜色 */
-.event-item.intensity-5::before { background: #00ff41; box-shadow: 0 0 8px rgba(0,255,65,0.6); }
+.event-item.intensity-5::before { background: #ff4757; box-shadow: 0 0 8px rgba(255,71,87,0.6); }
 .event-item.intensity-4::before { background: #ff8800; box-shadow: 0 0 8px rgba(255,136,0,0.6); }
 .event-item.intensity-3::before { background: #ffd700; box-shadow: 0 0 8px rgba(255,215,0,0.6); }
 .event-item.intensity-2::before { background: #00d4ff; box-shadow: 0 0 6px rgba(0,212,255,0.5); }
@@ -6699,7 +6887,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     flex-shrink: 0;
 }
 
-.event-item-badge.intensity-5 { background: rgba(0,255,65,0.15); color: #00ff41; }
+.event-item-badge.intensity-5 { background: rgba(255,71,87,0.15); color: #ff4757; }
 .event-item-badge.intensity-4 { background: rgba(255,136,0,0.2); color: #ff8800; }
 .event-item-badge.intensity-3 { background: rgba(255,215,0,0.15); color: #ffd700; }
 .event-item-badge.intensity-2 { background: rgba(0,212,255,0.15); color: #00d4ff; }

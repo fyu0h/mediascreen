@@ -7,8 +7,7 @@
 const CONFIG = {
     refreshInterval: 30000,  // 自动刷新间隔（毫秒）- 30秒
     alertLimit: 30,          // 告警列表数量
-    // PMTiles 瓦片源配置（可修改为自托管 .pmtiles 文件 URL）
-    pmtilesUrl: 'https://build.protomaps.com/20260217.pmtiles'
+    pmtilesUrl: 'https://build.protomaps.com/20250101.pmtiles'  // PMTiles 矢量瓦片源
 };
 
 // 全局变量
@@ -43,7 +42,8 @@ function addDarkTileLayer(map) {
         try {
             const pmLayer = protomapsL.leafletLayer({
                 url: CONFIG.pmtilesUrl,
-                flavor: 'dark'
+                flavor: 'dark',
+                language: 'zh'
             });
             pmLayer.addTo(map);
 
@@ -79,22 +79,22 @@ function addDarkTileLayer(map) {
 }
 
 /**
- * 回退瓦片层：依次尝试多个暗色瓦片源
- * 1. Stadia Alidade Smooth Dark
- * 2. CartoDB Dark
+ * 回退瓦片层：依次尝试多个暗色瓦片源（优先中文标签）
+ * 1. CartoDB Dark（中文标签）
+ * 2. Stadia Alidade Smooth Dark
  * 3. OSM + CSS 反色（终极兜底，永远可用）
  */
 function _addFallbackTileLayer(map) {
     _tryTileSource(map, [
         {
+            name: 'CartoDB Dark (中文)',
+            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?language=zh',
+            options: { maxZoom: 19, subdomains: 'abcd' }
+        },
+        {
             name: 'Stadia Dark',
             url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
             options: { maxZoom: 20 }
-        },
-        {
-            name: 'CartoDB Dark',
-            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-            options: { maxZoom: 19, subdomains: 'abcd' }
         },
         {
             name: 'OSM (反色)',
@@ -749,6 +749,14 @@ async function loadSourceChart() {
                 backgroundColor: 'rgba(255,255,255,0.05)',
                 fillerColor: 'rgba(0,240,255,0.2)',
                 handleStyle: { color: 'rgba(0,240,255,0.5)' }
+            },
+            {
+                type: 'inside',
+                yAxisIndex: 0,
+                start: sortedData.length > 15 ? 100 - (15 / sortedData.length * 100) : 0,
+                end: 100,
+                zoomOnMouseWheel: false,
+                moveOnMouseWheel: true
             }
         ],
         xAxis: {
@@ -1146,9 +1154,9 @@ function renderHotspots(hotspots) {
     });
 
     const styleMap = {
-        high:   { color: '#ff4757', fillColor: 'rgba(255, 71, 87, 0.3)',  weight: 2 },
-        medium: { color: '#ffa502', fillColor: 'rgba(255, 165, 2, 0.3)',  weight: 2 },
-        low:    { color: '#ffea00', fillColor: 'rgba(255, 234, 0, 0.3)',  weight: 2 }
+        high:   { color: '#ff4757', fillColor: 'rgba(255, 71, 87, 0.9)',  weight: 2 },
+        medium: { color: '#ffa502', fillColor: 'rgba(255, 165, 2, 0.9)',  weight: 2 },
+        low:    { color: '#ffea00', fillColor: 'rgba(255, 234, 0, 0.9)',  weight: 2 }
     };
 
     hotspots.forEach(h => {
@@ -1158,16 +1166,16 @@ function renderHotspots(hotspots) {
         const polygon = L.polygon(h.coordinates, {
             color: style.color,
             fillColor: style.fillColor,
-            fillOpacity: 0.3,
+            fillOpacity: 0.9,
             weight: style.weight
         }).addTo(hotspotMap);
 
         // 鼠标悬停高亮
         polygon.on('mouseover', function () {
-            this.setStyle({ fillOpacity: 0.5, weight: 3 });
+            this.setStyle({ fillOpacity: 1, weight: 3 });
         });
         polygon.on('mouseout', function () {
-            this.setStyle({ fillOpacity: 0.3, weight: style.weight });
+            this.setStyle({ fillOpacity: 0.9, weight: style.weight });
         });
 
         // 点击显示详情
@@ -1180,7 +1188,7 @@ function renderHotspots(hotspots) {
         const center = polygon.getBounds().getCenter();
         const label = L.divIcon({
             className: 'hotspot-label',
-            html: `<span style="color:${style.color};font-size:11px;text-shadow:0 0 6px rgba(0,0,0,0.8);white-space:nowrap;">${h.name}</span>`,
+            html: `<span style="color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 4px rgba(0,0,0,0.9),0 0 8px rgba(0,0,0,0.7),0 1px 2px rgba(0,0,0,0.9);white-space:nowrap;letter-spacing:0.5px;">${h.name}</span>`,
             iconSize: [100, 20],
             iconAnchor: [50, 10]
         });
@@ -1364,7 +1372,7 @@ function initMapToggle() {
 // ==================== 风控监控 ====================
 
 async function loadRiskStats() {
-    const data = await fetchAPI('/risk/stats?days=7');
+    const data = await fetchAPI('/risk/stats?days=3');
     if (!data) return;
 
     const { summary } = data;
@@ -1435,6 +1443,11 @@ function loadKeywordChart(stats) {
     // 保存到全局变量
     keywordChartData = sortedKeywords;
 
+    // 根据关键词数量自适应图表高度（每个关键词约28px，最小150px）
+    const dynamicHeight = Math.max(150, sortedKeywords.length * 28 + 40);
+    chartDom.style.height = dynamicHeight + 'px';
+    keywordChart.resize();
+
     if (sortedKeywords.length === 0) {
         keywordChart.setOption({
             graphic: {
@@ -1461,21 +1474,7 @@ function loadKeywordChart(stats) {
             left: '3%', right: '8%', top: '5%', bottom: '5%',
             containLabel: true
         },
-        dataZoom: sortedKeywords.length > 10 ? [
-            {
-                type: 'slider',
-                yAxisIndex: 0,
-                right: 0,
-                width: 12,
-                start: 100 - (10 / sortedKeywords.length * 100),
-                end: 100,
-                showDetail: false,
-                borderColor: 'transparent',
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                fillerColor: 'rgba(0,240,255,0.2)',
-                handleStyle: { color: 'rgba(0,240,255,0.5)' }
-            }
-        ] : [],
+        dataZoom: [],
         xAxis: {
             type: 'value',
             axisLine: { show: false },
@@ -1524,7 +1523,7 @@ function loadKeywordChart(stats) {
 }
 
 // 按关键词筛选告警
-function filterAlertsByKeyword(keyword) {
+async function filterAlertsByKeyword(keyword) {
     if (currentFilterKeyword === keyword) {
         // 再次点击同一关键词，清除筛选
         clearAlertFilter();
@@ -1532,14 +1531,26 @@ function filterAlertsByKeyword(keyword) {
     }
 
     currentFilterKeyword = keyword;
+
+    // 从后端请求该关键词的告警数据
+    try {
+        const data = await fetchAPI(`/risk/alerts?days=3&keyword=${encodeURIComponent(keyword)}`);
+        if (data && data.length > 0) {
+            allAlertsData = data;
+        }
+    } catch (e) {
+        console.warn('筛选告警请求失败，使用本地数据', e);
+    }
+
     renderFilteredAlerts();
     showToast(`已筛选: ${keyword}`, 'success');
 }
 
 // 清除告警筛选
-function clearAlertFilter() {
+async function clearAlertFilter() {
     currentFilterKeyword = null;
-    renderFilteredAlerts();
+    // 恢复默认告警列表
+    await loadRiskAlerts();
 }
 
 // 标记告警已读
@@ -1683,7 +1694,7 @@ function escapeRegExp(string) {
 }
 
 async function loadRiskAlerts() {
-    const data = await fetchAPI(`/risk/alerts?limit=${CONFIG.alertLimit}`);
+    const data = await fetchAPI('/risk/alerts?days=3');
     const alertList = document.getElementById('alertList');
     const alertCount = document.getElementById('alertCount');
 
@@ -5673,11 +5684,18 @@ let globalSearchPage = 1;
 let globalSearchTotal = 0;
 let globalSearchLoading = false;
 const GLOBAL_SEARCH_PAGE_SIZE = 20;
+let globalSearchMode = 'or';  // 搜索模式：'and' 或 'or'
+let globalSearchSourcesLoaded = false;  // 来源列表是否已加载
 
 // 打开全局搜索
 function openGlobalSearch() {
     const modal = document.getElementById('globalSearchModal');
     modal.classList.add('active');
+
+    // 首次打开时加载新闻来源列表
+    if (!globalSearchSourcesLoaded) {
+        loadSearchSources();
+    }
 
     // 聚焦输入框
     setTimeout(() => {
@@ -5700,7 +5718,7 @@ function closeGlobalSearch() {
     globalSearchTotal = 0;
 
     // 重置显示
-    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索</span>';
+    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索（多关键词用空格分隔）</span>';
     document.getElementById('globalSearchResults').innerHTML = '';
     document.getElementById('searchLoadMore').style.display = 'none';
 }
@@ -5712,7 +5730,7 @@ function clearGlobalSearch() {
     globalSearchKeyword = '';
     globalSearchPage = 1;
 
-    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索</span>';
+    document.getElementById('searchResultsInfo').innerHTML = '<span class="search-hint">输入关键词开始搜索（多关键词用空格分隔）</span>';
     document.getElementById('globalSearchResults').innerHTML = '';
     document.getElementById('searchLoadMore').style.display = 'none';
 
@@ -5763,7 +5781,18 @@ async function performGlobalSearch(append = false) {
     globalSearchLoading = true;
 
     try {
-        const url = `/api/articles?keyword=${encodeURIComponent(globalSearchKeyword)}&page=${globalSearchPage}&page_size=${GLOBAL_SEARCH_PAGE_SIZE}`;
+        // 构建搜索 URL，包含高级搜索参数
+        let url = `/api/articles?keyword=${encodeURIComponent(globalSearchKeyword)}&page=${globalSearchPage}&page_size=${GLOBAL_SEARCH_PAGE_SIZE}&mode=${globalSearchMode}`;
+
+        // 高级搜索参数
+        const source = document.getElementById('searchSourceSelect')?.value;
+        const startDate = document.getElementById('searchStartDate')?.value;
+        const endDate = document.getElementById('searchEndDate')?.value;
+
+        if (source) url += `&source=${encodeURIComponent(source)}`;
+        if (startDate) url += `&start_date=${encodeURIComponent(startDate)}`;
+        if (endDate) url += `&end_date=${encodeURIComponent(endDate)}`;
+
         const response = await fetch(url);
         const result = await response.json();
 
@@ -5774,13 +5803,15 @@ async function performGlobalSearch(append = false) {
         const data = result.data;
         globalSearchTotal = data.total;
 
-        // 更新结果信息
+        // 更新结果信息（包含筛选条件标签）
         if (data.total > 0) {
-            document.getElementById('searchResultsInfo').innerHTML =
-                `找到 <span class="search-results-count">${data.total}</span> 条相关结果`;
+            let infoHtml = `找到 <span class="search-results-count">${data.total}</span> 条相关结果`;
+            infoHtml += buildFilterTags(source, startDate, endDate);
+            document.getElementById('searchResultsInfo').innerHTML = infoHtml;
         } else {
-            document.getElementById('searchResultsInfo').innerHTML =
-                `<span class="search-hint">未找到相关结果</span>`;
+            let infoHtml = `<span class="search-hint">未找到相关结果</span>`;
+            infoHtml += buildFilterTags(source, startDate, endDate);
+            document.getElementById('searchResultsInfo').innerHTML = infoHtml;
         }
 
         // 渲染结果
@@ -5827,6 +5858,81 @@ async function performGlobalSearch(append = false) {
     }
 }
 
+// 构建筛选条件标签
+function buildFilterTags(source, startDate, endDate) {
+    let tags = '';
+    const parts = [];
+    if (source) parts.push(escapeHtml(source));
+    if (startDate && endDate) parts.push(`${startDate} ~ ${endDate}`);
+    else if (startDate) parts.push(`${startDate} 起`);
+    else if (endDate) parts.push(`至 ${endDate}`);
+    if (globalSearchMode === 'and') parts.push('全部匹配');
+
+    if (parts.length > 0) {
+        tags = '<span class="search-filter-tags">';
+        parts.forEach(p => { tags += `<span class="search-filter-tag">${p}</span>`; });
+        tags += '</span>';
+    }
+    return tags;
+}
+
+// 切换高级搜索面板显示/隐藏
+function toggleAdvancedSearch() {
+    const panel = document.getElementById('advancedSearchPanel');
+    const toggle = document.getElementById('advancedSearchToggle');
+    const isVisible = panel.style.display !== 'none';
+
+    panel.style.display = isVisible ? 'none' : 'block';
+    toggle.classList.toggle('active', !isVisible);
+}
+
+// 加载新闻来源列表到下拉框
+async function loadSearchSources() {
+    try {
+        const response = await fetch('/api/sources');
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+            const select = document.getElementById('searchSourceSelect');
+            result.data.forEach(source => {
+                const option = document.createElement('option');
+                option.value = source;
+                option.textContent = source;
+                select.appendChild(option);
+            });
+            globalSearchSourcesLoaded = true;
+        }
+    } catch (error) {
+        console.error('加载新闻来源列表失败:', error);
+    }
+}
+
+// 设置搜索模式（AND/OR）
+function setSearchMode(mode) {
+    globalSearchMode = mode;
+    document.getElementById('modeOrBtn').classList.toggle('active', mode === 'or');
+    document.getElementById('modeAndBtn').classList.toggle('active', mode === 'and');
+    triggerAdvancedSearch();
+}
+
+// 高级筛选条件变更时触发搜索
+function triggerAdvancedSearch() {
+    if (globalSearchKeyword) {
+        globalSearchPage = 1;
+        performGlobalSearch(false);
+    }
+}
+
+// 重置高级筛选条件
+function clearAdvancedFilters() {
+    document.getElementById('searchSourceSelect').value = '';
+    document.getElementById('searchStartDate').value = '';
+    document.getElementById('searchEndDate').value = '';
+    globalSearchMode = 'or';
+    document.getElementById('modeOrBtn').classList.add('active');
+    document.getElementById('modeAndBtn').classList.remove('active');
+    triggerAdvancedSearch();
+}
+
 // 渲染单个搜索结果
 function renderSearchResultItem(item) {
     const title = item.title || '无标题';
@@ -5868,13 +5974,15 @@ function renderSearchResultItem(item) {
     `;
 }
 
-// 高亮关键词
+// 高亮关键词（支持多关键词，空格分隔）
 function highlightKeyword(text, keyword) {
     if (!keyword) return escapeHtml(text);
 
-    // 转义特殊字符用于正则
-    const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+    // 按空格分割为多关键词，分别转义并用 | 连接
+    const keywords = keyword.trim().split(/\s+/).filter(k => k);
+    const escapedKeywords = keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const pattern = escapedKeywords.join('|');
+    const regex = new RegExp(`(${pattern})`, 'gi');
 
     // 先转义HTML，再添加高亮标记
     const escaped = escapeHtml(text);
@@ -7424,35 +7532,13 @@ function refreshDefconLevel() {
 // ========== 全球事件链模块（signal-markers 数据源） ==========
 
 let allEventsData = [];
-let filteredEventsData = [];
 let eventsLoading = false;
-let currentIntensityFilter = 'all';
 let selectedEventId = null;
 let eventsTranslationPollTimer = null;
+let eventsRefreshTimer = null;
 
 // intensity 到显示文本的映射
-const INTENSITY_LABELS = { 5: 'CRITICAL', 4: 'HIGH', 3: 'MEDIUM', 2: 'LOW', 1: 'NOTICE' };
-
-/**
- * 按 intensity 筛选
- */
-function filterEventsByIntensity(level) {
-    currentIntensityFilter = level;
-    document.querySelectorAll('#eventsFilterGroup .events-filter-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-intensity') === level);
-    });
-    applyEventsFilter();
-}
-
-function applyEventsFilter() {
-    if (currentIntensityFilter === 'all') {
-        filteredEventsData = [...allEventsData];
-    } else {
-        const lv = parseInt(currentIntensityFilter);
-        filteredEventsData = allEventsData.filter(e => e.intensity >= lv);
-    }
-    updateEventsDisplay();
-}
+const INTENSITY_LABELS = { 5: '危急', 4: '高', 3: '中', 2: '低', 1: '关注' };
 
 /**
  * 从后端加载事件（MongoDB 缓存 + 翻译）
@@ -7473,7 +7559,7 @@ async function loadEventsTimeline(reset = false) {
         if (result.success) {
             const data = result.data;
             allEventsData = data.locations || [];
-            applyEventsFilter();
+            updateEventsDisplay();
 
             // 刷新已选中的详情面板
             if (selectedEventId) {
@@ -7515,13 +7601,13 @@ function updateEventsDisplay() {
     const listElem = document.getElementById('eventsTimelineList');
     if (!listElem) return;
 
-    if (filteredEventsData.length === 0) {
+    if (allEventsData.length === 0) {
         listElem.innerHTML = '<div class="events-loading">暂无事件数据</div>';
         return;
     }
 
     let html = '';
-    filteredEventsData.forEach(loc => {
+    allEventsData.forEach(loc => {
         const intensity = loc.intensity || 1;
         const label = INTENSITY_LABELS[intensity] || 'NOTICE';
         const name = loc.location_name || '';
@@ -7553,18 +7639,27 @@ function updateEventsDisplay() {
  */
 function showEventDetail(eventId) {
     if (!eventId) return;
+
+    const panel = document.getElementById('eventsDetailPanel');
+    if (!panel) return;
+
+    // 再次点击同一事件：收起面板，恢复自动刷新
+    if (selectedEventId === eventId && panel.classList.contains('open')) {
+        panel.classList.remove('open');
+        selectedEventId = null;
+        document.querySelectorAll('.event-item').forEach(item => item.classList.remove('active'));
+        startEventsAutoRefresh();
+        return;
+    }
+
     selectedEventId = eventId;
 
     const loc = allEventsData.find(e => e.id === eventId);
     if (!loc) return;
 
-    const panel = document.getElementById('eventsDetailPanel');
-    if (!panel) return;
-
-    // 滑出详情面板
-    if (!panel.classList.contains('open')) {
-        panel.classList.add('open');
-    }
+    // 滑出详情面板，暂停自动刷新
+    panel.classList.add('open');
+    stopEventsAutoRefresh();
 
     const intensity = loc.intensity || 1;
     const label = INTENSITY_LABELS[intensity] || 'NOTICE';
@@ -7572,30 +7667,30 @@ function showEventDetail(eventId) {
 
     let html = '<div class="event-detail-content">';
 
-    // 顶部徽章行：CRITICAL + LEVEL xxx
+    // 顶部徽章行：危急程度 + 提及次数
     html += `<div class="event-detail-badges">
         <span class="event-detail-badge intensity-${intensity}">${label}</span>
-        <span class="event-detail-badge level-badge">LEVEL ${mentionCount}</span>
+        <span class="event-detail-badge level-badge">提及 ${mentionCount} 次</span>
     </div>`;
 
     // 标题
     html += `<div class="event-detail-title">${escapeHtml(loc.location_name || '')}</div>`;
 
-    // 国家 + 坐标
+    // 国家 + 坐标（带定位SVG图标）
     html += `<div class="event-detail-subtitle">${escapeHtml(loc.country || '')}`;
     if (loc.lat && loc.lng) {
-        html += `<br><span class="event-detail-coords">${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}</span>`;
+        html += `<br><span class="event-detail-coords"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;opacity:0.7;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}</span>`;
     }
     html += `</div>`;
 
     // 情报摘要
-    html += `<div class="event-detail-section-title">INTELLIGENCE SUMMARY</div>`;
+    html += `<div class="event-detail-section-title">情报摘要</div>`;
     html += `<div class="event-detail-summary">${escapeHtml(loc.summary || '')}</div>`;
 
     // 关键事件时间线
     const keyPoints = loc.key_points || [];
     if (keyPoints.length > 0) {
-        html += `<div class="event-detail-section-title">KEY EVENTS</div>`;
+        html += `<div class="event-detail-section-title">关键事件</div>`;
         html += `<div class="event-detail-keypoints">`;
         // 倒序显示最近的在前
         const recentPoints = [...keyPoints].reverse().slice(0, 15);
@@ -7603,7 +7698,7 @@ function showEventDetail(eventId) {
             html += `<div class="event-kp-item">
                 <div class="event-kp-dot"></div>
                 <div class="event-kp-content">
-                    <div class="event-kp-date">${escapeHtml(kp.date || '')}</div>
+                    <div class="event-kp-date">${translateEventDate(kp.date || '')}</div>
                     <div class="event-kp-text">${escapeHtml(kp.point || '')}</div>
                 </div>
             </div>`;
@@ -7621,28 +7716,47 @@ function showEventDetail(eventId) {
 }
 
 /**
- * 格式化为截图风格时间："Mar 6, afternoon"
+ * 将英文日期字符串翻译为中文，如 "Mar 6, night" → "3月6日 凌晨"
+ */
+function translateEventDate(dateStr) {
+    if (!dateStr) return '';
+    const monthMap = { 'Jan':'1','Feb':'2','Mar':'3','Apr':'4','May':'5','Jun':'6',
+                       'Jul':'7','Aug':'8','Sep':'9','Oct':'10','Nov':'11','Dec':'12' };
+    const periodMap = { 'night':'凌晨', 'morning':'上午', 'afternoon':'下午', 'evening':'傍晚' };
+
+    // 匹配 "Mar 6, night" 格式
+    const m = dateStr.match(/^(\w{3})\s+(\d{1,2}),?\s*(\w+)?$/);
+    if (m) {
+        const month = monthMap[m[1]] || m[1];
+        const day = m[2];
+        const period = m[3] ? (periodMap[m[3]] || m[3]) : '';
+        return `${month}月${day}日${period ? ' ' + period : ''}`;
+    }
+    return escapeHtml(dateStr);
+}
+
+/**
+ * 格式化为中文时间："3月6日 下午"
  */
 function formatEventTimePeriod(timestamp) {
     try {
         const d = new Date(timestamp);
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const h = d.getHours();
-        let period = 'night';
-        if (h >= 5 && h < 12) period = 'morning';
-        else if (h >= 12 && h < 17) period = 'afternoon';
-        else if (h >= 17 && h < 21) period = 'evening';
-        return `${months[d.getMonth()]} ${d.getDate()}, ${period}`;
+        let period = '凌晨';
+        if (h >= 5 && h < 12) period = '上午';
+        else if (h >= 12 && h < 17) period = '下午';
+        else if (h >= 17 && h < 21) period = '傍晚';
+        return `${d.getMonth() + 1}月${d.getDate()}日 ${period}`;
     } catch (e) { return ''; }
 }
 
 function formatEventAgo(timestamp) {
     try {
         const diff = Date.now() - new Date(timestamp).getTime();
-        if (diff < 60000) return '~1m';
-        if (diff < 3600000) return `~${Math.floor(diff / 60000)}m`;
-        if (diff < 86400000) return `~${Math.floor(diff / 3600000)}h`;
-        if (diff < 604800000) return `~${Math.floor(diff / 86400000)}d`;
+        if (diff < 60000) return '~1分钟';
+        if (diff < 3600000) return `~${Math.floor(diff / 60000)}分钟`;
+        if (diff < 86400000) return `~${Math.floor(diff / 3600000)}小时`;
+        if (diff < 604800000) return `~${Math.floor(diff / 86400000)}天`;
         return '';
     } catch (e) { return ''; }
 }
@@ -7661,12 +7775,29 @@ function escapeAttr(text) {
 
 function refreshEventsTimeline() { loadEventsTimeline(true); }
 
+function startEventsAutoRefresh() {
+    if (!eventsRefreshTimer) {
+        eventsRefreshTimer = setInterval(refreshEventsTimeline, 5 * 1000);
+    }
+}
+
+function stopEventsAutoRefresh() {
+    if (eventsRefreshTimer) {
+        clearInterval(eventsRefreshTimer);
+        eventsRefreshTimer = null;
+    }
+    if (eventsTranslationPollTimer) {
+        clearInterval(eventsTranslationPollTimer);
+        eventsTranslationPollTimer = null;
+    }
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => loadEventsTimeline(true));
 } else {
     loadEventsTimeline(true);
 }
-setInterval(refreshEventsTimeline, 5 * 60 * 1000);
+startEventsAutoRefresh();
 
 // ========== 事件详情模块（保留模态框函数） ==========
 
