@@ -6372,60 +6372,52 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 /* ========== 高级搜索面板 ========== */
 
-.advanced-search-toggle-wrapper {
-    padding: 0 24px 12px;
-    border-bottom: 1px solid rgba(0, 240, 255, 0.08);
-}
-
+/* 切换按钮 — 放在搜索输入框行内 */
 .advanced-search-toggle {
     display: flex;
     align-items: center;
-    gap: 6px;
-    background: none;
-    border: 1px solid rgba(0, 240, 255, 0.12);
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--text-muted);
-    font-size: 12px;
     cursor: pointer;
-    padding: 5px 12px;
     border-radius: 6px;
+    flex-shrink: 0;
     transition: all 0.2s ease;
 }
 
 .advanced-search-toggle:hover {
     color: var(--primary);
     border-color: rgba(0, 240, 255, 0.3);
-    background: rgba(0, 240, 255, 0.05);
+    background: rgba(0, 240, 255, 0.08);
 }
 
 .advanced-search-toggle.active {
     color: var(--primary);
-    border-color: rgba(0, 240, 255, 0.3);
-    background: rgba(0, 240, 255, 0.08);
+    border-color: rgba(0, 240, 255, 0.35);
+    background: rgba(0, 240, 255, 0.12);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
 }
 
-.advanced-search-toggle .toggle-arrow {
-    transition: transform 0.2s ease;
-}
-
-.advanced-search-toggle.active .toggle-arrow {
-    transform: rotate(180deg);
-}
-
+/* 面板 — 独立于 modal-header，在 header 与 body 之间 */
 .advanced-search-panel {
-    padding: 14px 24px;
+    padding: 14px 20px;
     border-bottom: 1px solid rgba(0, 240, 255, 0.08);
-    background: rgba(0, 0, 0, 0.15);
-    animation: slideDown 0.2s ease;
+    background: rgba(0, 240, 255, 0.02);
+    animation: advSlideDown 0.2s ease;
+    box-sizing: border-box;
 }
 
-@keyframes slideDown {
-    from { opacity: 0; transform: translateY(-8px); }
-    to { opacity: 1; transform: translateY(0); }
+@keyframes advSlideDown {
+    from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
+    to   { opacity: 1; max-height: 200px; }
 }
 
 .advanced-search-row {
     display: flex;
-    gap: 14px;
+    gap: 12px;
     align-items: flex-end;
 }
 
@@ -6435,16 +6427,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .advanced-search-field {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
 }
 
 .advanced-search-field label {
     font-size: 11px;
     color: var(--text-muted);
     opacity: 0.8;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
 }
 
 .advanced-search-field select,
@@ -6452,20 +6445,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(0, 240, 255, 0.05);
     border: 1px solid rgba(0, 240, 255, 0.15);
     color: var(--text-primary);
-    font-size: 13px;
-    padding: 7px 10px;
-    border-radius: 6px;
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: 5px;
     outline: none;
     transition: all 0.2s ease;
     width: 100%;
     box-sizing: border-box;
+    height: 32px;
 }
 
 .advanced-search-field select:focus,
 .advanced-search-field input[type="date"]:focus {
     border-color: rgba(0, 240, 255, 0.4);
     background: rgba(0, 240, 255, 0.08);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.1);
 }
 
 .advanced-search-field select option {
@@ -6473,17 +6467,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     color: var(--text-primary);
 }
 
-/* 日期输入框日历图标颜色适配 */
 .advanced-search-field input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(0.7);
     cursor: pointer;
 }
 
+/* 搜索模式切换 */
 .search-mode-toggle {
     display: flex;
     border: 1px solid rgba(0, 240, 255, 0.15);
-    border-radius: 6px;
+    border-radius: 5px;
     overflow: hidden;
+    height: 32px;
 }
 
 .search-mode-toggle .mode-btn {
@@ -6492,7 +6487,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     border: none;
     color: var(--text-muted);
     font-size: 12px;
-    padding: 7px 12px;
+    padding: 0 14px;
     cursor: pointer;
     transition: all 0.2s ease;
     white-space: nowrap;
@@ -6513,6 +6508,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     font-weight: 500;
 }
 
+/* 重置按钮 */
 .advanced-search-actions {
     flex: 0 0 auto;
     justify-content: flex-end;
@@ -6521,13 +6517,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .btn-clear-filters {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--text-muted);
     font-size: 12px;
-    padding: 7px 14px;
-    border-radius: 6px;
+    padding: 0 12px;
+    height: 32px;
+    border-radius: 5px;
     cursor: pointer;
     transition: all 0.2s ease;
     white-space: nowrap;
