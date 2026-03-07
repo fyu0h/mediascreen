@@ -2069,6 +2069,205 @@ async function deleteKeyword(id) {
     }
 }
 
+// ==================== 同义词管理 ====================
+
+let synonymsData = [];
+
+function openSynonymModal() {
+    document.getElementById('synonymModal').classList.add('active');
+    loadSynonyms();
+}
+
+function closeSynonymModal() {
+    document.getElementById('synonymModal').classList.remove('active');
+}
+
+function openEditSynonymModal(id) {
+    const group = synonymsData.find(g => g.id === id);
+    if (!group) return;
+    document.getElementById('editSynonymId').value = id;
+    document.getElementById('editSynonymWords').value = group.words.join(', ');
+    document.getElementById('editSynonymModal').classList.add('active');
+}
+
+function closeEditSynonymModal() {
+    document.getElementById('editSynonymModal').classList.remove('active');
+}
+
+async function loadSynonyms() {
+    const listEl = document.getElementById('synonymList');
+    listEl.innerHTML = '<div class="loading-text">加载中...</div>';
+
+    const data = await fetchAPI('/synonyms');
+    if (data) {
+        synonymsData = data;
+        renderSynonyms();
+    } else {
+        listEl.innerHTML = '<div class="loading-text">加载失败</div>';
+    }
+}
+
+function renderSynonyms() {
+    const listEl = document.getElementById('synonymList');
+
+    if (synonymsData.length === 0) {
+        listEl.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">-</div>
+                <div>暂无同义词组，添加后搜索时将自动扩展匹配</div>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = synonymsData.map(group => `
+        <div class="synonym-group-item ${group.enabled ? '' : 'disabled'}">
+            <div class="synonym-words">
+                ${group.words.map(w => `<span class="synonym-tag">${escapeHtml(w)}</span>`).join('')}
+            </div>
+            <div class="keyword-actions">
+                <button class="btn-icon ${group.enabled ? 'edit' : 'delete'}" onclick="toggleSynonymGroup('${group.id}', ${!group.enabled})" title="${group.enabled ? '禁用' : '启用'}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        ${group.enabled
+                            ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>'
+                            : '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'
+                        }
+                    </svg>
+                </button>
+                <button class="btn-icon edit" onclick="openEditSynonymModal('${group.id}')" title="编辑">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                </button>
+                <button class="btn-icon delete" onclick="deleteSynonymGroup('${group.id}')" title="删除">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function addSynonymGroup() {
+    const input = document.getElementById('newSynonyms');
+    const raw = input.value.trim();
+
+    if (!raw) {
+        showToast('请输入同义词', 'error');
+        return;
+    }
+
+    // 支持中英文逗号、顿号分隔
+    const words = raw.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+    if (words.length < 2) {
+        showToast('至少需要输入2个同义词', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/synonyms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ words })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('添加成功', 'success');
+            input.value = '';
+            loadSynonyms();
+        } else {
+            showToast(data.error || '添加失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+async function saveSynonymGroup() {
+    const id = document.getElementById('editSynonymId').value;
+    const raw = document.getElementById('editSynonymWords').value.trim();
+
+    if (!raw) {
+        showToast('同义词不能为空', 'error');
+        return;
+    }
+
+    const words = raw.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+    if (words.length < 2) {
+        showToast('至少需要2个同义词', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/synonyms/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ words })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('保存成功', 'success');
+            closeEditSynonymModal();
+            loadSynonyms();
+        } else {
+            showToast(data.error || '保存失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+async function toggleSynonymGroup(id, enabled) {
+    try {
+        const response = await fetch(`/api/synonyms/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(enabled ? '已启用' : '已禁用', 'success');
+            loadSynonyms();
+        } else {
+            showToast(data.error || '操作失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
+async function deleteSynonymGroup(id) {
+    if (!confirm('确定要删除这组同义词吗？')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/synonyms/${id}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('删除成功', 'success');
+            loadSynonyms();
+        } else {
+            showToast(data.error || '删除失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+}
+
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
@@ -7545,6 +7744,13 @@ function openMobileMoreMenu() {
                             </svg>
                             风控关键词
                         </button>
+                        <button class="btn btn-outline" style="width:100%;justify-content:flex-start;min-height:44px;" onclick="closeMobileMenu();openSynonymModal();">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                            搜索同义词
+                        </button>
                         <button class="btn btn-outline" style="width:100%;justify-content:flex-start;min-height:44px;" onclick="closeMobileMenu();openAllAlertsModal();">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -8153,6 +8359,10 @@ function closeEventDetailModal() {
         item.addEventListener('click', (e) => {
             // 防止冒泡到遮罩层
             e.stopPropagation();
+
+            // 已有独立处理逻辑的工具项跳过
+            const toolType = item.dataset.tool;
+            if (toolType === 'synonym-manage') return;
 
             const toolName = item.querySelector('.tool-name').textContent;
             alert(`${toolName} 功能即将上线，敬请期待！`);

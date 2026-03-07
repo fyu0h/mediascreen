@@ -1956,6 +1956,53 @@ select option {
     border-left-color: var(--risk-low);
 }
 
+/* 同义词组样式 */
+.synonym-group-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--accent);
+    transition: all 0.2s ease;
+}
+
+.synonym-group-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.synonym-group-item.disabled {
+    opacity: 0.45;
+    border-left-color: var(--text-muted);
+}
+
+.synonym-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    margin-right: 10px;
+}
+
+.synonym-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    background: rgba(0, 212, 255, 0.12);
+    border: 1px solid rgba(0, 212, 255, 0.25);
+    border-radius: 12px;
+    font-size: 13px;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.synonym-group-item.disabled .synonym-tag {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+}
+
 .keyword-text {
     flex: 1;
     font-size: 14px;

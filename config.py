@@ -63,6 +63,7 @@ class Config:
     COLLECTION_PLUGIN_SUBSCRIPTIONS = 'plugin_subscriptions'  # 插件订阅配置
     COLLECTION_SUMMARIES = 'ai_summaries'  # AI舆情总结历史
     COLLECTION_HOTSPOTS = 'hotspot_zones'  # 热点区域集合
+    COLLECTION_SYNONYMS = 'search_synonyms'  # 搜索同义词集合
 
     # 分页默认值
     DEFAULT_PAGE_SIZE = 20

@@ -37,7 +37,11 @@ from models.mongo import (
     delete_risk_keyword,
     get_alerts_count_by_day,
     mark_alert_read,
-    get_read_alerts
+    get_read_alerts,
+    get_all_synonyms,
+    add_synonym_group,
+    update_synonym_group,
+    delete_synonym_group
 )
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -5151,6 +5155,95 @@ def delete_hotspot_video(hotspot_id, filename):
     except Exception as e:
         log_error('删除热点视频失败', str(e))
         return error_response(f'删除失败: {str(e)}', 500)
+
+
+# ==================== 搜索同义词管理 ====================
+
+@api_bp.route('/synonyms', methods=['GET'])
+def synonyms_list():
+    """
+    获取所有同义词组
+    返回：[{id, words, enabled, created_at, updated_at}, ...]
+    """
+    try:
+        data = get_all_synonyms()
+        return success_response(data)
+    except Exception as e:
+        log_error(action='获取同义词列表失败', error=str(e))
+        return error_response('获取同义词列表失败，请稍后重试', 500)
+
+
+@api_bp.route('/synonyms', methods=['POST'])
+def synonyms_add():
+    """
+    新增同义词组
+    请求体：{words: ["词1", "词2", ...]}
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('请求体不能为空', 400)
+
+        words = data.get('words', [])
+        if not words or not isinstance(words, list):
+            return error_response('请提供同义词列表（words）', 400)
+
+        result = add_synonym_group(words)
+        return success_response({
+            'id': result.get('id'),
+            'words': result.get('words'),
+            'enabled': result.get('enabled', True)
+        })
+    except ValueError as e:
+        return error_response(str(e), 400)
+    except Exception as e:
+        log_error(action='添加同义词组失败', error=str(e))
+        return error_response('添加同义词组失败，请稍后重试', 500)
+
+
+@api_bp.route('/synonyms/<group_id>', methods=['PUT'])
+def synonyms_update(group_id: str):
+    """
+    更新同义词组
+    请求体：{words: ["词1", "词2", ...]（可选）, enabled: true/false（可选）}
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('请求体不能为空', 400)
+
+        words = data.get('words')
+        enabled = data.get('enabled')
+
+        if words is not None and not isinstance(words, list):
+            return error_response('words 必须为列表', 400)
+
+        success = update_synonym_group(group_id, words, enabled)
+        if success:
+            return success_response({'message': '更新成功'})
+        else:
+            return error_response('未找到该同义词组或无需更新', 404)
+    except ValueError as e:
+        return error_response(str(e), 400)
+    except Exception as e:
+        log_error(action='更新同义词组失败', error=str(e))
+        return error_response('更新同义词组失败，请稍后重试', 500)
+
+
+@api_bp.route('/synonyms/<group_id>', methods=['DELETE'])
+def synonyms_delete(group_id: str):
+    """
+    删除同义词组
+    """
+    try:
+        success = delete_synonym_group(group_id)
+        if success:
+            return success_response({'message': '删除成功'})
+        else:
+            return error_response('未找到该同义词组', 404)
+    except Exception as e:
+        log_error(action='删除同义词组失败', error=str(e))
+        return error_response('删除同义词组失败，请稍后重试', 500)
 
 
 

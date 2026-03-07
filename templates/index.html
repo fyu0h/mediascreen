@@ -505,6 +505,50 @@
         </div>
     </div>
 
+    <!-- 同义词管理弹窗 -->
+    <div class="modal-overlay" id="synonymModal">
+        <div class="modal modal-md">
+            <div class="modal-header">
+                <h3 class="modal-title">搜索同义词管理</h3>
+                <button class="modal-close" onclick="closeSynonymModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 添加同义词表单 -->
+                <div class="keyword-form">
+                    <input type="text" id="newSynonyms" class="form-input" placeholder="输入同义词，用逗号分隔（如：Apple,苹果公司,苹果）" style="flex:1;">
+                    <button class="btn btn-add" onclick="addSynonymGroup()">添加</button>
+                </div>
+                <p style="color:rgba(255,255,255,0.4);font-size:12px;margin:4px 0 12px;">搜索时输入组内任一词，将自动扩展匹配该组所有词</p>
+
+                <!-- 同义词组列表 -->
+                <div class="keyword-list" id="synonymList">
+                    <div class="loading-text">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑同义词弹窗 -->
+    <div class="modal-overlay" id="editSynonymModal">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title">编辑同义词组</h3>
+                <button class="modal-close" onclick="closeEditSynonymModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editSynonymId">
+                <div class="form-group">
+                    <label class="form-label">同义词（逗号分隔）</label>
+                    <input type="text" id="editSynonymWords" class="form-input" placeholder="Apple,苹果公司,苹果">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-cancel" onclick="closeEditSynonymModal()">取消</button>
+                    <button class="btn btn-save" onclick="saveSynonymGroup()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 插件管理弹窗 -->
     <div class="modal-overlay" id="sitesModal">
         <div class="modal modal-lg">
@@ -1839,6 +1883,13 @@
                     <div class="tool-info">
                         <div class="tool-name">深度搜索引擎</div>
                         <div class="tool-desc">全文检索分析</div>
+                    </div>
+                </div>
+                <div class="tool-item" data-tool="synonym-manage" onclick="event.stopPropagation();openSynonymModal();">
+                    <div class="tool-icon">🔗</div>
+                    <div class="tool-info">
+                        <div class="tool-name">搜索同义词</div>
+                        <div class="tool-desc">查询扩展管理</div>
                     </div>
                 </div>
                 <div class="tool-item" data-tool="export-center">

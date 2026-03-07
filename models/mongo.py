@@ -145,6 +145,11 @@ def get_alert_reads_collection() -> Collection:
     return get_db()['alert_reads']
 
 
+def get_synonyms_collection() -> Collection:
+    """获取搜索同义词集合"""
+    return get_db()[Config.COLLECTION_SYNONYMS]
+
+
 # ==================== 文章保存 ====================
 
 def save_articles(articles: List[Dict[str, Any]], translate: bool = True) -> int:
@@ -402,16 +407,24 @@ def search_articles(
     if keyword:
         # 按空格分割多关键词
         keywords = keyword.strip().split()
-        if len(keywords) <= 1:
+        # 查询扩展：每个关键词查同义词
+        expanded = expand_keywords(keywords)
+        if len(expanded) <= 1:
             # 单关键词：直接模糊搜索
-            query['title'] = {'$regex': re.escape(keyword.strip()), '$options': 'i'}
+            query['title'] = {'$regex': re.escape(expanded[0]), '$options': 'i'}
         elif mode == 'and':
-            # AND 模式：使用 lookahead 确保标题同时包含所有关键词
-            pattern = ''.join(f'(?=.*{re.escape(kw)})' for kw in keywords)
+            # AND 模式：对每个原始关键词，用其扩展后的同义词组做 OR，再整体做 AND
+            # 需要按原始关键词分组扩展
+            and_patterns = []
+            for kw in keywords:
+                kw_expanded = expand_keywords([kw])
+                group_pattern = '|'.join(re.escape(w) for w in kw_expanded)
+                and_patterns.append(f'(?=.*(?:{group_pattern}))')
+            pattern = ''.join(and_patterns)
             query['title'] = {'$regex': pattern, '$options': 'i'}
         else:
-            # OR 模式：用 | 连接，匹配任一关键词
-            pattern = '|'.join(re.escape(kw) for kw in keywords)
+            # OR 模式：用 | 连接所有扩展后的关键词
+            pattern = '|'.join(re.escape(kw) for kw in expanded)
             query['title'] = {'$regex': pattern, '$options': 'i'}
 
     if start_date or end_date:
@@ -1340,3 +1353,153 @@ def remove_hotspot_video(hotspot_id: str, filename: str) -> bool:
         return result.modified_count > 0
     except Exception:
         return False
+
+
+# ==================== 搜索同义词管理 ====================
+
+def get_all_synonyms() -> List[Dict[str, Any]]:
+    """
+    获取所有同义词组
+    返回：[{id, words, enabled, created_at, updated_at}, ...]
+    """
+    collection = get_synonyms_collection()
+    result = []
+    for doc in collection.find().sort('created_at', -1):
+        result.append({
+            'id': str(doc['_id']),
+            'words': doc.get('words', []),
+            'enabled': doc.get('enabled', True),
+            'created_at': doc.get('created_at', '').strftime('%Y-%m-%d %H:%M') if doc.get('created_at') else '',
+            'updated_at': doc.get('updated_at', '').strftime('%Y-%m-%d %H:%M') if doc.get('updated_at') else ''
+        })
+    return result
+
+
+def add_synonym_group(words: List[str]) -> Dict[str, Any]:
+    """
+    新增一组同义词
+    参数：
+        words: 同义词列表（至少2个词）
+    返回：新建的同义词组文档
+    """
+    if not words or len(words) < 2:
+        raise ValueError('同义词组至少需要2个词')
+
+    # 去重并清理空白
+    words = list(dict.fromkeys(w.strip() for w in words if w.strip()))
+    if len(words) < 2:
+        raise ValueError('去重后同义词组至少需要2个词')
+
+    collection = get_synonyms_collection()
+
+    # 检查是否有任何词已存在于其他同义词组中
+    existing = collection.find_one({
+        'words': {'$in': words}
+    })
+    if existing:
+        overlap = set(words) & set(existing.get('words', []))
+        raise ValueError(f'词 "{", ".join(overlap)}" 已存在于其他同义词组中')
+
+    doc = {
+        'words': words,
+        'enabled': True,
+        'created_at': datetime.now(),
+        'updated_at': datetime.now()
+    }
+
+    result = collection.insert_one(doc)
+    doc['id'] = str(result.inserted_id)
+    return doc
+
+
+def update_synonym_group(group_id: str, words: Optional[List[str]] = None, enabled: Optional[bool] = None) -> bool:
+    """
+    更新同义词组
+    参数：
+        group_id: 同义词组ID
+        words: 新的同义词列表（可选）
+        enabled: 是否启用（可选）
+    返回：是否更新成功
+    """
+    from bson import ObjectId
+
+    collection = get_synonyms_collection()
+    update_fields: Dict[str, Any] = {}
+
+    if words is not None:
+        words = list(dict.fromkeys(w.strip() for w in words if w.strip()))
+        if len(words) < 2:
+            raise ValueError('同义词组至少需要2个词')
+
+        # 检查是否有词已存在于其他同义词组中
+        existing = collection.find_one({
+            'words': {'$in': words},
+            '_id': {'$ne': ObjectId(group_id)}
+        })
+        if existing:
+            overlap = set(words) & set(existing.get('words', []))
+            raise ValueError(f'词 "{", ".join(overlap)}" 已存在于其他同义词组中')
+
+        update_fields['words'] = words
+
+    if enabled is not None:
+        update_fields['enabled'] = enabled
+
+    if not update_fields:
+        return False
+
+    update_fields['updated_at'] = datetime.now()
+
+    result = collection.update_one(
+        {'_id': ObjectId(group_id)},
+        {'$set': update_fields}
+    )
+
+    return result.modified_count > 0
+
+
+def delete_synonym_group(group_id: str) -> bool:
+    """
+    删除同义词组
+    参数：
+        group_id: 同义词组ID
+    返回：是否删除成功
+    """
+    from bson import ObjectId
+
+    collection = get_synonyms_collection()
+    result = collection.delete_one({'_id': ObjectId(group_id)})
+    return result.deleted_count > 0
+
+
+def expand_keywords(keywords: List[str]) -> List[str]:
+    """
+    查询扩展：将关键词列表中的每个词替换为其同义词组的全部词
+    参数：
+        keywords: 原始关键词列表
+    返回：扩展后的关键词列表（保持原顺序，同义词追加到对应关键词后面）
+    """
+    collection = get_synonyms_collection()
+
+    # 一次查询所有启用的同义词组
+    all_synonyms = list(collection.find({'enabled': True}))
+
+    expanded = []
+    for kw in keywords:
+        found = False
+        kw_lower = kw.lower()
+        for group in all_synonyms:
+            group_words = group.get('words', [])
+            # 检查关键词是否在该同义词组中（不区分大小写）
+            if any(w.lower() == kw_lower for w in group_words):
+                # 将同义词组中的所有词加入结果（去重）
+                for w in group_words:
+                    if w not in expanded:
+                        expanded.append(w)
+                found = True
+                break
+        if not found:
+            if kw not in expanded:
+                expanded.append(kw)
+
+    return expanded
