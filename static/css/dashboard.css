@@ -6433,6 +6433,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     animation: spin 0.8s linear infinite;
 }
 
+.search-end-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 18px 24px;
+    color: var(--text-muted);
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.search-end-line {
+    flex: 1;
+    max-width: 80px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+}
+
+.search-end-text {
+    white-space: nowrap;
+}
+
 /* ========== 高级搜索面板 ========== */
 
 /* 切换按钮 — 放在搜索输入框行内 */

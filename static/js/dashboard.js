@@ -5985,6 +5985,7 @@ function showSearchInitialState() {
     document.getElementById('searchResultsInfo').style.display = 'none';
     document.getElementById('globalSearchResults').innerHTML = '';
     document.getElementById('searchLoadMore').style.display = 'none';
+    document.getElementById('searchEndHint').style.display = 'none';
     renderSearchInitialState();
 }
 
@@ -6042,6 +6043,7 @@ function closeGlobalSearch() {
     // 重置显示
     document.getElementById('globalSearchResults').innerHTML = '';
     document.getElementById('searchLoadMore').style.display = 'none';
+    document.getElementById('searchEndHint').style.display = 'none';
 }
 
 // 清除搜索内容
@@ -6166,9 +6168,10 @@ async function performGlobalSearch(append = false) {
             });
         }
 
-        // 显示/隐藏"加载更多"按钮
+        // 显示/隐藏加载指示器和到底提示
         const hasMore = globalSearchPage * GLOBAL_SEARCH_PAGE_SIZE < data.total;
-        document.getElementById('searchLoadMore').style.display = hasMore ? 'block' : 'none';
+        document.getElementById('searchLoadMore').style.display = hasMore ? 'flex' : 'none';
+        document.getElementById('searchEndHint').style.display = (!hasMore && data.total > 0) ? 'flex' : 'none';
 
     } catch (error) {
         console.error('搜索出错:', error);
