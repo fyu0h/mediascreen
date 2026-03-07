@@ -538,11 +538,12 @@ def get_map_markers() -> List[Dict[str, Any]]:
 
 def get_source_list() -> List[str]:
     """
-    获取所有新闻源名称列表
+    获取所有新闻源名称列表（从文章集合中提取，确保与实际数据一致）
     返回：新闻源名称列表
     """
-    sources = get_sources_collection()
-    return sources.distinct('name')
+    articles = get_articles_collection()
+    names = articles.distinct('source_name')
+    return sorted([n for n in names if n])
 
 
 def get_all_sources() -> List[Dict[str, Any]]:
