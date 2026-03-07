@@ -8,7 +8,7 @@ const CONFIG = {
     refreshInterval: 30000,  // 自动刷新间隔（毫秒）- 30秒
     alertLimit: 30,          // 告警列表数量
     // PMTiles 瓦片源配置（可修改为自托管 .pmtiles 文件 URL）
-    pmtilesUrl: 'https://build.protomaps.com/20250101.pmtiles'
+    pmtilesUrl: 'https://build.protomaps.com/20260217.pmtiles'
 };
 
 // 全局变量
@@ -46,11 +46,30 @@ function addDarkTileLayer(map) {
                 flavor: 'dark'
             });
             pmLayer.addTo(map);
-            // 监听加载错误，自动回退
-            pmLayer.on('error', function () {
-                map.removeLayer(pmLayer);
+
+            let pmFailed = false;
+            const doFallback = function() {
+                if (pmFailed) return;
+                pmFailed = true;
+                console.warn('[地图] PMTiles 加载失败，切换回退瓦片源');
+                try { map.removeLayer(pmLayer); } catch(e) {}
                 _addFallbackTileLayer(map);
-            });
+            };
+
+            // 监听加载错误
+            pmLayer.on('error', doFallback);
+
+            // 超时保护：8秒内如果地图仍无瓦片内容则强制回退
+            setTimeout(function() {
+                if (pmFailed) return;
+                // 检查是否有瓦片已渲染（查找 canvas 或 tile img）
+                var container = map.getContainer();
+                var tiles = container.querySelectorAll('.leaflet-tile-loaded, canvas');
+                if (tiles.length === 0) {
+                    doFallback();
+                }
+            }, 8000);
+
             return;
         } catch (e) {
             console.warn('[地图] PMTiles 加载失败，使用回退瓦片源:', e.message);
@@ -59,22 +78,30 @@ function addDarkTileLayer(map) {
     _addFallbackTileLayer(map);
 }
 
-/** 回退瓦片层：先尝试 OpenFreeMap，再回退 CartoDB */
+/** 回退瓦片层：多源尝试，带加载错误检测 */
 function _addFallbackTileLayer(map) {
-    // OpenFreeMap Positron 暗色风格
-    try {
-        L.tileLayer('https://tiles.openfreemap.org/positron/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap'
-        }).addTo(map);
-        return;
-    } catch (e) {
-        console.warn('[地图] OpenFreeMap 回退失败，使用 CartoDB');
-    }
-    // 最终回退：CartoDB Dark
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19
-    }).addTo(map);
+    // CartoDB Dark（最稳定的暗色瓦片源）
+    var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+    });
+
+    // 监听瓦片加载错误，如果 CartoDB 也不行就尝试 OSM
+    var errorCount = 0;
+    cartoLayer.on('tileerror', function() {
+        errorCount++;
+        // 连续多个瓦片加载失败，切换到 OSM
+        if (errorCount >= 3) {
+            cartoLayer.off('tileerror');
+            console.warn('[地图] CartoDB 加载失败，切换到 OpenStreetMap');
+            map.removeLayer(cartoLayer);
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19
+            }).addTo(map);
+        }
+    });
+
+    cartoLayer.addTo(map);
 }
 
 // 国家代码映射（扩展中文名称）
