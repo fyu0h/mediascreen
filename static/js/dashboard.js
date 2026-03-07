@@ -66,21 +66,21 @@ const MAP_TILE_SOURCES = {
         group: '国内',
         type: 'raster',
         url: 'https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',
-        options: { minZoom: 3, maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
+        options: { maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
     },
     'gaode-sat': {
         name: '高德卫星',
         group: '国内',
         type: 'raster',
         url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
-        options: { minZoom: 3, maxZoom: 18, subdomains: '1234' }
+        options: { maxZoom: 18, subdomains: '1234' }
     },
     'gaode-dark': {
         name: '高德暗色',
         group: '国内',
         type: 'raster',
         url: 'https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=8&ltype=11',
-        options: { minZoom: 3, maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
+        options: { maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
     },
     'tianditu-vec': {
         name: '天地图矢量',
