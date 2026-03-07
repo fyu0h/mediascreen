@@ -5972,18 +5972,39 @@ async function performGlobalSearch(append = false) {
 function buildFilterTags(source, startDate, endDate) {
     let tags = '';
     const parts = [];
-    if (source) parts.push(escapeHtml(source));
-    if (startDate && endDate) parts.push(`${startDate} ~ ${endDate}`);
-    else if (startDate) parts.push(`${startDate} 起`);
-    else if (endDate) parts.push(`至 ${endDate}`);
-    if (globalSearchMode === 'and') parts.push('全部匹配');
+    if (source) parts.push({ text: escapeHtml(source), action: 'removeFilterSource()' });
+    if (startDate && endDate) parts.push({ text: `${startDate} ~ ${endDate}`, action: 'removeFilterDate()' });
+    else if (startDate) parts.push({ text: `${startDate} 起`, action: 'removeFilterDate()' });
+    else if (endDate) parts.push({ text: `至 ${endDate}`, action: 'removeFilterDate()' });
+    if (globalSearchMode === 'and') parts.push({ text: '全部匹配', action: 'removeFilterMode()' });
 
     if (parts.length > 0) {
         tags = '<span class="search-filter-tags">';
-        parts.forEach(p => { tags += `<span class="search-filter-tag">${p}</span>`; });
+        parts.forEach(p => {
+            tags += `<span class="search-filter-tag">${p.text}<button class="filter-tag-remove" onclick="event.stopPropagation();${p.action}" title="移除">&times;</button></span>`;
+        });
         tags += '</span>';
     }
     return tags;
+}
+
+// 移除单个筛选条件
+function removeFilterSource() {
+    document.getElementById('searchSourceSelect').value = '';
+    triggerAdvancedSearch();
+}
+
+function removeFilterDate() {
+    document.getElementById('searchStartDate').value = '';
+    document.getElementById('searchEndDate').value = '';
+    triggerAdvancedSearch();
+}
+
+function removeFilterMode() {
+    globalSearchMode = 'or';
+    document.getElementById('modeOrBtn').classList.add('active');
+    document.getElementById('modeAndBtn').classList.remove('active');
+    triggerAdvancedSearch();
 }
 
 // 切换高级搜索面板显示/隐藏（平滑动画）
