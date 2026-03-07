@@ -6449,6 +6449,56 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* 面板 — 独立于 modal-header，在 header 与 body 之间 */
+/* 快捷时间筛选条 */
+.search-quick-filters {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.06);
+    background: rgba(0, 240, 255, 0.015);
+    gap: 12px;
+}
+
+.quick-time-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.time-chip {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.time-chip:hover {
+    background: rgba(0, 240, 255, 0.08);
+    border-color: rgba(0, 240, 255, 0.2);
+    color: var(--text-primary);
+}
+
+.time-chip.active {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: rgba(0, 240, 255, 0.35);
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.quick-filters-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .advanced-search-panel {
     padding: 14px 20px;
     border-bottom: 1px solid rgba(0, 240, 255, 0.08);
@@ -6517,9 +6567,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .search-mode-toggle {
     display: flex;
     border: 1px solid rgba(0, 240, 255, 0.15);
-    border-radius: 5px;
+    border-radius: 14px;
     overflow: hidden;
-    height: 32px;
+    height: 28px;
 }
 
 .search-mode-toggle .mode-btn {
@@ -6823,7 +6873,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .advanced-search-panel.expanded {
-    max-height: 200px;
+    max-height: 120px;
     opacity: 1;
 }
 
@@ -9468,6 +9518,30 @@ body.resizing .chart-container-sm {
 
     .search-shortcut {
         display: none;
+    }
+
+    .search-quick-filters {
+        flex-direction: column;
+        padding: 8px 14px;
+        gap: 8px;
+    }
+
+    .quick-time-chips {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .quick-filters-right {
+        width: 100%;
+    }
+
+    .quick-filters-right .search-mode-toggle {
+        width: 100%;
+    }
+
+    .advanced-search-row {
+        flex-direction: column;
+        gap: 8px;
     }
 
     /* 关键词管理弹窗 */

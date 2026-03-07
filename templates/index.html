@@ -1623,31 +1623,37 @@
                     <span class="search-shortcut">ESC 关闭</span>
                 </div>
             </div>
-            <!-- 高级搜索面板 - 独立于 modal-header -->
+            <!-- 快捷时间筛选 + 高级搜索面板 -->
+            <div class="search-quick-filters">
+                <div class="quick-time-chips">
+                    <button class="time-chip active" data-range="all" onclick="setTimeChip('all')">全部时间</button>
+                    <button class="time-chip" data-range="1d" onclick="setTimeChip('1d')">24小时</button>
+                    <button class="time-chip" data-range="7d" onclick="setTimeChip('7d')">近7天</button>
+                    <button class="time-chip" data-range="30d" onclick="setTimeChip('30d')">近30天</button>
+                    <button class="time-chip" data-range="1y" onclick="setTimeChip('1y')">近1年</button>
+                </div>
+                <div class="quick-filters-right">
+                    <div class="search-mode-toggle">
+                        <button class="mode-btn active" id="modeOrBtn" onclick="setSearchMode('or')">任意匹配</button>
+                        <button class="mode-btn" id="modeAndBtn" onclick="setSearchMode('and')">全部匹配</button>
+                    </div>
+                </div>
+            </div>
             <div class="advanced-search-panel collapsed" id="advancedSearchPanel">
                 <div class="advanced-search-row">
-                    <div class="advanced-search-field">
-                        <label>搜索模式</label>
-                        <div class="search-mode-toggle">
-                            <button class="mode-btn active" id="modeOrBtn" onclick="setSearchMode('or')">任意匹配</button>
-                            <button class="mode-btn" id="modeAndBtn" onclick="setSearchMode('and')">全部匹配</button>
-                        </div>
-                    </div>
                     <div class="advanced-search-field">
                         <label>新闻来源</label>
                         <select id="searchSourceSelect" onchange="triggerAdvancedSearch()">
                             <option value="">全部来源</option>
                         </select>
                     </div>
-                </div>
-                <div class="advanced-search-row">
                     <div class="advanced-search-field">
                         <label>开始日期</label>
-                        <input type="date" id="searchStartDate" onchange="triggerAdvancedSearch()">
+                        <input type="date" id="searchStartDate" onchange="onDateInputChange()">
                     </div>
                     <div class="advanced-search-field">
                         <label>结束日期</label>
-                        <input type="date" id="searchEndDate" onchange="triggerAdvancedSearch()">
+                        <input type="date" id="searchEndDate" onchange="onDateInputChange()">
                     </div>
                     <div class="advanced-search-field advanced-search-actions">
                         <button class="btn-clear-filters" onclick="clearAdvancedFilters()">

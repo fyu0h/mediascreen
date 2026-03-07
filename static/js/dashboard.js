@@ -5891,6 +5891,7 @@ const GLOBAL_SEARCH_PAGE_SIZE = 20;
 let globalSearchMode = 'or';  // 搜索模式：'and' 或 'or'
 let globalSearchExpandedKeywords = null;  // 同义词扩展后的关键词列表
 let globalSearchSourcesLoaded = false;  // 来源列表是否已加载
+let activeTimeChip = 'all';  // 当前选中的快捷时间范围
 let searchActiveIndex = -1;  // 键盘导航当前选中索引
 const SEARCH_HISTORY_KEY = 'global_search_history';
 const SEARCH_HISTORY_MAX = 8;
@@ -6029,6 +6030,14 @@ function closeGlobalSearch() {
     globalSearchPage = 1;
     globalSearchTotal = 0;
     searchActiveIndex = -1;
+
+    // 重置快捷时间和筛选
+    activeTimeChip = 'all';
+    document.querySelectorAll('.time-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.range === 'all');
+    });
+    document.getElementById('searchStartDate').value = '';
+    document.getElementById('searchEndDate').value = '';
 
     // 重置显示
     document.getElementById('globalSearchResults').innerHTML = '';
@@ -6183,9 +6192,18 @@ function buildFilterTags(source, startDate, endDate) {
     let tags = '';
     const parts = [];
     if (source) parts.push({ text: escapeHtml(source), action: 'removeFilterSource()' });
-    if (startDate && endDate) parts.push({ text: `${startDate} ~ ${endDate}`, action: 'removeFilterDate()' });
-    else if (startDate) parts.push({ text: `${startDate} 起`, action: 'removeFilterDate()' });
-    else if (endDate) parts.push({ text: `至 ${endDate}`, action: 'removeFilterDate()' });
+
+    // 时间范围标签：快捷选项用友好名称
+    const chipLabels = { '1d': '24小时内', '7d': '近7天', '30d': '近30天', '1y': '近1年' };
+    if (activeTimeChip && activeTimeChip !== 'all' && activeTimeChip !== 'custom') {
+        parts.push({ text: chipLabels[activeTimeChip], action: 'removeFilterDate()' });
+    } else if (startDate && endDate) {
+        parts.push({ text: `${startDate} ~ ${endDate}`, action: 'removeFilterDate()' });
+    } else if (startDate) {
+        parts.push({ text: `${startDate} 起`, action: 'removeFilterDate()' });
+    } else if (endDate) {
+        parts.push({ text: `至 ${endDate}`, action: 'removeFilterDate()' });
+    }
     if (globalSearchMode === 'and') parts.push({ text: '全部匹配', action: 'removeFilterMode()' });
 
     if (parts.length > 0) {
@@ -6207,6 +6225,10 @@ function removeFilterSource() {
 function removeFilterDate() {
     document.getElementById('searchStartDate').value = '';
     document.getElementById('searchEndDate').value = '';
+    activeTimeChip = 'all';
+    document.querySelectorAll('.time-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.range === 'all');
+    });
     triggerAdvancedSearch();
 }
 
@@ -6262,6 +6284,88 @@ function setSearchMode(mode) {
     triggerAdvancedSearch();
 }
 
+// 快捷时间筛选按钮
+function setTimeChip(range) {
+    activeTimeChip = range;
+
+    // 更新按钮高亮
+    document.querySelectorAll('.time-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.range === range);
+    });
+
+    // 计算日期范围
+    const today = new Date();
+    const fmt = d => d.toISOString().slice(0, 10);
+    let startDate = '';
+    let endDate = '';
+
+    if (range === '1d') {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 1);
+        startDate = fmt(d);
+        endDate = fmt(today);
+    } else if (range === '7d') {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 7);
+        startDate = fmt(d);
+        endDate = fmt(today);
+    } else if (range === '30d') {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 30);
+        startDate = fmt(d);
+        endDate = fmt(today);
+    } else if (range === '1y') {
+        const d = new Date(today);
+        d.setFullYear(d.getFullYear() - 1);
+        startDate = fmt(d);
+        endDate = fmt(today);
+    }
+    // 'all' → 留空
+
+    document.getElementById('searchStartDate').value = startDate;
+    document.getElementById('searchEndDate').value = endDate;
+
+    triggerAdvancedSearch();
+}
+
+// 手动修改日期输入框时，取消快捷按钮高亮
+function onDateInputChange() {
+    // 检查当前日期是否匹配某个快捷范围，若不匹配则清除高亮
+    const startDate = document.getElementById('searchStartDate').value;
+    const endDate = document.getElementById('searchEndDate').value;
+
+    if (!startDate && !endDate) {
+        activeTimeChip = 'all';
+    } else {
+        // 检测是否匹配某个预设范围
+        const today = new Date();
+        const fmt = d => d.toISOString().slice(0, 10);
+        const todayStr = fmt(today);
+        let matched = '';
+
+        if (endDate === todayStr) {
+            const ranges = { '1d': 1, '7d': 7, '30d': 30 };
+            for (const [key, days] of Object.entries(ranges)) {
+                const d = new Date(today);
+                d.setDate(d.getDate() - days);
+                if (startDate === fmt(d)) { matched = key; break; }
+            }
+            if (!matched) {
+                const d = new Date(today);
+                d.setFullYear(d.getFullYear() - 1);
+                if (startDate === fmt(d)) matched = '1y';
+            }
+        }
+        activeTimeChip = matched || 'custom';
+    }
+
+    document.querySelectorAll('.time-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.range === activeTimeChip);
+    });
+
+    triggerAdvancedSearch();
+}
+
 // 高级筛选条件变更时触发搜索
 function triggerAdvancedSearch() {
     if (globalSearchKeyword) {
@@ -6276,8 +6380,12 @@ function clearAdvancedFilters() {
     document.getElementById('searchStartDate').value = '';
     document.getElementById('searchEndDate').value = '';
     globalSearchMode = 'or';
+    activeTimeChip = 'all';
     document.getElementById('modeOrBtn').classList.add('active');
     document.getElementById('modeAndBtn').classList.remove('active');
+    document.querySelectorAll('.time-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.range === 'all');
+    });
     triggerAdvancedSearch();
 }
 
