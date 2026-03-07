@@ -588,6 +588,97 @@ html, body {
     color: #ff4757;
 }
 
+/* 地图源选择器 */
+.map-source-wrap {
+    position: relative;
+    margin-left: 8px;
+}
+
+.map-source-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 6px;
+    color: var(--primary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.map-source-btn:hover {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: rgba(0, 240, 255, 0.4);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
+}
+
+.map-source-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    min-width: 170px;
+    background: rgba(10, 21, 37, 0.97);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 8px;
+    padding: 6px 0;
+    z-index: 1000;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.map-source-dropdown.show {
+    display: block;
+}
+
+.map-source-group {
+    padding: 6px 14px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.7;
+}
+
+.map-source-item {
+    padding: 7px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.map-source-item:hover {
+    background: rgba(0, 240, 255, 0.08);
+    color: var(--text-primary);
+}
+
+.map-source-item.active {
+    color: var(--primary);
+    background: rgba(0, 240, 255, 0.06);
+    position: relative;
+}
+
+.map-source-item.active::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    background: var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--primary);
+}
+
 /* 热点详情卡片 */
 .hotspot-detail {
     position: absolute;

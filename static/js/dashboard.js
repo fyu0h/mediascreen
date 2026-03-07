@@ -7,7 +7,7 @@
 const CONFIG = {
     refreshInterval: 30000,  // 自动刷新间隔（毫秒）- 30秒
     alertLimit: 30,          // 告警列表数量
-    pmtilesUrl: 'https://build.protomaps.com/20250101.pmtiles'  // PMTiles 矢量瓦片源
+    pmtilesUrl: 'https://build.protomaps.com/20250305.pmtiles'  // PMTiles 矢量瓦片源
 };
 
 // 全局变量
@@ -36,97 +36,346 @@ let keywordChartData = [];        // 关键词图表数据
  * 为地图添加暗色瓦片层
  * 优先使用 PMTiles（protomaps-leaflet），失败时回退到 OpenFreeMap / CartoDB
  */
-function addDarkTileLayer(map) {
-    // 尝试 PMTiles 矢量瓦片（protomaps-leaflet）
-    if (typeof protomapsL !== 'undefined') {
+// ==================== 地图瓦片源管理 ====================
+
+/** 所有可选地图源定义 */
+const MAP_TILE_SOURCES = {
+    'pmtiles': {
+        name: 'Protomaps 矢量暗色',
+        group: '国际',
+        type: 'pmtiles',
+        url: CONFIG.pmtilesUrl,
+        options: { flavor: 'dark', language: 'zh' }
+    },
+    'carto-dark': {
+        name: 'CartoDB 暗色',
+        group: '国际',
+        type: 'raster',
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?language=zh',
+        options: { maxZoom: 19, subdomains: 'abcd' }
+    },
+    'osm-dark': {
+        name: 'OpenStreetMap 暗色',
+        group: '国际',
+        type: 'raster',
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        options: { maxZoom: 19, className: 'dark-tiles-invert' }
+    },
+    'gaode-vec': {
+        name: '高德矢量',
+        group: '国内',
+        type: 'raster',
+        url: 'https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',
+        options: { maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
+    },
+    'gaode-sat': {
+        name: '高德卫星',
+        group: '国内',
+        type: 'raster',
+        url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+        options: { maxZoom: 18, subdomains: '1234' }
+    },
+    'gaode-dark': {
+        name: '高德暗色',
+        group: '国内',
+        type: 'raster',
+        url: 'https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=8&ltype=11',
+        options: { maxZoom: 18, subdomains: '1234', className: 'dark-tiles-invert' }
+    },
+    'tianditu-vec': {
+        name: '天地图矢量',
+        group: '国内',
+        type: 'raster',
+        url: 'https://t{s}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILECOL={x}&TILEROW={y}&TILEMATRIX={z}&tk=c8a762dac1e4ab3aaa0e74e6f2e7beb7',
+        options: { maxZoom: 18, subdomains: '01234567', className: 'dark-tiles-invert' }
+    },
+    'tianditu-sat': {
+        name: '天地图卫星',
+        group: '国内',
+        type: 'raster',
+        url: 'https://t{s}.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILECOL={x}&TILEROW={y}&TILEMATRIX={z}&tk=c8a762dac1e4ab3aaa0e74e6f2e7beb7',
+        options: { maxZoom: 18, subdomains: '01234567' }
+    },
+    'google-sat': {
+        name: '谷歌卫星',
+        group: '国际',
+        type: 'raster',
+        url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        options: { maxZoom: 20, subdomains: '0123' }
+    }
+};
+
+/** 自动回退顺序（用户未选择时的默认尝试顺序） */
+const MAP_AUTO_FALLBACK_ORDER = ['pmtiles', 'carto-dark', 'gaode-dark', 'osm-dark'];
+
+/** 当前已加载的瓦片图层引用（map id → layer） */
+let _mapTileLayers = {};
+
+/**
+ * 为地图添加瓦片层
+ * @param {L.Map} map - Leaflet 地图实例
+ * @param {string} [sourceId] - 指定地图源 ID，为空则自动回退
+ */
+function addDarkTileLayer(map, sourceId) {
+    var mapId = map.getContainer().id;
+    // 用户选择了指定源
+    if (sourceId) {
+        _applyTileSource(map, mapId, sourceId);
+        return;
+    }
+    // 检查 localStorage 保存的偏好
+    var saved = localStorage.getItem('mapTileSource');
+    if (saved && MAP_TILE_SOURCES[saved]) {
+        _applyTileSource(map, mapId, saved);
+        return;
+    }
+    // 自动回退模式
+    _autoFallbackTileLayer(map, mapId, 0);
+}
+
+/** 应用指定地图源 */
+function _applyTileSource(map, mapId, sourceId) {
+    var src = MAP_TILE_SOURCES[sourceId];
+    if (!src) return;
+
+    // 移除旧图层
+    _removeCurrentTileLayer(map, mapId);
+
+    console.log('[地图] 加载地图源: ' + src.name);
+
+    if (src.type === 'pmtiles' && typeof protomapsL !== 'undefined') {
         try {
-            const pmLayer = protomapsL.leafletLayer({
-                url: CONFIG.pmtilesUrl,
-                flavor: 'dark',
-                language: 'zh'
+            var layer = protomapsL.leafletLayer({
+                url: src.url,
+                flavor: src.options.flavor || 'dark',
+                language: src.options.language || 'zh'
             });
-            pmLayer.addTo(map);
+            layer.addTo(map);
+            _mapTileLayers[mapId] = { layer: layer, type: 'pmtiles' };
 
-            let pmFailed = false;
-            const doFallback = function() {
-                if (pmFailed) return;
-                pmFailed = true;
-                console.warn('[地图] PMTiles 加载失败，切换回退瓦片源');
-                try { map.removeLayer(pmLayer); } catch(e) {}
-                _addFallbackTileLayer(map);
+            // PMTiles 超时检测
+            var failed = false;
+            var doFallback = function() {
+                if (failed) return;
+                failed = true;
+                console.warn('[地图] PMTiles 加载失败，自动回退');
+                _removeCurrentTileLayer(map, mapId);
+                _autoFallbackTileLayer(map, mapId, 1); // 跳过 pmtiles
             };
-
-            // 监听加载错误
-            pmLayer.on('error', doFallback);
-
-            // 超时保护：8秒内如果地图仍无瓦片内容则强制回退
+            layer.on('error', doFallback);
             setTimeout(function() {
-                if (pmFailed) return;
-                // 检查是否有瓦片已渲染（查找 canvas 或 tile img）
+                if (failed) return;
                 var container = map.getContainer();
-                var tiles = container.querySelectorAll('.leaflet-tile-loaded, canvas');
-                if (tiles.length === 0) {
-                    doFallback();
+                var canvases = container.querySelectorAll('canvas');
+                if (canvases.length === 0) { doFallback(); return; }
+                try {
+                    var hasContent = false;
+                    for (var i = 0; i < canvases.length; i++) {
+                        var ctx = canvases[i].getContext('2d');
+                        if (!ctx) continue;
+                        var w = canvases[i].width, h = canvases[i].height;
+                        if (w === 0 || h === 0) continue;
+                        var data = ctx.getImageData(Math.floor(w/4), Math.floor(h/4), Math.floor(w/2), Math.floor(h/2)).data;
+                        var nonEmpty = 0;
+                        for (var j = 3; j < data.length; j += 16) {
+                            if (data[j] > 0) nonEmpty++;
+                        }
+                        if (nonEmpty > 10) { hasContent = true; break; }
+                    }
+                    if (!hasContent) doFallback();
+                } catch(e) {
+                    console.warn('[地图] Canvas 内容检测异常:', e.message);
                 }
-            }, 8000);
-
+            }, 5000);
             return;
-        } catch (e) {
-            console.warn('[地图] PMTiles 加载失败，使用回退瓦片源:', e.message);
+        } catch(e) {
+            console.warn('[地图] PMTiles 加载失败:', e.message);
+            _autoFallbackTileLayer(map, mapId, 1);
+            return;
         }
     }
-    _addFallbackTileLayer(map);
+
+    // 栅格瓦片
+    var tileOpts = Object.assign({}, src.options);
+    var layer = L.tileLayer(src.url, tileOpts);
+    _mapTileLayers[mapId] = { layer: layer, type: 'raster' };
+
+    var errorCount = 0;
+    var loadedCount = 0;
+    var settled = false;
+
+    layer.on('tileload', function() { loadedCount++; });
+    layer.on('tileerror', function() {
+        errorCount++;
+        if (errorCount >= 4 && !settled) {
+            settled = true;
+            console.warn('[地图] ' + src.name + ' 瓦片加载错误过多，自动回退');
+            _removeCurrentTileLayer(map, mapId);
+            _autoFallbackTileLayer(map, mapId, 0);
+            localStorage.removeItem('mapTileSource');
+        }
+    });
+    // 超时保护
+    setTimeout(function() {
+        if (!settled && loadedCount === 0) {
+            settled = true;
+            console.warn('[地图] ' + src.name + ' 加载超时，自动回退');
+            _removeCurrentTileLayer(map, mapId);
+            _autoFallbackTileLayer(map, mapId, 0);
+            localStorage.removeItem('mapTileSource');
+        }
+    }, 6000);
+
+    layer.addTo(map);
+}
+
+/** 移除地图上当前的瓦片图层 */
+function _removeCurrentTileLayer(map, mapId) {
+    var cur = _mapTileLayers[mapId];
+    if (cur && cur.layer) {
+        try { map.removeLayer(cur.layer); } catch(e) {}
+    }
+    _mapTileLayers[mapId] = null;
+}
+
+/** 自动回退模式：按顺序尝试加载 */
+function _autoFallbackTileLayer(map, mapId, startIndex) {
+    if (startIndex >= MAP_AUTO_FALLBACK_ORDER.length) return;
+
+    var sourceId = MAP_AUTO_FALLBACK_ORDER[startIndex];
+    var src = MAP_TILE_SOURCES[sourceId];
+    if (!src) { _autoFallbackTileLayer(map, mapId, startIndex + 1); return; }
+
+    // PMTiles 在自动回退中的处理
+    if (src.type === 'pmtiles') {
+        if (typeof protomapsL === 'undefined') {
+            _autoFallbackTileLayer(map, mapId, startIndex + 1);
+            return;
+        }
+        _applyTileSource(map, mapId, sourceId);
+        return;
+    }
+
+    console.log('[地图] 自动回退尝试: ' + src.name);
+    var tileOpts = Object.assign({}, src.options);
+    var layer = L.tileLayer(src.url, tileOpts);
+    var errorCount = 0;
+    var loadedCount = 0;
+    var settled = false;
+
+    var doNext = function() {
+        if (settled) return;
+        settled = true;
+        console.warn('[地图] ' + src.name + ' 加载失败，尝试下一个');
+        layer.off('tileerror'); layer.off('tileload');
+        try { map.removeLayer(layer); } catch(e) {}
+        _mapTileLayers[mapId] = null;
+        _autoFallbackTileLayer(map, mapId, startIndex + 1);
+    };
+
+    layer.on('tileload', function() { loadedCount++; });
+    layer.on('tileerror', function() {
+        errorCount++;
+        if (errorCount >= 3) doNext();
+    });
+    setTimeout(function() {
+        if (!settled && loadedCount === 0) doNext();
+    }, 6000);
+
+    layer.addTo(map);
+    _mapTileLayers[mapId] = { layer: layer, type: 'raster' };
 }
 
 /**
- * 回退瓦片层：依次尝试多个暗色瓦片源（优先中文标签）
- * 1. CartoDB Dark（中文标签）
- * 2. Stadia Alidade Smooth Dark
- * 3. OSM + CSS 反色（终极兜底，永远可用）
+ * 切换地图源（用户手动选择）
+ * @param {string} sourceId - 地图源 ID
  */
-function _addFallbackTileLayer(map) {
-    _tryTileSource(map, [
-        {
-            name: 'CartoDB Dark (中文)',
-            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?language=zh',
-            options: { maxZoom: 19, subdomains: 'abcd' }
-        },
-        {
-            name: 'Stadia Dark',
-            url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
-            options: { maxZoom: 20 }
-        },
-        {
-            name: 'OSM (反色)',
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            options: { maxZoom: 19, className: 'dark-tiles-invert' }
-        }
-    ], 0);
+function switchMapTileSource(sourceId) {
+    localStorage.setItem('mapTileSource', sourceId);
+    // 对所有已初始化的地图切换
+    [worldMap, hotspotMap].forEach(function(map) {
+        if (!map) return;
+        var mapId = map.getContainer().id;
+        _removeCurrentTileLayer(map, mapId);
+        _applyTileSource(map, mapId, sourceId);
+    });
+    // 更新下拉选中状态
+    _updateMapSourceDropdown(sourceId);
 }
 
-/** 依次尝试瓦片源列表，失败则切换下一个 */
-function _tryTileSource(map, sources, index) {
-    if (index >= sources.length) return;
+/** 更新下拉菜单选中状态 */
+function _updateMapSourceDropdown(activeId) {
+    document.querySelectorAll('.map-source-item').forEach(function(el) {
+        el.classList.toggle('active', el.dataset.sourceId === activeId);
+    });
+}
 
-    var src = sources[index];
-    console.log('[地图] 尝试加载: ' + src.name);
+/** 初始化地图源选择下拉菜单 */
+function initMapSourceSelector() {
+    var btn = document.getElementById('mapSourceBtn');
+    var dropdown = document.getElementById('mapSourceDropdown');
+    if (!btn || !dropdown) return;
 
-    var layer = L.tileLayer(src.url, src.options);
-    var errorCount = 0;
-    var settled = false;
-
-    layer.on('tileerror', function() {
-        errorCount++;
-        if (errorCount >= 3 && !settled) {
-            settled = true;
-            console.warn('[地图] ' + src.name + ' 加载失败，尝试下一个源');
-            layer.off('tileerror');
-            map.removeLayer(layer);
-            _tryTileSource(map, sources, index + 1);
-        }
+    // 构建下拉菜单内容
+    var groups = {};
+    Object.keys(MAP_TILE_SOURCES).forEach(function(id) {
+        var src = MAP_TILE_SOURCES[id];
+        if (!groups[src.group]) groups[src.group] = [];
+        groups[src.group].push({ id: id, name: src.name });
     });
 
-    layer.addTo(map);
+    var html = '';
+    var saved = localStorage.getItem('mapTileSource');
+    Object.keys(groups).forEach(function(group) {
+        html += '<div class="map-source-group">' + group + '</div>';
+        groups[group].forEach(function(item) {
+            var active = item.id === saved ? ' active' : '';
+            html += '<div class="map-source-item' + active + '" data-source-id="' + item.id + '">' + item.name + '</div>';
+        });
+    });
+    // 自动模式
+    if (!saved) {
+        html = '<div class="map-source-item active" data-source-id="__auto__">自动选择</div>' + html;
+    } else {
+        html = '<div class="map-source-item" data-source-id="__auto__">自动选择</div>' + html;
+    }
+    dropdown.innerHTML = html;
+
+    // 点击选项
+    dropdown.addEventListener('click', function(e) {
+        var item = e.target.closest('.map-source-item');
+        if (!item) return;
+        var sid = item.dataset.sourceId;
+        if (sid === '__auto__') {
+            localStorage.removeItem('mapTileSource');
+            // 重新自动加载
+            [worldMap, hotspotMap].forEach(function(map) {
+                if (!map) return;
+                var mapId = map.getContainer().id;
+                _removeCurrentTileLayer(map, mapId);
+                _autoFallbackTileLayer(map, mapId, 0);
+            });
+            dropdown.querySelectorAll('.map-source-item').forEach(function(el) {
+                el.classList.toggle('active', el.dataset.sourceId === '__auto__');
+            });
+        } else {
+            switchMapTileSource(sid);
+        }
+        dropdown.classList.remove('show');
+    });
+
+    // 切换下拉显示
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dropdown.classList.toggle('show');
+    });
+
+    // 点击外部关闭
+    document.addEventListener('click', function(e) {
+        if (!dropdown.contains(e.target) && e.target !== btn) {
+            dropdown.classList.remove('show');
+        }
+    });
 }
 
 // 国家代码映射（扩展中文名称）
@@ -1831,6 +2080,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 初始化地图切换控制（热点地图 <-> 新闻源地图）
     initMapToggle();
+    // 初始化地图源选择器
+    initMapSourceSelector();
 
     // ESC 关闭弹窗
     document.addEventListener('keydown', (e) => {
