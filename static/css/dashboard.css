@@ -694,6 +694,17 @@ html, body {
     z-index: 10;
     overflow-y: auto;
     color: var(--text-primary);
+    /* 缓入动画 */
+    opacity: 0;
+    transform: translateX(15px);
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                top 0.3s ease-out, left 0.3s ease-out;
+}
+
+.hotspot-detail.hotspot-detail--visible {
+    opacity: 1;
+    transform: translateX(0);
 }
 
 .hotspot-detail__header {
