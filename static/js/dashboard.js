@@ -2561,6 +2561,59 @@ async function deleteSynonymGroup(id) {
     }
 }
 
+// 导出同义词为 JSON 文件
+async function exportSynonyms() {
+    try {
+        const resp = await fetch('/api/synonyms/export');
+        const data = await resp.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `同义词_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`已导出 ${data.length} 组同义词`, 'success');
+    } catch (e) {
+        showToast('导出失败', 'error');
+    }
+}
+
+// 从 JSON 文件导入同义词
+async function importSynonyms(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        if (!Array.isArray(data)) {
+            showToast('文件格式错误：需要 JSON 数组', 'error');
+            return;
+        }
+
+        if (!confirm(`即将导入 ${data.length} 组同义词，已存在的会自动跳过。确定继续？`)) return;
+
+        const resp = await fetch('/api/synonyms/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+
+        if (result.success) {
+            showToast(result.data.message, 'success');
+            loadSynonyms();
+        } else {
+            showToast(result.error || '导入失败', 'error');
+        }
+    } catch (e) {
+        showToast('文件解析失败，请确认为有效的 JSON 文件', 'error');
+    }
+}
+
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
     toast.textContent = message;

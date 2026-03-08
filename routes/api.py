@@ -5273,4 +5273,62 @@ def synonyms_delete(group_id: str):
         return error_response('删除同义词组失败，请稍后重试', 500)
 
 
+@api_bp.route('/synonyms/export', methods=['GET'])
+def synonyms_export():
+    """导出所有同义词组为 JSON"""
+    try:
+        data = get_all_synonyms()
+        export_list = [{'words': g['words'], 'enabled': g.get('enabled', True)} for g in data]
+        return jsonify(export_list)
+    except Exception as e:
+        log_error(action='导出同义词失败', error=str(e))
+        return error_response('导出失败', 500)
+
+
+@api_bp.route('/synonyms/import', methods=['POST'])
+def synonyms_import():
+    """
+    导入同义词组
+    请求体：JSON 数组 [{words: [...], enabled: true/false}, ...]
+    """
+    try:
+        data = request.get_json()
+        if not data or not isinstance(data, list):
+            return error_response('请求体必须为 JSON 数组', 400)
+
+        added = 0
+        skipped = 0
+        errors = []
+
+        for i, item in enumerate(data):
+            words = item.get('words', [])
+            enabled = item.get('enabled', True)
+
+            if not words or not isinstance(words, list) or len(words) < 2:
+                skipped += 1
+                continue
+
+            try:
+                result = add_synonym_group(words)
+                if result:
+                    # 如果导入的是禁用状态，更新为禁用
+                    if not enabled:
+                        update_synonym_group(result['id'], enabled=False)
+                    added += 1
+            except ValueError as e:
+                # 词已存在于其他组，跳过
+                skipped += 1
+                errors.append(f"第{i+1}组: {str(e)}")
+
+        return success_response({
+            'added': added,
+            'skipped': skipped,
+            'errors': errors[:10],
+            'message': f'导入完成：成功 {added} 组，跳过 {skipped} 组'
+        })
+    except Exception as e:
+        log_error(action='导入同义词失败', error=str(e))
+        return error_response(f'导入失败: {str(e)}', 500)
+
+
 
