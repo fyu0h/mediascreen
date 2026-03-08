@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全球舆情态势感知平台</title>
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Leaflet CSS & JS -->
+    <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Protomaps Leaflet -->
+    <script src="https://unpkg.com/protomaps-leaflet@5.0.0/dist/protomaps-leaflet.js"></script>
+    <!-- 样式 -->
+    <link href="{{ url_for('static', filename='css/test.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- 顶部标题栏 -->
+    <header class="header">
+        <div class="header-left">
+            <div class="header-logo">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+            </div>
+            <h1 class="header-title">全球舆情态势感知平台</h1>
+        </div>
+        <div class="header-center">
+            <div class="status-dot"></div>
+            <span class="status-text">系统运行中</span>
+        </div>
+        <div class="header-right">
+            <div class="datetime" id="datetime"></div>
+            <a href="/" class="btn-back" title="返回旧版">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                旧版
+            </a>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="main-grid">
+        <!-- 统计卡片行 -->
+        <div class="stat-card" id="statToday">
+            <div class="stat-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value" id="todayCount">--</span>
+                <span class="stat-label">今日文章</span>
+            </div>
+        </div>
+
+        <div class="stat-card" id="statTotal">
+            <div class="stat-icon icon-purple">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value" id="totalCount">--</span>
+                <span class="stat-label">总文章数</span>
+            </div>
+        </div>
+
+        <div class="stat-card" id="statSources">
+            <div class="stat-icon icon-green">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value" id="sourceCount">--</span>
+                <span class="stat-label">新闻源数</span>
+            </div>
+        </div>
+
+        <div class="stat-card" id="statCountries">
+            <div class="stat-icon icon-amber">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value" id="countryCount">--</span>
+                <span class="stat-label">国家覆盖</span>
+            </div>
+        </div>
+
+        <!-- 世界地图 -->
+        <div class="glass-card card-map">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M2 12h20"/>
+                    </svg>
+                    全球新闻源分布
+                </h3>
+                <div class="map-controls">
+                    <select id="mapSourceSelect" class="map-select" title="选择地图源">
+                        <optgroup label="国际">
+                            <option value="carto-dark" selected>CartoDB 暗色</option>
+                            <option value="pmtiles">Protomaps 矢量暗色</option>
+                            <option value="osm-dark">OpenStreetMap 暗色</option>
+                        </optgroup>
+                        <optgroup label="国内">
+                            <option value="gaode-vec">高德矢量</option>
+                            <option value="gaode-sat">高德卫星</option>
+                            <option value="gaode-dark">高德暗色</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body card-body-map">
+                <div id="worldMap"></div>
+            </div>
+        </div>
+
+        <!-- 风控监控中心 -->
+        <div class="glass-card card-risk">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    风控监控中心
+                </h3>
+            </div>
+            <div class="card-body">
+                <!-- 风险等级徽章 -->
+                <div class="risk-badges" id="riskBadges">
+                    <div class="risk-badge high">
+                        <span class="risk-dot"></span>
+                        <span class="risk-level">高风险</span>
+                        <span class="risk-count" id="riskHigh">0</span>
+                    </div>
+                    <div class="risk-badge medium">
+                        <span class="risk-dot"></span>
+                        <span class="risk-level">中风险</span>
+                        <span class="risk-count" id="riskMedium">0</span>
+                    </div>
+                    <div class="risk-badge low">
+                        <span class="risk-dot"></span>
+                        <span class="risk-level">低风险</span>
+                        <span class="risk-count" id="riskLow">0</span>
+                    </div>
+                </div>
+                <!-- 关键词图表 -->
+                <div id="keywordChart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- 来源分布图 -->
+        <div class="glass-card card-sources">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 20V10M12 20V4M6 20v-6"/>
+                    </svg>
+                    来源分布
+                </h3>
+            </div>
+            <div class="card-body">
+                <div id="sourceChart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- 最新文章 -->
+        <div class="glass-card card-articles">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2z"/>
+                    </svg>
+                    最新文章
+                </h3>
+                <span class="article-count" id="articleCount"></span>
+            </div>
+            <div class="card-body">
+                <div class="article-list" id="articleList">
+                    <div class="loading-placeholder">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 风控告警列表 -->
+        <div class="glass-card card-alerts">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    风控告警
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="alert-list" id="alertList">
+                    <div class="loading-placeholder">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/test.js') }}"></script>
+</body>
+</html>

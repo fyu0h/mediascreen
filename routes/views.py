@@ -60,6 +60,14 @@ def logout():
     return redirect(url_for('views.login'))
 
 
+@views_bp.route('/test')
+def test_page():
+    """重构版主页 - 玻璃拟态暗色风格（需要登录）"""
+    if 'user' not in session:
+        return redirect(url_for('views.login'))
+    return render_template('test.html')
+
+
 @views_bp.route('/hotspot-admin')
 def hotspot_admin():
     """热点区域管理页面（需要登录）"""
