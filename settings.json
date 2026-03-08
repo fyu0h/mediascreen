@@ -107,14 +107,14 @@
       }
     }
   },
-  "updated_at": "2026-03-06 01:12:57",
+  "updated_at": "2026-03-08 03:17:25",
   "layout": {
     "panels": {
       "panel-left": {
-        "width": "20.90%"
+        "width": "20.65%"
       },
       "panel-right": {
-        "width": "23.75%"
+        "width": "23.47%"
       }
     },
     "cards": {
@@ -130,16 +130,12 @@
         "flex": "0.8947 1 0%",
         "height": null
       },
-      "achievements": {
-        "flex": "0.57 1 0%",
-        "height": null
-      },
       "keyword-chart": {
-        "flex": "0.4571 1 0%",
+        "flex": "0.3493 1 0%",
         "height": null
       },
       "risk-alerts": {
-        "flex": "0.5429 1 0%",
+        "flex": "0.6507 1 0%",
         "height": null
       }
     }

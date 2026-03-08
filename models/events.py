@@ -44,13 +44,13 @@ def save_event(event_data: Dict) -> bool:
 
 
 def get_all_events(skip: int = 0, limit: int = 0, intensity: int = None) -> List[Dict]:
-    """获取所有事件（按 intensity 降序 + mention_count 降序）"""
+    """获取所有事件（按最后提及时间降序，最新在前）"""
     collection = get_events_collection()
     query = {}
     if intensity is not None:
         query['intensity'] = intensity
 
-    cursor = collection.find(query).sort([('intensity', -1), ('mention_count', -1)])
+    cursor = collection.find(query).sort([('last_mentioned_sort', -1)])
     if skip > 0:
         cursor = cursor.skip(skip)
     if limit > 0:
@@ -76,7 +76,7 @@ def get_untranslated_events(limit: int = 10) -> List[Dict]:
             {'summary_cn': None},
             {'summary_cn': ''}
         ]
-    }).sort([('intensity', -1), ('mention_count', -1)]).limit(limit)
+    }).sort([('last_mentioned_sort', -1)]).limit(limit)
     return list(cursor)
 
 

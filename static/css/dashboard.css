@@ -7260,6 +7260,57 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     border-left: 2px solid rgba(0, 255, 65, 0.12);
     cursor: pointer;
     transition: background 0.15s ease;
+    transform-origin: top center;
+}
+
+/* 新事件缓入动画 */
+.event-item-enter {
+    animation: eventSlideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes eventSlideIn {
+    0% {
+        opacity: 0;
+        transform: translateY(-12px) scaleY(0.92);
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    40% {
+        opacity: 0.4;
+        max-height: 200px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scaleY(1);
+        max-height: 200px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+}
+
+/* 事件移除淡出动画 */
+.event-item-exit {
+    animation: eventFadeOut 0.35s ease-out forwards;
+    pointer-events: none;
+}
+
+@keyframes eventFadeOut {
+    0% {
+        opacity: 1;
+        transform: translateX(0);
+        max-height: 200px;
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(15px);
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        overflow: hidden;
+    }
 }
 
 .event-item:hover {

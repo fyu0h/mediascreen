@@ -8341,6 +8341,7 @@ function refreshDefconLevel() {
 // ========== 全球事件链模块（signal-markers 数据源） ==========
 
 let allEventsData = [];
+let previousEventIds = new Set();  // 上一次渲染的事件ID集合，用于差量比较
 let eventsLoading = false;
 let selectedEventId = null;
 let eventsTranslationPollTimer = null;
@@ -8404,7 +8405,37 @@ async function loadEventsTimeline(reset = false) {
 }
 
 /**
- * 渲染右侧时间轴列表（匹配截图样式）
+ * 构建单个事件项的 HTML
+ */
+function buildEventItemHTML(loc) {
+    const intensity = loc.intensity || 1;
+    const label = INTENSITY_LABELS[intensity] || 'NOTICE';
+    const name = loc.location_name || '';
+    const country = loc.country || '';
+    const summary = loc.summary || '';
+    const lastTime = loc.last_mentioned_at || '';
+    const timeStr = lastTime ? formatEventTimePeriod(lastTime) : '';
+    const agoStr = lastTime ? formatEventAgo(lastTime) : '';
+    const isActive = loc.id === selectedEventId ? ' active' : '';
+
+    return `
+        <div class="event-item intensity-${intensity}${isActive}" onclick="showEventDetail('${escapeAttr(loc.id)}')" data-event-id="${escapeAttr(loc.id)}">
+            <div class="event-item-header">
+                <span class="event-item-location">${escapeHtml(name)}</span>
+                <span class="event-item-country">${escapeHtml(country)}</span>
+                <span class="event-item-badge intensity-${intensity}">${label}</span>
+                ${agoStr ? `<span class="event-item-ago">${agoStr}</span>` : ''}
+            </div>
+            <div class="event-item-time">${timeStr}</div>
+            <div class="event-item-desc">${escapeHtml(summary)}</div>
+        </div>
+    `;
+}
+
+/**
+ * 渲染右侧时间轴列表（差量更新 + 新事件缓入动画）
+ * - 首次加载或数据为空时全量渲染
+ * - 后续刷新时：新增事件带缓入动画插入，已有事件就地更新内容，已消失事件淡出移除
  */
 function updateEventsDisplay() {
     const listElem = document.getElementById('eventsTimelineList');
@@ -8412,35 +8443,122 @@ function updateEventsDisplay() {
 
     if (allEventsData.length === 0) {
         listElem.innerHTML = '<div class="events-loading">暂无事件数据</div>';
+        previousEventIds.clear();
         return;
     }
 
-    let html = '';
-    allEventsData.forEach(loc => {
-        const intensity = loc.intensity || 1;
-        const label = INTENSITY_LABELS[intensity] || 'NOTICE';
-        const name = loc.location_name || '';
-        const country = loc.country || '';
-        const summary = loc.summary || '';
-        const lastTime = loc.last_mentioned_at || '';
-        const timeStr = lastTime ? formatEventTimePeriod(lastTime) : '';
-        const agoStr = lastTime ? formatEventAgo(lastTime) : '';
-        const isActive = loc.id === selectedEventId ? ' active' : '';
+    const currentIds = new Set(allEventsData.map(e => e.id));
+    const isFirstRender = previousEventIds.size === 0 || listElem.querySelector('.events-loading');
 
-        html += `
-            <div class="event-item intensity-${intensity}${isActive}" onclick="showEventDetail('${escapeAttr(loc.id)}')" data-event-id="${escapeAttr(loc.id)}">
-                <div class="event-item-header">
-                    <span class="event-item-location">${escapeHtml(name)}</span>
-                    <span class="event-item-country">${escapeHtml(country)}</span>
-                    <span class="event-item-badge intensity-${intensity}">${label}</span>
-                    ${agoStr ? `<span class="event-item-ago">${agoStr}</span>` : ''}
-                </div>
-                <div class="event-item-time">${timeStr}</div>
-                <div class="event-item-desc">${escapeHtml(summary)}</div>
-            </div>
-        `;
+    // 首次加载：全量渲染，无动画
+    if (isFirstRender) {
+        let html = '';
+        allEventsData.forEach(loc => { html += buildEventItemHTML(loc); });
+        listElem.innerHTML = html;
+        previousEventIds = currentIds;
+        return;
+    }
+
+    // --- 差量更新 ---
+
+    // 1. 淡出移除已消失的事件
+    const existingItems = listElem.querySelectorAll('.event-item[data-event-id]');
+    existingItems.forEach(item => {
+        const id = item.getAttribute('data-event-id');
+        if (!currentIds.has(id)) {
+            item.classList.add('event-item-exit');
+            item.addEventListener('animationend', () => item.remove(), { once: true });
+        }
     });
-    listElem.innerHTML = html;
+
+    // 2. 遍历新数据，逐项处理
+    let prevSibling = null;  // 用于定位插入位置
+    allEventsData.forEach((loc, index) => {
+        const existingItem = listElem.querySelector(`.event-item[data-event-id="${CSS.escape(loc.id)}"]`);
+
+        if (existingItem) {
+            // 已有事件：就地更新内容（时间、摘要等可能变化）
+            const intensity = loc.intensity || 1;
+            const label = INTENSITY_LABELS[intensity] || 'NOTICE';
+            const agoStr = loc.last_mentioned_at ? formatEventAgo(loc.last_mentioned_at) : '';
+            const timeStr = loc.last_mentioned_at ? formatEventTimePeriod(loc.last_mentioned_at) : '';
+
+            // 更新时间标签
+            const agoElem = existingItem.querySelector('.event-item-ago');
+            if (agoStr) {
+                if (agoElem) {
+                    agoElem.textContent = agoStr;
+                } else {
+                    const header = existingItem.querySelector('.event-item-header');
+                    if (header) header.insertAdjacentHTML('beforeend', `<span class="event-item-ago">${agoStr}</span>`);
+                }
+            } else if (agoElem) {
+                agoElem.remove();
+            }
+
+            // 更新时间行
+            const timeElem = existingItem.querySelector('.event-item-time');
+            if (timeElem) timeElem.textContent = timeStr;
+
+            // 更新摘要
+            const descElem = existingItem.querySelector('.event-item-desc');
+            if (descElem) descElem.textContent = loc.summary || '';
+
+            // 更新位置名（翻译完成后会变）
+            const locElem = existingItem.querySelector('.event-item-location');
+            if (locElem) locElem.textContent = loc.location_name || '';
+
+            // 更新国家
+            const countryElem = existingItem.querySelector('.event-item-country');
+            if (countryElem) countryElem.textContent = loc.country || '';
+
+            // 更新徽章
+            const badgeElem = existingItem.querySelector('.event-item-badge');
+            if (badgeElem) {
+                badgeElem.textContent = label;
+                badgeElem.className = `event-item-badge intensity-${intensity}`;
+            }
+
+            // 更新 intensity class
+            existingItem.className = existingItem.className.replace(/intensity-\d/g, `intensity-${intensity}`);
+
+            // 更新 active 状态
+            existingItem.classList.toggle('active', loc.id === selectedEventId);
+
+            // 确保顺序正确：如果位置不对，移动到正确位置
+            if (prevSibling) {
+                if (existingItem.previousElementSibling !== prevSibling) {
+                    prevSibling.after(existingItem);
+                }
+            } else {
+                if (existingItem !== listElem.firstElementChild) {
+                    listElem.prepend(existingItem);
+                }
+            }
+
+            prevSibling = existingItem;
+        } else {
+            // 新增事件：创建 DOM 并带缓入动画插入
+            const temp = document.createElement('div');
+            temp.innerHTML = buildEventItemHTML(loc).trim();
+            const newItem = temp.firstElementChild;
+            newItem.classList.add('event-item-enter');
+            // 动画结束后移除动画类
+            newItem.addEventListener('animationend', () => {
+                newItem.classList.remove('event-item-enter');
+            }, { once: true });
+
+            // 插入到正确位置
+            if (prevSibling) {
+                prevSibling.after(newItem);
+            } else {
+                listElem.prepend(newItem);
+            }
+            prevSibling = newItem;
+        }
+    });
+
+    previousEventIds = currentIds;
 }
 
 /**
