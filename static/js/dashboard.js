@@ -1440,17 +1440,20 @@ function renderHotspots(hotspots) {
 
         // 点击显示详情 + 聚焦到区域
         polygon.on('click', function () {
-            // 聚焦到多边形区域，留出右侧空间给详情面板
+            // 右侧留出详情面板宽度（380px + 间距），让多边形显示在左半区
+            const mapWidth = hotspotMap.getContainer().offsetWidth;
+            const panelSpace = Math.min(420, mapWidth * 0.45);
             const bounds = polygon.getBounds();
             hotspotMap.flyToBounds(bounds, {
-                padding: [40, 40],
+                paddingTopLeft: [40, 40],
+                paddingBottomRight: [panelSpace, 40],
                 maxZoom: 8,
                 duration: 0.6
             });
-            // 延迟显示详情，等地图飞行开始后再定位面板
-            setTimeout(() => {
+            // 地图飞行完成后显示详情面板
+            hotspotMap.once('moveend', () => {
                 showHotspotDetail(h, polygon);
-            }, 100);
+            });
             resetMapIdleTimer();
         });
 
@@ -1470,51 +1473,8 @@ function renderHotspots(hotspots) {
     }
 }
 
-/** 当前关联的多边形引用（用于地图移动时更新面板位置） */
+/** 当前关联的多边形引用 */
 let _hotspotDetailPolygon = null;
-
-/** 根据多边形在地图上的像素位置，定位详情面板 */
-function _positionHotspotDetail(el, polygon) {
-    if (!polygon || !hotspotMap) return;
-
-    const mapContainer = hotspotMap.getContainer();
-    const mapRect = mapContainer.getBoundingClientRect();
-    const parentRect = el.parentElement.getBoundingClientRect();
-
-    // 多边形右边缘在地图上的像素坐标
-    const bounds = polygon.getBounds();
-    const rightPoint = hotspotMap.latLngToContainerPoint(bounds.getNorthEast());
-    const centerPoint = hotspotMap.latLngToContainerPoint(bounds.getCenter());
-
-    const panelWidth = 380;
-    const panelHeight = el.offsetHeight || 300;
-    const gap = 15;
-
-    // 面板左边缘 = 多边形右边缘 + 间距
-    let left = rightPoint.x + gap;
-    let top = centerPoint.y - panelHeight / 2;
-
-    // 如果右侧放不下，移到多边形左侧
-    const leftPoint = hotspotMap.latLngToContainerPoint(bounds.getSouthWest());
-    if (left + panelWidth > mapRect.width - 10) {
-        left = leftPoint.x - panelWidth - gap;
-    }
-    // 如果左侧也放不下，回退到右侧固定位置
-    if (left < 10) {
-        left = mapRect.width - panelWidth - 20;
-    }
-
-    // 垂直方向限制在地图区域内
-    top = Math.max(10, Math.min(top, mapRect.height - panelHeight - 10));
-
-    // 转为相对于父容器的坐标
-    const offsetX = mapRect.left - parentRect.left;
-    const offsetY = mapRect.top - parentRect.top;
-
-    el.style.left = (left + offsetX) + 'px';
-    el.style.top = (top + offsetY) + 'px';
-    el.style.right = 'auto';
-}
 
 /** 显示热点详情卡片 */
 function showHotspotDetail(hotspot, polygon) {
@@ -1559,23 +1519,10 @@ function showHotspotDetail(hotspot, polygon) {
         el.querySelector('.hotspot-detail__videos').style.display = 'none';
     }
 
-    // 先显示（用于计算尺寸），移除动画类
+    // 显示面板（CSS 固定在右侧，flyToBounds 已将多边形推到左侧）
+    _hotspotDetailPolygon = polygon || null;
     el.style.display = '';
     el.classList.remove('hotspot-detail--visible');
-
-    // 定位到多边形旁边
-    _hotspotDetailPolygon = polygon || null;
-    if (polygon && hotspotMap) {
-        _positionHotspotDetail(el, polygon);
-
-        // 地图移动/缩放时跟随更新位置
-        hotspotMap.off('moveend.hotspotDetail');
-        hotspotMap.on('moveend.hotspotDetail', () => {
-            if (_hotspotDetailPolygon && el.style.display !== 'none') {
-                _positionHotspotDetail(el, _hotspotDetailPolygon);
-            }
-        });
-    }
 
     // 触发缓入动画
     requestAnimationFrame(() => {
@@ -1593,11 +1540,7 @@ function closeHotspotDetail() {
     }, 350);
     // 暂停所有视频
     document.querySelectorAll('#hotspotDetail video').forEach(v => v.pause());
-    // 清理地图事件监听
     _hotspotDetailPolygon = null;
-    if (hotspotMap) {
-        hotspotMap.off('moveend.hotspotDetail');
-    }
 }
 
 /** 视频轮播：滑动到指定索引 */
