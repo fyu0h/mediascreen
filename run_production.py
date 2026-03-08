@@ -23,7 +23,7 @@ def main():
     check_dependencies()
 
     from waitress import serve
-    from app import app, init_database, init_plugins, init_schedulers, init_telegram
+    from app import app, init_database, init_plugins, init_schedulers, init_telegram, init_events_service
     from config import Config
     from models.logger import log_system
 
@@ -42,11 +42,12 @@ def main():
     print(f"MongoDB: {Config.MONGO_HOST}:{Config.MONGO_PORT}/{Config.MONGO_DB}")
     print("=" * 50)
 
-    # 初始化数据库、插件、调度器、Telegram 监控
+    # 初始化数据库、插件、调度器、Telegram 监控、事件链
     init_database()
     init_plugins()
     init_schedulers()
     init_telegram()
+    init_events_service()
 
     # 记录启动日志
     log_system(
