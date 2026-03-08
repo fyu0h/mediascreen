@@ -129,8 +129,8 @@ function addDarkTileLayer(map, sourceId) {
         _applyTileSource(map, mapId, saved);
         return;
     }
-    // 自动回退模式
-    _autoFallbackTileLayer(map, mapId, 0);
+    // 默认使用 CartoDB 暗色
+    _applyTileSource(map, mapId, 'carto-dark');
 }
 
 /** 应用指定地图源 */
@@ -1616,17 +1616,7 @@ function initMapToggle() {
         resetMapIdleTimer();
     });
 
-    // 页面失焦时暂停自动切换，聚焦时恢复
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            stopMapAutoSwitch();
-        } else {
-            startMapAutoSwitch();
-        }
-    });
-
-    // 启动自动切换
-    startMapAutoSwitch();
+    // 不再自动切换地图视图，由用户手动控制
 }
 
 // ==================== 风控监控 ====================
