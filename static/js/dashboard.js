@@ -1639,6 +1639,11 @@ function switchMapView(view) {
     const legendHotspot = document.getElementById('mapLegendHotspot');
     const toggle = document.getElementById('mapToggleInput');
 
+    // 地图初始视角
+    const isMobile = window.innerWidth <= 768;
+    const defaultCenter = isMobile ? [20, 0] : [25, 20];
+    const defaultZoom = isMobile ? 1 : 2;
+
     if (view === 'hotspot') {
         newsLayer.classList.remove('map-layer--active');
         hotspotLayer.classList.add('map-layer--active');
@@ -1650,7 +1655,10 @@ function switchMapView(view) {
         // 延迟初始化和加载热点数据
         if (!hotspotMap) initHotspotMap();
         setTimeout(() => {
-            if (hotspotMap) hotspotMap.invalidateSize();
+            if (hotspotMap) {
+                hotspotMap.invalidateSize();
+                hotspotMap.setView(defaultCenter, defaultZoom, { animate: false });
+            }
             loadHotspotData();
         }, 100);
     } else {
@@ -1663,7 +1671,10 @@ function switchMapView(view) {
         closeHotspotDetail();
 
         setTimeout(() => {
-            if (worldMap) worldMap.invalidateSize();
+            if (worldMap) {
+                worldMap.invalidateSize();
+                worldMap.setView(defaultCenter, defaultZoom, { animate: false });
+            }
         }, 100);
     }
 }
