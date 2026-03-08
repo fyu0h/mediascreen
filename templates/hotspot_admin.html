@@ -611,21 +611,11 @@
                 attributionControl: false
             });
 
-            // 添加暗色瓦片层（PMTiles / OpenFreeMap 回退）
-            try {
-                if (typeof protomapsL !== 'undefined') {
-                    protomapsL.leafletLayer({
-                        url: 'https://build.protomaps.com/20250101.pmtiles',
-                        flavor: 'dark'
-                    }).addTo(drawMap);
-                } else {
-                    throw new Error('protomapsL not loaded');
-                }
-            } catch (e) {
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19
-                }).addTo(drawMap);
-            }
+            // 使用 CartoDB 暗色瓦片层
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                subdomains: 'abcd'
+            }).addTo(drawMap);
 
             drawnItems = new L.FeatureGroup();
             drawMap.addLayer(drawnItems);
