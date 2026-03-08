@@ -1414,9 +1414,9 @@ function renderHotspots(hotspots) {
     });
 
     const styleMap = {
-        high:   { color: '#ff4757', fillColor: 'rgba(255, 71, 87, 0.9)',  weight: 2 },
-        medium: { color: '#ffa502', fillColor: 'rgba(255, 165, 2, 0.9)',  weight: 2 },
-        low:    { color: '#ffea00', fillColor: 'rgba(255, 234, 0, 0.9)',  weight: 2 }
+        high:   { color: '#ff4757', fillColor: 'rgba(255, 71, 87, 0.6)',  weight: 2 },
+        medium: { color: '#ffa502', fillColor: 'rgba(255, 165, 2, 0.6)',  weight: 2 },
+        low:    { color: '#ffea00', fillColor: 'rgba(255, 234, 0, 0.6)',  weight: 2 }
     };
 
     hotspots.forEach(h => {
@@ -1426,16 +1426,16 @@ function renderHotspots(hotspots) {
         const polygon = L.polygon(h.coordinates, {
             color: style.color,
             fillColor: style.fillColor,
-            fillOpacity: 0.9,
+            fillOpacity: 0.6,
             weight: style.weight
         }).addTo(hotspotMap);
 
         // 鼠标悬停高亮
         polygon.on('mouseover', function () {
-            this.setStyle({ fillOpacity: 1, weight: 3 });
+            this.setStyle({ fillOpacity: 0.8, weight: 3 });
         });
         polygon.on('mouseout', function () {
-            this.setStyle({ fillOpacity: 0.9, weight: style.weight });
+            this.setStyle({ fillOpacity: 0.6, weight: style.weight });
         });
 
         // 点击显示详情 + 聚焦到区域
