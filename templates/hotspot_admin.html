@@ -313,18 +313,55 @@
 
         .upload-progress {
             width: 100%;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
-            margin-top: 4px;
+            margin-top: 8px;
+        }
+
+        .upload-progress__info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .upload-progress__info .filename {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 10px;
+            color: var(--text);
+        }
+
+        .upload-progress__info .percent {
+            color: var(--primary);
+            font-weight: 600;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .upload-progress__track {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 3px;
             overflow: hidden;
         }
 
         .upload-progress__bar {
             height: 100%;
-            background: var(--primary);
-            border-radius: 2px;
-            transition: width 0.3s;
+            background: linear-gradient(90deg, var(--primary), #00d4aa);
+            border-radius: 3px;
+            transition: width 0.15s ease-out;
+            width: 0%;
+        }
+
+        .upload-progress__detail {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 3px;
+            text-align: right;
         }
 
         .modal-footer {
@@ -446,7 +483,14 @@
                         <input type="file" id="videoInput" accept=".mp4,.webm,.mov" multiple style="display:none;">
                     </div>
                     <div class="upload-progress" id="uploadProgress" style="display:none;">
-                        <div class="upload-progress__bar" id="uploadBar"></div>
+                        <div class="upload-progress__info">
+                            <span class="filename" id="uploadFileName">准备上传...</span>
+                            <span class="percent" id="uploadPercent">0%</span>
+                        </div>
+                        <div class="upload-progress__track">
+                            <div class="upload-progress__bar" id="uploadBar"></div>
+                        </div>
+                        <div class="upload-progress__detail" id="uploadDetail"></div>
                     </div>
                     <div class="video-list" id="videoList"></div>
                 </div>
@@ -698,6 +742,45 @@
             videoInput.value = '';
         });
 
+        // 带进度的文件上传（使用 XMLHttpRequest）
+        function uploadWithProgress(url, formData, onProgress) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url);
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable && onProgress) {
+                        onProgress(e.loaded, e.total);
+                    }
+                });
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const result = JSON.parse(xhr.responseText);
+                            if (result.success) {
+                                resolve(result);
+                            } else {
+                                reject(result.error || '上传失败');
+                            }
+                        } catch (e) {
+                            reject('响应解析失败');
+                        }
+                    } else {
+                        reject(`HTTP ${xhr.status}`);
+                    }
+                });
+                xhr.addEventListener('error', () => reject('网络错误'));
+                xhr.addEventListener('abort', () => reject('上传已取消'));
+                xhr.send(formData);
+            });
+        }
+
+        // 文件大小格式化
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
         function handleFiles(files) {
             const allowed = ['.mp4', '.webm', '.mov'];
             for (const f of files) {
@@ -804,28 +887,48 @@
                     }
                 }
 
-                // 上传新视频
+                // 上传新视频（带实时进度）
                 if (pendingFiles.length > 0) {
                     const progressEl = document.getElementById('uploadProgress');
                     const barEl = document.getElementById('uploadBar');
+                    const fileNameEl = document.getElementById('uploadFileName');
+                    const percentEl = document.getElementById('uploadPercent');
+                    const detailEl = document.getElementById('uploadDetail');
                     progressEl.style.display = '';
 
                     for (let i = 0; i < pendingFiles.length; i++) {
-                        barEl.style.width = `${((i + 1) / pendingFiles.length) * 100}%`;
-                        const formData = new FormData();
-                        formData.append('video', pendingFiles[i]);
-                        formData.append('title', pendingFiles[i].name);
+                        const file = pendingFiles[i];
+                        const fileLabel = `(${i + 1}/${pendingFiles.length}) ${file.name}`;
+                        fileNameEl.textContent = fileLabel;
+                        percentEl.textContent = '0%';
+                        barEl.style.width = '0%';
+                        detailEl.textContent = `${formatFileSize(0)} / ${formatFileSize(file.size)}`;
 
-                        const resp = await fetch(`/api/hotspots/${hotspotId}/videos`, {
-                            method: 'POST',
-                            body: formData
-                        });
-                        const result = await resp.json();
-                        if (!result.success) {
-                            showToast(`上传 ${pendingFiles[i].name} 失败`, 'error');
+                        const formData = new FormData();
+                        formData.append('video', file);
+                        formData.append('title', file.name);
+
+                        try {
+                            await uploadWithProgress(
+                                `/api/hotspots/${hotspotId}/videos`,
+                                formData,
+                                (loaded, total) => {
+                                    const pct = Math.round((loaded / total) * 100);
+                                    barEl.style.width = pct + '%';
+                                    percentEl.textContent = pct + '%';
+                                    detailEl.textContent = `${formatFileSize(loaded)} / ${formatFileSize(total)}`;
+                                }
+                            );
+                            barEl.style.width = '100%';
+                            percentEl.textContent = '100%';
+                            detailEl.textContent = `${file.name} 上传完成`;
+                        } catch (err) {
+                            showToast(`上传 ${file.name} 失败: ${err}`, 'error');
                         }
                     }
-                    progressEl.style.display = 'none';
+                    // 短暂显示完成状态后隐藏
+                    fileNameEl.textContent = '全部上传完成';
+                    setTimeout(() => { progressEl.style.display = 'none'; }, 1000);
                 }
 
                 showToast(id ? '热点已更新' : '热点已创建', 'success');
