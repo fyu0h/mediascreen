@@ -4693,6 +4693,33 @@ def events_proxy():
         return error_response(f'获取事件失败: {str(e)}', 500)
 
 
+@api_bp.route('/events/refresh', methods=['POST'])
+def events_refresh():
+    """手动触发事件链重新获取和翻译"""
+    if 'user' not in session:
+        return error_response('未登录', 401)
+
+    try:
+        from services.events_service import get_events_service
+        import threading
+
+        service = get_events_service()
+        if not service.running:
+            return error_response('事件后台服务未运行', 500)
+
+        # 在新线程中立即执行获取，不阻塞请求
+        def _do_refresh():
+            service._fetch_and_cache_events()
+
+        threading.Thread(target=_do_refresh, daemon=True).start()
+
+        return success_response({'message': '已触发重新获取，请稍后刷新查看'})
+
+    except Exception as e:
+        log_error("手动触发事件刷新失败", str(e))
+        return error_response(f'触发失败: {str(e)}', 500)
+
+
 # ==================== 全球事件链 API（旧接口，保留兼容） ====================
 
 @api_bp.route('/events/timeline', methods=['GET'])

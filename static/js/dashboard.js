@@ -8690,7 +8690,19 @@ function escapeAttr(text) {
     return text.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function refreshEventsTimeline() { loadEventsTimeline(true); }
+function refreshEventsTimeline() {
+    // 触发后端立即重新获取事件数据，然后延迟刷新前端列表
+    fetch('/api/events/refresh', { method: 'POST' })
+        .then(() => {
+            // 等待3秒让后端获取完成，再刷新前端
+            setTimeout(() => loadEventsTimeline(true), 3000);
+        })
+        .catch(() => {
+            loadEventsTimeline(true);
+        });
+    // 先立即刷新一次当前缓存数据
+    loadEventsTimeline(true);
+}
 
 function startEventsAutoRefresh() {
     if (!eventsRefreshTimer) {
